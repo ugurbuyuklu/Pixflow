@@ -29,6 +29,9 @@
 |---------|-------|--------|
 | A: Generate Images | Reference photo + n prompts | n generated images |
 | B: Save to Local | Generated images | Named files in local folder |
+| C: Custom Prompts | JSON or plain text | Converted & used for generation |
+| D: Image Preview | Click on generated image | Full-size overlay with actions |
+| E: Send to Analyze | Generated image | Loaded into Image-to-Prompt tab |
 
 ### Phase 03: Image to Prompt
 | Feature | Input | Output |
@@ -56,6 +59,31 @@ Uses GPT-4 Vision to analyze images and extract:
 - History auto-saves every generation (max 100 entries)
 - Favorites allow naming and organizing best prompts
 - Both stored in `packages/server/data/` directory
+
+---
+
+## 🎯 Custom Prompt Features
+
+### Text-to-JSON Conversion
+Users can enter prompts in two formats:
+1. **JSON format** - Structured prompt following the schema
+2. **Plain text** - Natural language description (e.g., "Black & white editorial photoshoot with dramatic lighting")
+
+Plain text is automatically converted to JSON using GPT-4o via `/api/prompts/text-to-json` endpoint.
+
+### External Prompt Adaptation
+When pasting prompts from other sources with different schemas, the system automatically adapts them to the internal format by:
+- Mapping common fields (scene → set_design, subject → pose, etc.)
+- Preserving original data under mapped fields
+- Generating a style summary from available information
+
+### Generated Image Actions
+When viewing a generated image in the preview overlay:
+- **Click thumbnail** → Opens full-size preview
+- **FileJson button (📄)** → Sends image to Image-to-Prompt for analysis
+- **X button** → Closes preview
+
+This enables a workflow: Generate → Preview → Extract prompt → Iterate
 
 ---
 
@@ -297,17 +325,29 @@ For a set of n prompts, verify:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Reference Image: [Drag & drop or click]                        │
-│ Prompts loaded: 3                                               │
-│ Output folder: outputs/christmas_2025-02-03_153042/            │
-│ [🚀 Generate All]                                               │
+│ Prompts: [Generated] [Custom]                                   │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │ Custom prompt input (JSON or plain text)                    │ │
+│ │ Plain text is auto-converted to JSON via GPT-4o             │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+│ Reference Image: [Gallery] [Upload]                             │
+│ [🚀 Generate N Images]                                          │
 ├─────────────────────────────────────────────────────────────────┤
 │ ┌──────────┐ ┌──────────┐ ┌──────────┐                        │
-│ │ ✅ Done  │ │ ⏳ 43%   │ │ ⏸️ Queue │                        │
+│ │ ✅ Done  │ │ ⏳ 43%   │ │ ⏸️ Queue │  ← Click to preview    │
 │ │ img_01   │ │ img_02   │ │ img_03   │                        │
 │ └──────────┘ └──────────┘ └──────────┘                        │
 │ [Open Output Folder]                                            │
 └─────────────────────────────────────────────────────────────────┘
+
+Image Preview Overlay:
+┌─────────────────────────────────────────────────────────────────┐
+│                                              [📄] [✕]           │
+│                    [Full-size image]                            │
+│                                                                 │
+│                   Click anywhere to close                       │
+└─────────────────────────────────────────────────────────────────┘
+  📄 = Send to Image-to-Prompt (extracts prompt from generated image)
 ```
 
 ### Tab 3: Image to Prompt (GPT-4 Vision)
@@ -404,6 +444,7 @@ borgflow/
 |--------|----------|-------------|
 | POST | `/api/prompts/generate` | Generate prompts from concept |
 | GET | `/api/prompts/research/:concept` | Research only (no prompts) |
+| POST | `/api/prompts/text-to-json` | Convert plain text to JSON prompt |
 
 ### Batch Generation
 | Method | Endpoint | Description |
