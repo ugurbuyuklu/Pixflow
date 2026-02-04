@@ -414,6 +414,83 @@ function App() {
     setSelectedPrompts(new Set())
   }
 
+  const adaptPromptFormat = (input: Record<string, unknown>): GeneratedPrompt => {
+    // If already in our format (has top-level style), return as-is
+    if (typeof input.style === 'string') {
+      return input as unknown as GeneratedPrompt
+    }
+
+    // Transform from external format to our format
+    const scene = input.scene as Record<string, unknown> | undefined
+    const subject = input.subject as Record<string, unknown> | undefined
+    const lighting = input.lighting as Record<string, unknown> | undefined
+    const camera = input.camera as Record<string, unknown> | undefined
+    const colorGrading = input.color_grading as Record<string, unknown> | undefined
+    const quality = input.quality as Record<string, unknown> | undefined
+    const subjectOutfit = subject?.outfit as Record<string, unknown> | undefined
+
+    // Build style summary from scene description
+    const styleParts: string[] = []
+    if (scene?.environment) styleParts.push(String(scene.environment))
+    if (scene?.atmosphere) styleParts.push(String(scene.atmosphere))
+    if (lighting?.style) styleParts.push(String(lighting.style))
+
+    const adapted: GeneratedPrompt = {
+      style: styleParts.join(', ') || 'Custom prompt',
+
+      pose: {
+        framing: camera?.framing as string || '',
+        body_position: subject?.pose as string || '',
+        arms: subject?.movement_detail as string || '',
+        posture: '',
+        expression: {
+          facial: subject?.expression as string || '',
+          eyes: '',
+          mouth: ''
+        }
+      },
+
+      lighting: {
+        setup: lighting?.style as string || '',
+        key_light: lighting?.key_light as string || '',
+        fill_light: lighting?.fill_light as string || lighting?.ambient_light as string || '',
+        shadows: '',
+        mood: scene?.atmosphere as string || ''
+      },
+
+      set_design: {
+        backdrop: scene?.environment as string || '',
+        surface: scene?.depth as string || '',
+        props: Array.isArray(scene?.background_elements) ? scene.background_elements as string[] : [],
+        atmosphere: scene?.atmosphere as string || ''
+      },
+
+      outfit: {
+        main: subjectOutfit?.outer_layer as string || subjectOutfit?.inner_layer as string || '',
+        underneath: subjectOutfit?.inner_layer as string || '',
+        accessories: '',
+        styling: ''
+      },
+
+      camera: {
+        lens: camera?.lens as string || '',
+        aperture: camera?.aperture as string || '',
+        angle: camera?.camera_angle as string || '',
+        focus: camera?.focus as string || '',
+        distortion: ''
+      },
+
+      effects: {
+        color_grade: colorGrading?.palette as string || '',
+        grain: quality?.grain as string || '',
+        vignette: '',
+        atmosphere: colorGrading?.tone_control as string || ''
+      }
+    }
+
+    return adapted
+  }
+
   const parseCustomPrompt = (): GeneratedPrompt[] | null => {
     try {
       const parsed = JSON.parse(customPromptJson)
@@ -421,8 +498,9 @@ function App() {
         setCustomPromptError('Invalid prompt: must be a JSON object')
         return null
       }
+      const adapted = adaptPromptFormat(parsed as Record<string, unknown>)
       setCustomPromptError(null)
-      return Array(customPromptCount).fill(parsed)
+      return Array(customPromptCount).fill(adapted)
     } catch {
       setCustomPromptError('Invalid JSON format')
       return null
