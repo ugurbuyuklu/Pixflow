@@ -168,6 +168,7 @@ function App() {
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null)
   const [batchError, setBatchError] = useState<ErrorInfo | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
 
   // Avatar Gallery State
   const [avatars, setAvatars] = useState<Avatar[]>([])
@@ -1275,11 +1276,12 @@ function App() {
 
                   <div className="grid grid-cols-4 gap-3">
                     {batchProgress.images.map((img) => (
-                      <div
+                      <button
                         key={img.index}
+                        onClick={() => img.status === 'completed' && img.url && setPreviewImage(img.url)}
                         className={`aspect-square rounded-lg border-2 flex items-center justify-center ${
                           img.status === 'completed'
-                            ? 'border-green-500 bg-green-500/10'
+                            ? 'border-green-500 bg-green-500/10 cursor-pointer hover:border-green-400 hover:scale-105 transition-all'
                             : img.status === 'generating'
                             ? 'border-yellow-500 bg-yellow-500/10'
                             : img.status === 'failed'
@@ -1296,7 +1298,7 @@ function App() {
                         ) : (
                           <Image className="w-6 h-6 text-gray-500" />
                         )}
-                      </div>
+                      </button>
                     ))}
                   </div>
 
@@ -1669,6 +1671,31 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* Image Preview Overlay */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 cursor-pointer"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div className="relative">
+            <img
+              src={previewImage}
+              alt="Preview"
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            />
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm text-gray-400 bg-black/50 px-3 py-1 rounded">
+              Click anywhere to close
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
