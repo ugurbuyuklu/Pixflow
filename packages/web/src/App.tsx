@@ -24,6 +24,8 @@ import {
   Trash2,
   Users,
   ImagePlus,
+  FileJson,
+  List,
 } from 'lucide-react'
 
 interface ErrorInfo {
@@ -172,6 +174,12 @@ function App() {
   const [avatarsLoading, setAvatarsLoading] = useState(false)
   const [imageSource, setImageSource] = useState<'upload' | 'gallery'>('gallery')
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(null)
+
+  // Custom Prompt State
+  const [promptSource, setPromptSource] = useState<'generated' | 'custom'>('generated')
+  const [customPromptJson, setCustomPromptJson] = useState('')
+  const [customPromptCount, setCustomPromptCount] = useState(1)
+  const [customPromptError, setCustomPromptError] = useState<string | null>(null)
 
   // Image Analysis State
   const [analyzeImage, setAnalyzeImage] = useState<File | null>(null)
@@ -405,14 +413,42 @@ function App() {
     setSelectedPrompts(new Set())
   }
 
+  const parseCustomPrompt = (): GeneratedPrompt[] | null => {
+    try {
+      const parsed = JSON.parse(customPromptJson)
+      if (!parsed || typeof parsed !== 'object' || !parsed.style) {
+        setCustomPromptError('Invalid prompt: missing "style" field')
+        return null
+      }
+      setCustomPromptError(null)
+      return Array(customPromptCount).fill(parsed)
+    } catch {
+      setCustomPromptError('Invalid JSON format')
+      return null
+    }
+  }
+
   const handleBatchGenerate = async () => {
     if (!referenceImage) {
       setBatchError({ message: 'Please upload a reference image first.', type: 'warning' })
       return
     }
-    if (selectedPrompts.size === 0) {
-      setBatchError({ message: 'Please select at least one prompt.', type: 'warning' })
-      return
+
+    let promptsToGenerate: GeneratedPrompt[]
+
+    if (promptSource === 'custom') {
+      const customPrompts = parseCustomPrompt()
+      if (!customPrompts) {
+        setBatchError({ message: 'Please fix the JSON errors first.', type: 'warning' })
+        return
+      }
+      promptsToGenerate = customPrompts
+    } else {
+      if (selectedPrompts.size === 0) {
+        setBatchError({ message: 'Please select at least one prompt.', type: 'warning' })
+        return
+      }
+      promptsToGenerate = Array.from(selectedPrompts).map((i) => prompts[i])
     }
 
     setBatchLoading(true)
@@ -423,11 +459,8 @@ function App() {
     try {
       const formData = new FormData()
       formData.append('referenceImage', referenceImage)
-      formData.append('concept', concept || 'untitled')
-      formData.append(
-        'prompts',
-        JSON.stringify(Array.from(selectedPrompts).map((i) => prompts[i]))
-      )
+      formData.append('concept', promptSource === 'custom' ? 'custom' : (concept || 'untitled'))
+      formData.append('prompts', JSON.stringify(promptsToGenerate))
 
       response = await fetch('/api/generate/batch', {
         method: 'POST',
@@ -892,65 +925,139 @@ function App() {
             {/* Left: Prompt Selection */}
             <div className="col-span-1 bg-gray-900 rounded-lg p-4">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">Select Prompts</h2>
-                <span className="text-sm text-gray-400">
-                  {selectedPrompts.size}/{prompts.length}
-                </span>
-              </div>
-
-              {prompts.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>No prompts yet</p>
+                <h2 className="text-lg font-semibold">Prompts</h2>
+                {/* Prompt Source Toggle */}
+                <div className="flex bg-gray-800 rounded-lg p-1">
                   <button
-                    onClick={() => setActiveTab('prompts')}
-                    className="mt-2 text-purple-400 hover:text-purple-300 text-sm"
+                    onClick={() => setPromptSource('generated')}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+                      promptSource === 'generated'
+                        ? 'bg-purple-600 text-white'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
                   >
-                    Generate prompts first →
+                    <List className="w-3 h-3" />
+                    Generated
+                  </button>
+                  <button
+                    onClick={() => setPromptSource('custom')}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+                      promptSource === 'custom'
+                        ? 'bg-purple-600 text-white'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <FileJson className="w-3 h-3" />
+                    Custom
                   </button>
                 </div>
-              ) : (
+              </div>
+
+              {promptSource === 'generated' ? (
                 <>
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      onClick={selectAllPrompts}
-                      className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded"
-                    >
-                      Select All
-                    </button>
-                    <button
-                      onClick={deselectAllPrompts}
-                      className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded"
-                    >
-                      Deselect All
-                    </button>
-                  </div>
-                  <div className="space-y-2 max-h-[500px] overflow-auto">
-                    {prompts.map((prompt, index) => (
+                  {prompts.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p>No prompts yet</p>
                       <button
-                        key={index}
-                        onClick={() => togglePromptSelection(index)}
-                        className={`w-full text-left p-3 rounded-lg transition-colors flex items-start gap-3 ${
-                          selectedPrompts.has(index)
-                            ? 'bg-purple-600/30 border border-purple-500'
-                            : 'bg-gray-800 hover:bg-gray-700 border border-transparent'
-                        }`}
+                        onClick={() => setActiveTab('prompts')}
+                        className="mt-2 text-purple-400 hover:text-purple-300 text-sm"
                       >
-                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
-                          selectedPrompts.has(index)
-                            ? 'bg-purple-500 border-purple-500'
-                            : 'border-gray-600'
-                        }`}>
-                          {selectedPrompts.has(index) && <Check className="w-3 h-3" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="font-mono text-xs text-gray-400">#{index + 1}</span>
-                          <p className="text-sm line-clamp-2">{prompt.style}</p>
-                        </div>
+                        Generate prompts first →
                       </button>
-                    ))}
-                  </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={selectAllPrompts}
+                            className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded"
+                          >
+                            Select All
+                          </button>
+                          <button
+                            onClick={deselectAllPrompts}
+                            className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded"
+                          >
+                            Deselect All
+                          </button>
+                        </div>
+                        <span className="text-sm text-gray-400">
+                          {selectedPrompts.size}/{prompts.length}
+                        </span>
+                      </div>
+                      <div className="space-y-2 max-h-[500px] overflow-auto">
+                        {prompts.map((prompt, index) => (
+                          <button
+                            key={index}
+                            onClick={() => togglePromptSelection(index)}
+                            className={`w-full text-left p-3 rounded-lg transition-colors flex items-start gap-3 ${
+                              selectedPrompts.has(index)
+                                ? 'bg-purple-600/30 border border-purple-500'
+                                : 'bg-gray-800 hover:bg-gray-700 border border-transparent'
+                            }`}
+                          >
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                              selectedPrompts.has(index)
+                                ? 'bg-purple-500 border-purple-500'
+                                : 'border-gray-600'
+                            }`}>
+                              {selectedPrompts.has(index) && <Check className="w-3 h-3" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className="font-mono text-xs text-gray-400">#{index + 1}</span>
+                              <p className="text-sm line-clamp-2">{prompt.style}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">
+                      Paste JSON Prompt
+                    </label>
+                    <textarea
+                      value={customPromptJson}
+                      onChange={(e) => {
+                        setCustomPromptJson(e.target.value)
+                        setCustomPromptError(null)
+                      }}
+                      placeholder='{"style": "...", "pose": {...}, ...}'
+                      className={`w-full h-64 bg-gray-800 rounded-lg p-3 font-mono text-sm resize-none border ${
+                        customPromptError
+                          ? 'border-red-500 focus:border-red-500'
+                          : 'border-transparent focus:border-purple-500'
+                      } focus:outline-none`}
+                    />
+                    {customPromptError && (
+                      <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {customPromptError}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">
+                      Number of Images
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={customPromptCount}
+                      onChange={(e) => setCustomPromptCount(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                      className="w-full bg-gray-800 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Generate {customPromptCount} image{customPromptCount > 1 ? 's' : ''} using this prompt
+                    </p>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -1075,18 +1182,22 @@ function App() {
               {/* Generate Button */}
               <button
                 onClick={handleBatchGenerate}
-                disabled={batchLoading || !referenceImage || selectedPrompts.size === 0}
+                disabled={
+                  batchLoading ||
+                  !referenceImage ||
+                  (promptSource === 'generated' ? selectedPrompts.size === 0 : !customPromptJson.trim())
+                }
                 className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg px-6 py-4 font-medium transition-colors flex items-center justify-center gap-2"
               >
                 {batchLoading ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Generating {batchProgress?.completedImages || 0}/{batchProgress?.totalImages || selectedPrompts.size}...
+                    Generating {batchProgress?.completedImages || 0}/{batchProgress?.totalImages || (promptSource === 'custom' ? customPromptCount : selectedPrompts.size)}...
                   </>
                 ) : (
                   <>
                     <Play className="w-5 h-5" />
-                    Generate {selectedPrompts.size} Images
+                    Generate {promptSource === 'custom' ? customPromptCount : selectedPrompts.size} Image{(promptSource === 'custom' ? customPromptCount : selectedPrompts.size) !== 1 ? 's' : ''}
                   </>
                 )}
               </button>
