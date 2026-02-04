@@ -190,6 +190,24 @@ function App() {
   const [analyzeError, setAnalyzeError] = useState<ErrorInfo | null>(null)
   const [analyzeCopied, setAnalyzeCopied] = useState(false)
 
+  const sendToImageToPrompt = async (imageUrl: string) => {
+    try {
+      const response = await fetch(imageUrl)
+      const blob = await response.blob()
+      const filename = imageUrl.split('/').pop() || 'generated-image.png'
+      const file = new File([blob], filename, { type: blob.type })
+
+      setAnalyzeImage(file)
+      setAnalyzePreview(imageUrl)
+      setAnalyzedPrompt(null)
+      setAnalyzeError(null)
+      setPreviewImage(null)
+      setActiveTab('analyze')
+    } catch {
+      console.error('Failed to load image for analysis')
+    }
+  }
+
   // History & Favorites State
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([])
   const [favorites, setFavorites] = useState<FavoritePrompt[]>([])
@@ -1805,18 +1823,27 @@ Examples:
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 cursor-pointer"
           onClick={() => setPreviewImage(null)}
         >
-          <div className="relative">
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
             <img
               src={previewImage}
               alt="Preview"
               className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
             />
-            <button
-              onClick={() => setPreviewImage(null)}
-              className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+              <button
+                onClick={() => sendToImageToPrompt(previewImage)}
+                className="bg-purple-600 hover:bg-purple-700 rounded-full p-2 transition-colors"
+                title="Analyze with Image-to-Prompt"
+              >
+                <ScanSearch className="w-6 h-6" />
+              </button>
+              <button
+                onClick={() => setPreviewImage(null)}
+                className="bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
             <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm text-gray-400 bg-black/50 px-3 py-1 rounded">
               Click anywhere to close
             </p>
