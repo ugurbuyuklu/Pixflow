@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@elevenlabs/elevenlabs-js": "^2.34.0",
     "@fal-ai/client": "^1.8.5",
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",

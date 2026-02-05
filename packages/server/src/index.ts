@@ -10,6 +10,7 @@ import { generatePrompts, validateAllPrompts, textToPrompt } from './services/pr
 import { addToHistory } from './services/history.js'
 import generateRouter from './routes/generate.js'
 import historyRouter from './routes/history.js'
+import avatarsRouter from './routes/avatars.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -196,6 +197,7 @@ app.post('/api/prompts/text-to-json', apiLimiter, async (req, res) => {
 
 app.use('/api/generate', generateRouter)
 app.use('/api/history', historyRouter)
+app.use('/api/avatars', avatarsRouter)
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useDropzone, FileRejection } from 'react-dropzone'
 import {
   Sparkles,
@@ -27,6 +27,16 @@ import {
   FileJson,
   List,
   Download,
+  Video,
+  Mic,
+  Volume2,
+  RefreshCw,
+  MessageSquare,
+  Wand2,
+  Bot,
+  Layers,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 
 interface ErrorInfo {
@@ -195,8 +205,25 @@ interface Avatar {
   url: string
 }
 
+interface Voice {
+  id: string
+  name: string
+  category?: string
+  previewUrl?: string
+  labels?: Record<string, string>
+}
+
+interface LipsyncJob {
+  id: string
+  status: 'pending' | 'processing' | 'complete' | 'error'
+  videoUrl?: string
+  error?: string
+  progress?: number
+}
+
 function App() {
-  const [activeTab, setActiveTab] = useState<'prompts' | 'generate' | 'analyze' | 'history'>('prompts')
+  const [activeTab, setActiveTab] = useState<'prompts' | 'generate' | 'history' | 'avatars'>('prompts')
+  const [promptMode, setPromptMode] = useState<'concept' | 'image'>('concept')
 
   // Prompt Factory State
   const [concept, setConcept] = useState('')
@@ -204,10 +231,15 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [prompts, setPrompts] = useState<GeneratedPrompt[]>([])
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [editingPromptText, setEditingPromptText] = useState<string>('')
+  const [promptSaving, setPromptSaving] = useState(false)
   const [error, setError] = useState<ErrorInfo | null>(null)
   const [copied, setCopied] = useState(false)
   const [research, setResearch] = useState<ResearchData | null>(null)
   const [varietyScore, setVarietyScore] = useState<VarietyScore | null>(null)
+
+  // Abort controller for cancellable requests
+  const generateAbortController = useRef<AbortController | null>(null)
 
   // Asset Monster State
   const [selectedPrompts, setSelectedPrompts] = useState<Set<number>>(new Set())
@@ -261,7 +293,8 @@ function App() {
       setAnalyzedPrompt(null)
       setAnalyzeError(null)
       setPreviewImage(null)
-      setActiveTab('analyze')
+      setActiveTab('prompts')
+      setPromptMode('image')
     } catch {
       console.error('Failed to load image for analysis')
     }
@@ -273,6 +306,43 @@ function App() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [selectedHistoryPrompt, setSelectedHistoryPrompt] = useState<GeneratedPrompt | null>(null)
   const [favoriteAdded, setFavoriteAdded] = useState<string | null>(null)
+
+  // Avatars Tab State
+  const [avatarMode, setAvatarMode] = useState<'gallery' | 'generate'>('gallery')
+  const [selectedAvatar, setSelectedAvatar] = useState<Avatar | null>(null)
+  const [avatarGender, setAvatarGender] = useState<'female' | 'male'>('female')
+  const [avatarAgeGroup, setAvatarAgeGroup] = useState<'young-adult' | 'adult' | 'middle-aged'>('young-adult')
+  const [avatarEthnicity, setAvatarEthnicity] = useState<'caucasian' | 'black' | 'asian' | 'hispanic' | 'middle-eastern' | 'south-asian'>('caucasian')
+  const [avatarOutfit, setAvatarOutfit] = useState<'casual' | 'business' | 'sporty' | 'elegant' | 'streetwear'>('casual')
+  const [avatarCount, setAvatarCount] = useState(1)
+  const [avatarGenerating, setAvatarGenerating] = useState(false)
+  const [generatedAvatarUrls, setGeneratedAvatarUrls] = useState<string[]>([])
+  const [selectedGeneratedIndex, setSelectedGeneratedIndex] = useState(0)
+  const [avatarGenerationProgress, setAvatarGenerationProgress] = useState(0)
+
+  // Script Generation State
+  const [scriptConcept, setScriptConcept] = useState('')
+  const [scriptDuration, setScriptDuration] = useState(30)
+  const [scriptTone, setScriptTone] = useState<'casual' | 'professional' | 'energetic' | 'friendly' | 'dramatic'>('energetic')
+  const [scriptGenerating, setScriptGenerating] = useState(false)
+  const [generatedScript, setGeneratedScript] = useState('')
+  const [scriptWordCount, setScriptWordCount] = useState(0)
+  const [scriptEstimatedDuration, setScriptEstimatedDuration] = useState(0)
+
+  // Voice & TTS State
+  const [voices, setVoices] = useState<Voice[]>([])
+  const [voicesLoading, setVoicesLoading] = useState(false)
+  const [selectedVoice, setSelectedVoice] = useState<Voice | null>(null)
+  const [ttsGenerating, setTtsGenerating] = useState(false)
+  const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null)
+  const [_audioPlaying, setAudioPlaying] = useState(false)
+
+  // Lipsync State
+  const [lipsyncGenerating, setLipsyncGenerating] = useState(false)
+  const [lipsyncJob, setLipsyncJob] = useState<LipsyncJob | null>(null)
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null)
+  const [avatarsError, setAvatarsError] = useState<ErrorInfo | null>(null)
+  const [fullSizeAvatarUrl, setFullSizeAvatarUrl] = useState<string | null>(null)
 
   const loadHistory = async () => {
     setHistoryLoading(true)
@@ -383,7 +453,269 @@ function App() {
     if (activeTab === 'generate') {
       loadAvatars()
     }
+    if (activeTab === 'avatars') {
+      loadAvatars()
+      loadVoices()
+    }
   }, [activeTab])
+
+  // Avatars Tab Functions
+  const loadVoices = async () => {
+    if (voices.length > 0) return
+    setVoicesLoading(true)
+    try {
+      const response = await fetch('/api/avatars/voices')
+      if (response.ok) {
+        const data = await response.json()
+        setVoices(data.voices || [])
+        if (data.voices?.length > 0 && !selectedVoice) {
+          setSelectedVoice(data.voices[0])
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load voices:', err)
+    } finally {
+      setVoicesLoading(false)
+    }
+  }
+
+  const handleGenerateAvatar = async () => {
+    setAvatarGenerating(true)
+    setAvatarsError(null)
+    setGeneratedAvatarUrls([])
+    setSelectedGeneratedIndex(0)
+    setAvatarGenerationProgress(0)
+
+    const ageDescriptions: Record<string, string> = {
+      'young-adult': 'young adult in their 20s',
+      'adult': 'adult in their 30s',
+      'middle-aged': 'middle-aged person in their 40s-50s',
+    }
+
+    const ethnicityDescriptions: Record<string, string> = {
+      'caucasian': 'caucasian',
+      'black': 'black/african',
+      'asian': 'east asian',
+      'hispanic': 'hispanic/latino',
+      'middle-eastern': 'middle eastern',
+      'south-asian': 'south asian',
+    }
+
+    const outfitDescriptions: Record<string, string> = {
+      'casual': 'casual everyday clothes',
+      'business': 'professional business attire',
+      'sporty': 'athletic sportswear',
+      'elegant': 'elegant formal outfit',
+      'streetwear': 'trendy streetwear',
+    }
+
+    const prompt = `portrait photo of a ${ageDescriptions[avatarAgeGroup]} ${ethnicityDescriptions[avatarEthnicity]} ${avatarGender}
+background: solid green color (1ebf1a)
+outfit: ${outfitDescriptions[avatarOutfit]}
+pose: standing straight, body and face directly facing the camera, arms relaxed at sides
+framing: medium shot from waist up
+expression: friendly, warm smile, direct eye contact with camera, looking straight at viewer
+lighting: soft studio lighting, even illumination
+sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, professional photography`
+
+    const generatedUrls: string[] = []
+
+    try {
+      for (let i = 0; i < avatarCount; i++) {
+        setAvatarGenerationProgress(i + 1)
+
+        const response = await fetch('/api/avatars/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt,
+            aspectRatio: '9:16',
+          }),
+        })
+
+        if (!response.ok) {
+          let errorMessage = 'Failed to generate avatar'
+          try {
+            const data = await response.json()
+            errorMessage = data.error || errorMessage
+          } catch {
+            // Response body was empty or not valid JSON
+          }
+          throw new Error(errorMessage)
+        }
+
+        const data = await response.json()
+        generatedUrls.push(data.localPath)
+        setGeneratedAvatarUrls([...generatedUrls])
+      }
+
+      await loadAvatars()
+    } catch (err) {
+      setAvatarsError(parseError(err))
+    } finally {
+      setAvatarGenerating(false)
+    }
+  }
+
+  const handleGenerateScript = async () => {
+    if (!scriptConcept.trim()) {
+      setAvatarsError({ message: 'Please enter a concept', type: 'warning' })
+      return
+    }
+
+    setScriptGenerating(true)
+    setAvatarsError(null)
+
+    try {
+      const response = await fetch('/api/avatars/script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          concept: scriptConcept,
+          duration: scriptDuration,
+          tone: scriptTone,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to generate script')
+      }
+
+      const data = await response.json()
+      setGeneratedScript(data.script)
+      setScriptWordCount(data.wordCount)
+      setScriptEstimatedDuration(data.estimatedDuration)
+    } catch (err) {
+      setAvatarsError(parseError(err))
+    } finally {
+      setScriptGenerating(false)
+    }
+  }
+
+  const handleGenerateTTS = async () => {
+    if (!generatedScript.trim()) {
+      setAvatarsError({ message: 'Please generate a script first', type: 'warning' })
+      return
+    }
+    if (!selectedVoice) {
+      setAvatarsError({ message: 'Please select a voice', type: 'warning' })
+      return
+    }
+
+    setTtsGenerating(true)
+    setAvatarsError(null)
+    setGeneratedAudioUrl(null)
+
+    try {
+      const response = await fetch('/api/avatars/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: generatedScript,
+          voiceId: selectedVoice.id,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to generate audio')
+      }
+
+      const data = await response.json()
+      setGeneratedAudioUrl(data.audioUrl)
+    } catch (err) {
+      setAvatarsError(parseError(err))
+    } finally {
+      setTtsGenerating(false)
+    }
+  }
+
+  const handleCreateLipsyncVideo = async () => {
+    const avatarUrl = generatedAvatarUrls[selectedGeneratedIndex] || selectedAvatar?.url
+    if (!avatarUrl) {
+      setAvatarsError({ message: 'Please select or generate an avatar', type: 'warning' })
+      return
+    }
+    if (!generatedAudioUrl) {
+      setAvatarsError({ message: 'Please generate audio first', type: 'warning' })
+      return
+    }
+
+    setLipsyncGenerating(true)
+    setAvatarsError(null)
+    setLipsyncJob(null)
+    setGeneratedVideoUrl(null)
+
+    try {
+      const response = await fetch('/api/avatars/lipsync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: avatarUrl,
+          audioUrl: generatedAudioUrl,
+          textPrompt: 'A person talking at the camera',
+          aspectRatio: '9:16',
+          resolution: '720p',
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Failed to create lipsync job')
+      }
+
+      const data = await response.json()
+      setLipsyncJob(data.job)
+    } catch (err) {
+      setAvatarsError(parseError(err))
+      setLipsyncGenerating(false)
+    }
+  }
+
+  // Poll lipsync job status
+  useEffect(() => {
+    if (!lipsyncJob || lipsyncJob.status === 'complete' || lipsyncJob.status === 'error') {
+      if (lipsyncJob?.status === 'complete' || lipsyncJob?.status === 'error') {
+        setLipsyncGenerating(false)
+      }
+      return
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/avatars/lipsync/${lipsyncJob.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          setLipsyncJob({
+            id: data.id,
+            status: data.status,
+            videoUrl: data.videoUrl,
+            error: data.error,
+            progress: data.progress,
+          })
+
+          if (data.status === 'complete' && data.videoUrl) {
+            const downloadResponse = await fetch(`/api/avatars/lipsync/${lipsyncJob.id}/download`, {
+              method: 'POST',
+            })
+            if (downloadResponse.ok) {
+              const downloadData = await downloadResponse.json()
+              setGeneratedVideoUrl(downloadData.videoUrl)
+            }
+            setLipsyncGenerating(false)
+          } else if (data.status === 'error') {
+            setAvatarsError({ message: data.error || 'Video generation failed', type: 'error' })
+            setLipsyncGenerating(false)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to check lipsync status:', err)
+      }
+    }, 5000)
+
+    return () => clearInterval(interval)
+  }, [lipsyncJob?.id, lipsyncJob?.status])
 
   // Load favorites on initial mount for badge display
   useEffect(() => {
@@ -415,6 +747,12 @@ function App() {
       return
     }
 
+    // Cancel any existing request
+    if (generateAbortController.current) {
+      generateAbortController.current.abort()
+    }
+    generateAbortController.current = new AbortController()
+
     setLoading(true)
     setError(null)
     setPrompts([])
@@ -429,6 +767,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ concept, count }),
+        signal: generateAbortController.current.signal,
       })
 
       if (!response.ok) {
@@ -440,14 +779,30 @@ function App() {
       setPrompts(data.prompts)
       setResearch(data.research)
       setVarietyScore(data.varietyScore)
-      if (data.prompts.length > 0) setSelectedIndex(0)
+      if (data.prompts.length > 0) {
+        setSelectedIndex(0)
+        setEditingPromptText(JSON.stringify(data.prompts[0], null, 2))
+      }
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        // Request was cancelled, don't show error
+        return
+      }
       const errorInfo = parseError(err, response)
       if (response?.status === 429) {
         errorInfo.action = { label: 'Retry', onClick: () => handleGenerate() }
       }
       setError(errorInfo)
     } finally {
+      setLoading(false)
+      generateAbortController.current = null
+    }
+  }
+
+  const handleCancelGenerate = () => {
+    if (generateAbortController.current) {
+      generateAbortController.current.abort()
+      generateAbortController.current = null
       setLoading(false)
     }
   }
@@ -727,6 +1082,27 @@ function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [batchLoading])
 
+  // Keyboard navigation for image preview
+  useEffect(() => {
+    if (!previewImage || !batchProgress) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const completedImages = batchProgress.images.filter(img => img.status === 'completed' && img.url)
+      const currentIndex = completedImages.findIndex(img => img.url === previewImage)
+
+      if (e.key === 'ArrowLeft' && currentIndex > 0) {
+        setPreviewImage(completedImages[currentIndex - 1].url!)
+      } else if (e.key === 'ArrowRight' && currentIndex < completedImages.length - 1) {
+        setPreviewImage(completedImages[currentIndex + 1].url!)
+      } else if (e.key === 'Escape') {
+        setPreviewImage(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [previewImage, batchProgress])
+
   useEffect(() => {
     if (!batchProgress || batchProgress.status === 'completed' || batchProgress.status === 'failed') {
       setBatchLoading(false)
@@ -818,8 +1194,8 @@ function App() {
       <div className="border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-8 py-4">
           <h1 className="text-2xl font-bold flex items-center gap-3">
-            <Sparkles className="w-7 h-7 text-purple-400" />
-            Borgflow Prompt Factory
+            <Bot className="w-7 h-7 text-purple-400" />
+            Borgflow
           </h1>
         </div>
       </div>
@@ -830,12 +1206,13 @@ function App() {
           <div className="flex gap-1">
             <button
               onClick={() => setActiveTab('prompts')}
-              className={`px-6 py-3 font-medium transition-colors relative ${
+              className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 ${
                 activeTab === 'prompts'
                   ? 'text-purple-400'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
+              <Wand2 className="w-4 h-4" />
               Prompt Factory
               {activeTab === 'prompts' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-400" />
@@ -843,12 +1220,13 @@ function App() {
             </button>
             <button
               onClick={() => setActiveTab('generate')}
-              className={`px-6 py-3 font-medium transition-colors relative ${
+              className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 ${
                 activeTab === 'generate'
                   ? 'text-purple-400'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
+              <Layers className="w-4 h-4" />
               Asset Monster
               {prompts.length > 0 && (
                 <span className="ml-2 px-2 py-0.5 bg-gray-800 rounded text-xs">
@@ -860,16 +1238,16 @@ function App() {
               )}
             </button>
             <button
-              onClick={() => setActiveTab('analyze')}
+              onClick={() => setActiveTab('avatars')}
               className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 ${
-                activeTab === 'analyze'
+                activeTab === 'avatars'
                   ? 'text-purple-400'
                   : 'text-gray-400 hover:text-white'
               }`}
             >
-              <ScanSearch className="w-4 h-4" />
-              Image to Prompt
-              {activeTab === 'analyze' && (
+              <Video className="w-4 h-4" />
+              Avatars
+              {activeTab === 'avatars' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-400" />
               )}
             </button>
@@ -884,7 +1262,7 @@ function App() {
               <History className="w-4 h-4" />
               History
               {favorites.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 bg-yellow-600 rounded text-xs flex items-center gap-1">
+                <span className="ml-1 px-1.5 py-0.5 bg-purple-600 rounded text-xs flex items-center gap-1">
                   <Star className="w-3 h-3" />
                   {favorites.length}
                 </span>
@@ -901,6 +1279,34 @@ function App() {
       <div className="max-w-6xl mx-auto p-8">
         {activeTab === 'prompts' && (
           <>
+            {/* Sub-tabs: Concept / Image */}
+            <div className="flex gap-2 mb-6">
+              <button
+                onClick={() => setPromptMode('concept')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                  promptMode === 'concept'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                <Sparkles className="w-4 h-4" />
+                Concept to Prompts
+              </button>
+              <button
+                onClick={() => setPromptMode('image')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                  promptMode === 'image'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                <ScanSearch className="w-4 h-4" />
+                Image to Prompt
+              </button>
+            </div>
+
+            {promptMode === 'concept' && (
+            <>
             {/* Prompt Factory Input */}
             <div className="bg-gray-900 rounded-lg p-6 mb-6">
               <div className="mb-4">
@@ -929,23 +1335,30 @@ function App() {
                 />
               </div>
 
-              <button
-                onClick={handleGenerate}
-                disabled={loading || !concept.trim()}
-                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg px-6 py-3 font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
+              {loading ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-center gap-3 text-purple-400">
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Researching & Generating...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5" />
-                    Generate Prompts
-                  </>
-                )}
-              </button>
+                    <span>Researching & Generating...</span>
+                  </div>
+                  <button
+                    onClick={handleCancelGenerate}
+                    className="w-full bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 rounded-lg px-6 py-3 font-medium transition-all flex items-center justify-center gap-2"
+                  >
+                    <X className="w-5 h-5" />
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleGenerate}
+                  disabled={!concept.trim()}
+                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-6 py-3 font-medium transition-all flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  Generate Prompts
+                </button>
+              )}
             </div>
 
             {error && (
@@ -1043,18 +1456,15 @@ function App() {
                 <div className="col-span-1 bg-gray-900 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-semibold">Prompts</h2>
-                    <button
-                      onClick={() => setActiveTab('generate')}
-                      className="text-sm text-purple-400 hover:text-purple-300"
-                    >
-                      Send to Monster →
-                    </button>
                   </div>
-                  <div className="space-y-2 max-h-[600px] overflow-auto">
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
                     {prompts.map((prompt, index) => (
                       <div
                         key={index}
-                        onClick={() => setSelectedIndex(index)}
+                        onClick={() => {
+                          setSelectedIndex(index)
+                          setEditingPromptText(JSON.stringify(prompts[index], null, 2))
+                        }}
                         className={`w-full text-left p-3 rounded-lg transition-colors cursor-pointer ${
                           selectedIndex === index
                             ? 'bg-purple-600'
@@ -1069,8 +1479,8 @@ function App() {
                                 e.stopPropagation()
                                 addToFavorites(prompt, generateFavoriteName(prompt, index))
                               }}
-                              className={`p-1 rounded hover:bg-yellow-600/30 transition-colors ${
-                                selectedIndex === index ? 'text-yellow-300' : 'text-gray-500 hover:text-yellow-400'
+                              className={`p-1 rounded hover:bg-purple-600/30 transition-colors ${
+                                selectedIndex === index ? 'text-purple-300' : 'text-gray-500 hover:text-purple-400'
                               }`}
                               title="Add to favorites"
                             >
@@ -1083,10 +1493,24 @@ function App() {
                             </span>
                           </div>
                         </div>
-                        <p className="text-sm line-clamp-2">{prompt.style}</p>
+                        <p className="text-sm break-words">{prompt.style}</p>
                       </div>
                     ))}
                   </div>
+
+                  {/* Send to Monster Button */}
+                  <button
+                    onClick={() => {
+                      selectAllPrompts()
+                      setImageSource('upload')
+                      setActiveTab('generate')
+                    }}
+                    className="w-full mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg px-4 py-3 font-medium transition-all flex items-center justify-center gap-2"
+                  >
+                    <Layers className="w-5 h-5" />
+                    Send to Monster
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
 
                 <div className="col-span-2 bg-gray-900 rounded-lg p-4">
@@ -1108,14 +1532,14 @@ function App() {
                           onClick={() => {
                             addToFavorites(prompts[selectedIndex], generateFavoriteName(prompts[selectedIndex], selectedIndex))
                           }}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-sm"
+                          className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg text-sm"
                         >
                           <Star className="w-4 h-4" />
                           <span>Favorite</span>
                         </button>
                         <button
                           onClick={handleCopy}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm"
+                          className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-gray-700 to-gray-600 hover:from-gray-600 hover:to-gray-500 rounded-lg text-sm"
                         >
                           {copied ? (
                             <>
@@ -1133,9 +1557,246 @@ function App() {
                     )}
                   </div>
                   {selectedIndex !== null && prompts[selectedIndex] && (
-                    <pre className="bg-gray-800 rounded-lg p-4 overflow-auto max-h-[550px] text-sm font-mono">
-                      {JSON.stringify(prompts[selectedIndex], null, 2)}
+                    <div className="space-y-2">
+                      <textarea
+                        value={editingPromptText || JSON.stringify(prompts[selectedIndex], null, 2)}
+                        onChange={(e) => setEditingPromptText(e.target.value)}
+                        className="w-full bg-gray-800 rounded-lg p-4 h-[480px] text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 overflow-y-auto"
+                        spellCheck={false}
+                      />
+                      <button
+                        onClick={async () => {
+                          const text = editingPromptText || JSON.stringify(prompts[selectedIndex], null, 2)
+                          setPromptSaving(true)
+                          try {
+                            // First try to parse as JSON
+                            const parsed = JSON.parse(text)
+                            const newPrompts = [...prompts]
+                            newPrompts[selectedIndex] = parsed
+                            setPrompts(newPrompts)
+                            setEditingPromptText(JSON.stringify(parsed, null, 2))
+                          } catch {
+                            // If not valid JSON, convert text to our format via API
+                            try {
+                              const converted = await convertTextToPrompt(text)
+                              if (converted) {
+                                const newPrompts = [...prompts]
+                                newPrompts[selectedIndex] = converted
+                                setPrompts(newPrompts)
+                                setEditingPromptText(JSON.stringify(converted, null, 2))
+                              }
+                            } catch {
+                              // Silent fail - keep current text
+                            }
+                          }
+                          setPromptSaving(false)
+                        }}
+                        disabled={promptSaving}
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
+                      >
+                        {promptSaving ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Converting...
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4" />
+                            Save Changes
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            </>
+            )}
+
+            {promptMode === 'image' && (
+              <div className="grid grid-cols-2 gap-6">
+                {/* Left: Image Upload */}
+                <div className="bg-gray-900 rounded-lg p-6">
+                  <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <ScanSearch className="w-5 h-5 text-purple-400" />
+                    Analyze Image
+                  </h2>
+                  <div
+                    className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                      analyzePreview
+                        ? 'border-purple-500 bg-purple-500/10'
+                        : 'border-gray-700 hover:border-gray-600'
+                    }`}
+                    onClick={() => document.getElementById('analyze-input')?.click()}
+                  >
+                    <input
+                      id="analyze-input"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setAnalyzeImage(file)
+                          setAnalyzePreview(URL.createObjectURL(file))
+                          setAnalyzedPrompt(null)
+                          setAnalyzeError(null)
+                        }
+                      }}
+                    />
+                    {analyzePreview ? (
+                      <div className="space-y-4">
+                        <img
+                          src={analyzePreview}
+                          alt="To analyze"
+                          className="max-h-64 mx-auto rounded-lg"
+                        />
+                        <p className="text-sm text-gray-400">{analyzeImage?.name}</p>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setAnalyzeImage(null)
+                            setAnalyzePreview(null)
+                            setAnalyzedPrompt(null)
+                          }}
+                          className="text-sm text-red-400 hover:text-red-300"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-10 h-10 mx-auto mb-3 text-gray-500" />
+                        <p className="text-gray-400">Click to upload an image to analyze</p>
+                        <p className="text-sm text-gray-500 mt-1">JPEG, PNG, WebP</p>
+                      </>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={async () => {
+                      if (!analyzeImage) return
+                      setAnalyzeLoading(true)
+                      setAnalyzeError(null)
+                      setAnalyzedPrompt(null)
+
+                      try {
+                        const formData = new FormData()
+                        formData.append('image', analyzeImage)
+
+                        const response = await fetch('/api/generate/analyze-image', {
+                          method: 'POST',
+                          body: formData,
+                        })
+
+                        if (!response.ok) {
+                          const data = await response.json()
+                          throw new Error(data.error || 'Analysis failed')
+                        }
+
+                        const data = await response.json()
+                        setAnalyzedPrompt(data.prompt)
+                      } catch (err) {
+                        setAnalyzeError(parseError(err))
+                      } finally {
+                        setAnalyzeLoading(false)
+                      }
+                    }}
+                    disabled={analyzeLoading || !analyzeImage}
+                    className="w-full mt-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-6 py-3 font-medium transition-all flex items-center justify-center gap-2"
+                  >
+                    {analyzeLoading ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Analyzing with GPT-4 Vision...
+                      </>
+                    ) : (
+                      <>
+                        <ScanSearch className="w-5 h-5" />
+                        Analyze Image
+                      </>
+                    )}
+                  </button>
+
+                  {analyzeError && (
+                    <div className="mt-4 bg-red-900/50 border border-red-700 rounded-lg p-4 flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                      <p className="flex-1 text-red-200">{analyzeError.message}</p>
+                      <button onClick={() => setAnalyzeError(null)} className="text-gray-400 hover:text-white">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right: Generated Prompt */}
+                <div className="bg-gray-900 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold">Generated Prompt</h2>
+                    {analyzedPrompt && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            const json = JSON.stringify(analyzedPrompt, null, 2)
+                            await navigator.clipboard.writeText(json)
+                            setAnalyzeCopied(true)
+                            setTimeout(() => setAnalyzeCopied(false), 2000)
+                          }}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm"
+                        >
+                          {analyzeCopied ? (
+                            <>
+                              <Check className="w-4 h-4 text-green-400" />
+                              <span className="text-green-400">Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPrompts([analyzedPrompt])
+                            setSelectedIndex(0)
+                            setEditingPromptText(JSON.stringify(analyzedPrompt, null, 2))
+                            setPromptMode('concept')
+                          }}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                          Use in Factory
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPrompts([analyzedPrompt])
+                            setSelectedIndex(0)
+                            setEditingPromptText(JSON.stringify(analyzedPrompt, null, 2))
+                            setActiveTab('generate')
+                          }}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded-lg text-sm"
+                        >
+                          <Play className="w-4 h-4" />
+                          Asset Monster
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {analyzedPrompt ? (
+                    <pre className="bg-gray-800 rounded-lg p-4 overflow-y-auto overflow-x-hidden max-h-[600px] text-sm font-mono whitespace-pre-wrap break-words">
+                      {JSON.stringify(analyzedPrompt, null, 2)}
                     </pre>
+                  ) : (
+                    <div className="h-96 flex items-center justify-center text-gray-500">
+                      <div className="text-center">
+                        <ScanSearch className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                        <p>Upload an image and click Analyze</p>
+                        <p className="text-sm mt-1">GPT-4 Vision will extract styling details</p>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1210,7 +1871,7 @@ function App() {
                           {selectedPrompts.size}/{prompts.length}
                         </span>
                       </div>
-                      <div className="space-y-2 max-h-[500px] overflow-auto">
+                      <div className="space-y-2 max-h-[500px] overflow-y-auto">
                         {prompts.map((prompt, index) => (
                           <button
                             key={index}
@@ -1230,7 +1891,7 @@ function App() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <span className="font-mono text-xs text-gray-400">#{index + 1}</span>
-                              <p className="text-sm line-clamp-2">{prompt.style}</p>
+                              <p className="text-sm break-words">{prompt.style}</p>
                             </div>
                           </button>
                         ))}
@@ -1271,19 +1932,22 @@ Examples:
                   </div>
                   <div>
                     <label className="block text-sm text-gray-400 mb-2">
-                      Number of Images
+                      Number of Images: {customPromptCount}
                     </label>
                     <input
-                      type="number"
-                      min={1}
-                      max={20}
+                      type="range"
+                      min="1"
+                      max="4"
                       value={customPromptCount}
-                      onChange={(e) => setCustomPromptCount(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                      className="w-full bg-gray-800 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      onChange={(e) => setCustomPromptCount(Number(e.target.value))}
+                      className="w-full accent-purple-500"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Generate {customPromptCount} image{customPromptCount > 1 ? 's' : ''} using this prompt
-                    </p>
+                    <div className="flex justify-between text-xs text-gray-500 mt-1">
+                      <span>1</span>
+                      <span>2</span>
+                      <span>3</span>
+                      <span>4</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1293,6 +1957,9 @@ Examples:
             <div className="col-span-2 space-y-6">
               {/* Reference Image Section */}
               <div className="bg-gray-900 rounded-lg p-4">
+                {/* Hidden input for openFilePicker to work in any mode */}
+                <input {...getInputProps()} />
+
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold">Reference Image</h2>
                   {/* Source Toggle */}
@@ -1510,7 +2177,7 @@ Examples:
                   referenceImages.length === 0 ||
                   (promptSource === 'generated' ? selectedPrompts.size === 0 : !customPromptJson.trim())
                 }
-                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg px-6 py-4 font-medium transition-colors flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-6 py-4 font-medium transition-all flex items-center justify-center gap-2"
               >
                 {batchLoading ? (
                   <>
@@ -1596,12 +2263,12 @@ Examples:
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-3">
+                  <div className="grid grid-cols-6 gap-3">
                     {batchProgress.images.map((img) => (
                       <button
                         key={img.index}
                         onClick={() => img.status === 'completed' && img.url && setPreviewImage(img.url)}
-                        className={`aspect-square rounded-lg border-2 flex items-center justify-center ${
+                        className={`aspect-[9/16] rounded-lg border-2 flex items-center justify-center ${
                           img.status === 'completed'
                             ? 'border-green-500 bg-green-500/10 cursor-pointer hover:border-green-400 hover:scale-105 transition-all'
                             : img.status === 'generating'
@@ -1655,184 +2322,9 @@ Examples:
           </div>
         )}
 
-        {activeTab === 'analyze' && (
-          <div className="grid grid-cols-2 gap-6">
-            {/* Left: Image Upload */}
-            <div className="bg-gray-900 rounded-lg p-6">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <ScanSearch className="w-5 h-5 text-purple-400" />
-                Analyze Image
-              </h2>
-              <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                  analyzePreview
-                    ? 'border-purple-500 bg-purple-500/10'
-                    : 'border-gray-700 hover:border-gray-600'
-                }`}
-                onClick={() => document.getElementById('analyze-input')?.click()}
-              >
-                <input
-                  id="analyze-input"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) {
-                      setAnalyzeImage(file)
-                      setAnalyzePreview(URL.createObjectURL(file))
-                      setAnalyzedPrompt(null)
-                      setAnalyzeError(null)
-                    }
-                  }}
-                />
-                {analyzePreview ? (
-                  <div className="space-y-4">
-                    <img
-                      src={analyzePreview}
-                      alt="To analyze"
-                      className="max-h-64 mx-auto rounded-lg"
-                    />
-                    <p className="text-sm text-gray-400">{analyzeImage?.name}</p>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setAnalyzeImage(null)
-                        setAnalyzePreview(null)
-                        setAnalyzedPrompt(null)
-                      }}
-                      className="text-sm text-red-400 hover:text-red-300"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <Upload className="w-10 h-10 mx-auto mb-3 text-gray-500" />
-                    <p className="text-gray-400">Click to upload an image to analyze</p>
-                    <p className="text-sm text-gray-500 mt-1">JPEG, PNG, WebP</p>
-                  </>
-                )}
-              </div>
-
-              <button
-                onClick={async () => {
-                  if (!analyzeImage) return
-                  setAnalyzeLoading(true)
-                  setAnalyzeError(null)
-                  setAnalyzedPrompt(null)
-
-                  try {
-                    const formData = new FormData()
-                    formData.append('image', analyzeImage)
-
-                    const response = await fetch('/api/generate/analyze-image', {
-                      method: 'POST',
-                      body: formData,
-                    })
-
-                    if (!response.ok) {
-                      const data = await response.json()
-                      throw new Error(data.error || 'Analysis failed')
-                    }
-
-                    const data = await response.json()
-                    setAnalyzedPrompt(data.prompt)
-                  } catch (err) {
-                    setAnalyzeError(parseError(err))
-                  } finally {
-                    setAnalyzeLoading(false)
-                  }
-                }}
-                disabled={analyzeLoading || !analyzeImage}
-                className="w-full mt-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg px-6 py-3 font-medium transition-colors flex items-center justify-center gap-2"
-              >
-                {analyzeLoading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    Analyzing with GPT-4 Vision...
-                  </>
-                ) : (
-                  <>
-                    <ScanSearch className="w-5 h-5" />
-                    Analyze Image
-                  </>
-                )}
-              </button>
-
-              {analyzeError && (
-                <div className="mt-4 bg-red-900/50 border border-red-700 rounded-lg p-4 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-                  <p className="flex-1 text-red-200">{analyzeError.message}</p>
-                  <button onClick={() => setAnalyzeError(null)} className="text-gray-400 hover:text-white">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Right: Generated Prompt */}
-            <div className="bg-gray-900 rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">Generated Prompt</h2>
-                {analyzedPrompt && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={async () => {
-                        const json = JSON.stringify(analyzedPrompt, null, 2)
-                        await navigator.clipboard.writeText(json)
-                        setAnalyzeCopied(true)
-                        setTimeout(() => setAnalyzeCopied(false), 2000)
-                      }}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm"
-                    >
-                      {analyzeCopied ? (
-                        <>
-                          <Check className="w-4 h-4 text-green-400" />
-                          <span className="text-green-400">Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setPrompts([analyzedPrompt])
-                        setSelectedIndex(0)
-                        setActiveTab('prompts')
-                      }}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm"
-                    >
-                      <ArrowRight className="w-4 h-4" />
-                      Use in Factory
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {analyzedPrompt ? (
-                <pre className="bg-gray-800 rounded-lg p-4 overflow-auto max-h-[600px] text-sm font-mono">
-                  {JSON.stringify(analyzedPrompt, null, 2)}
-                </pre>
-              ) : (
-                <div className="h-96 flex items-center justify-center text-gray-500">
-                  <div className="text-center">
-                    <ScanSearch className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>Upload an image and click Analyze</p>
-                    <p className="text-sm mt-1">GPT-4 Vision will extract styling details</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Favorite Added Toast */}
         {favoriteAdded && (
-          <div className="fixed bottom-6 right-6 bg-yellow-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50">
+          <div className="fixed bottom-6 right-6 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 z-50">
             <Star className="w-5 h-5" />
             <span>Added "{favoriteAdded}" to favorites!</span>
           </div>
@@ -1843,7 +2335,7 @@ Examples:
             {/* Left: Favorites */}
             <div className="bg-gray-900 rounded-lg p-4">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Star className="w-5 h-5 text-yellow-400" />
+                <Star className="w-5 h-5 text-purple-400" />
                 Favorites
               </h2>
               {historyLoading ? (
@@ -1857,7 +2349,7 @@ Examples:
                   <p className="text-sm mt-1">Star prompts to save them here</p>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[500px] overflow-auto">
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
                   {favorites.map((fav) => (
                     <div
                       key={fav.id}
@@ -1876,7 +2368,7 @@ Examples:
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
-                      <p className="text-xs text-gray-400 line-clamp-2">{fav.prompt.style}</p>
+                      <p className="text-xs text-gray-400 break-words">{fav.prompt.style}</p>
                       {fav.concept && (
                         <span className="text-xs text-purple-400">{fav.concept}</span>
                       )}
@@ -1903,7 +2395,7 @@ Examples:
                   <p className="text-sm mt-1">Generate prompts to see them here</p>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-[500px] overflow-auto">
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
                   {historyEntries.map((entry) => (
                     <div
                       key={entry.id}
@@ -1930,6 +2422,9 @@ Examples:
                             setPrompts(entry.prompts as GeneratedPrompt[])
                             setConcept(entry.concept)
                             setSelectedIndex(0)
+                            if (entry.prompts.length > 0) {
+                              setEditingPromptText(JSON.stringify(entry.prompts[0], null, 2))
+                            }
                             setActiveTab('prompts')
                           }}
                           className="text-xs text-purple-400 hover:text-purple-300"
@@ -1966,7 +2461,7 @@ Examples:
                           addToFavorites(selectedHistoryPrompt, name)
                         }
                       }}
-                      className="flex items-center gap-1 px-2 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs"
+                      className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 rounded text-xs"
                     >
                       <Star className="w-3 h-3" />
                       Favorite
@@ -1975,7 +2470,7 @@ Examples:
                 )}
               </div>
               {selectedHistoryPrompt ? (
-                <pre className="bg-gray-800 rounded-lg p-4 overflow-auto max-h-[500px] text-xs font-mono">
+                <pre className="bg-gray-800 rounded-lg p-4 overflow-y-auto overflow-x-hidden max-h-[500px] text-xs font-mono whitespace-pre-wrap break-words">
                   {JSON.stringify(selectedHistoryPrompt, null, 2)}
                 </pre>
               ) : (
@@ -1989,6 +2484,563 @@ Examples:
             </div>
           </div>
         )}
+
+        {activeTab === 'avatars' && (
+          <div className="space-y-6">
+            {/* Error Display */}
+            {avatarsError && (
+              <div className={`rounded-lg p-4 flex items-start gap-3 ${
+                avatarsError.type === 'warning'
+                  ? 'bg-yellow-900/50 border border-yellow-700'
+                  : 'bg-red-900/50 border border-red-700'
+              }`}>
+                <AlertCircle className={`w-5 h-5 shrink-0 mt-0.5 ${
+                  avatarsError.type === 'warning' ? 'text-yellow-400' : 'text-red-400'
+                }`} />
+                <p className={`flex-1 ${
+                  avatarsError.type === 'warning' ? 'text-yellow-200' : 'text-red-200'
+                }`}>
+                  {avatarsError.message}
+                </p>
+                <button
+                  onClick={() => setAvatarsError(null)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-6">
+              {/* Left Column: Avatar Selection */}
+              <div className="space-y-6">
+                {/* Step 1: Avatar Selection */}
+                <div className="bg-gray-900 rounded-lg p-4">
+                  <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <span className="bg-purple-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">1</span>
+                    Select Avatar
+                  </h2>
+
+                  {/* Mode Toggle */}
+                  <div className="flex bg-gray-800 rounded-lg p-1 mb-4">
+                    <button
+                      onClick={() => setAvatarMode('gallery')}
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
+                        avatarMode === 'gallery'
+                          ? 'bg-purple-600 text-white'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <Users className="w-4 h-4" />
+                      Gallery
+                    </button>
+                    <button
+                      onClick={() => setAvatarMode('generate')}
+                      className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
+                        avatarMode === 'generate'
+                          ? 'bg-purple-600 text-white'
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <Wand2 className="w-4 h-4" />
+                      Generate New
+                    </button>
+                  </div>
+
+                  {avatarMode === 'gallery' ? (
+                    <div>
+                      {avatarsLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+                        </div>
+                      ) : avatars.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-700 rounded-lg">
+                          <Users className="w-10 h-10 mx-auto mb-3 opacity-50" />
+                          <p>No avatars in gallery</p>
+                          <p className="text-sm mt-1">Generate a new avatar or add images to <code className="bg-gray-800 px-1 rounded">avatars/</code></p>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-5 gap-2 max-h-[300px] overflow-auto">
+                          {avatars.map((avatar) => (
+                            <button
+                              key={avatar.filename}
+                              onClick={() => {
+                                setSelectedAvatar(selectedAvatar?.filename === avatar.filename ? null : avatar)
+                                setGeneratedAvatarUrls([])
+                                setSelectedGeneratedIndex(0)
+                              }}
+                              className={`aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 relative ${
+                                selectedAvatar?.filename === avatar.filename
+                                  ? 'border-purple-500 ring-2 ring-purple-500/50'
+                                  : 'border-transparent hover:border-gray-600'
+                              }`}
+                            >
+                              <img
+                                src={avatar.url}
+                                alt={avatar.name}
+                                className="w-full h-full object-cover"
+                              />
+                              {selectedAvatar?.filename === avatar.filename && (
+                                <div className="absolute top-1 right-1 bg-purple-500 rounded-full p-0.5">
+                                  <Check className="w-3 h-3" />
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-2">Gender</label>
+                          <select
+                            value={avatarGender}
+                            onChange={(e) => setAvatarGender(e.target.value as 'female' | 'male')}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                          >
+                            <option value="female">Female</option>
+                            <option value="male">Male</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-2">Age Group</label>
+                          <select
+                            value={avatarAgeGroup}
+                            onChange={(e) => setAvatarAgeGroup(e.target.value as 'young-adult' | 'adult' | 'middle-aged')}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                          >
+                            <option value="young-adult">Young Adult (20s)</option>
+                            <option value="adult">Adult (30s)</option>
+                            <option value="middle-aged">Middle-aged (40-50s)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-2">Ethnicity</label>
+                          <select
+                            value={avatarEthnicity}
+                            onChange={(e) => setAvatarEthnicity(e.target.value as 'caucasian' | 'black' | 'asian' | 'hispanic' | 'middle-eastern' | 'south-asian')}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                          >
+                            <option value="caucasian">Caucasian</option>
+                            <option value="black">Black / African</option>
+                            <option value="asian">East Asian</option>
+                            <option value="hispanic">Hispanic / Latino</option>
+                            <option value="middle-eastern">Middle Eastern</option>
+                            <option value="south-asian">South Asian</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-2">Outfit</label>
+                          <select
+                            value={avatarOutfit}
+                            onChange={(e) => setAvatarOutfit(e.target.value as 'casual' | 'business' | 'sporty' | 'elegant' | 'streetwear')}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                          >
+                            <option value="casual">Casual</option>
+                            <option value="business">Business</option>
+                            <option value="sporty">Sporty</option>
+                            <option value="elegant">Elegant</option>
+                            <option value="streetwear">Streetwear</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Number of Avatars: {avatarCount}</label>
+                        <input
+                          type="range"
+                          min="1"
+                          max="4"
+                          value={avatarCount}
+                          onChange={(e) => setAvatarCount(Number(e.target.value))}
+                          className="w-full accent-purple-500"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>1</span>
+                          <span>2</span>
+                          <span>3</span>
+                          <span>4</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleGenerateAvatar}
+                        disabled={avatarGenerating}
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
+                      >
+                        {avatarGenerating ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Generating {avatarGenerationProgress}/{avatarCount}...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="w-4 h-4" />
+                            Generate {avatarCount > 1 ? `${avatarCount} Avatars` : 'Avatar'}
+                          </>
+                        )}
+                      </button>
+                      {generatedAvatarUrls.length > 0 && (
+                        <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg space-y-3">
+                          <p className="text-green-400 text-sm flex items-center gap-2">
+                            <CheckCircle className="w-4 h-4" />
+                            {generatedAvatarUrls.length} avatar{generatedAvatarUrls.length > 1 ? 's' : ''} generated and saved to gallery!
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {generatedAvatarUrls.map((url, index) => (
+                              <div
+                                key={index}
+                                className={`cursor-pointer transition-all relative rounded-lg overflow-hidden border-2 ${
+                                  selectedGeneratedIndex === index
+                                    ? 'border-purple-500 ring-2 ring-purple-500/50'
+                                    : 'border-transparent hover:border-gray-600'
+                                }`}
+                                onClick={() => setSelectedGeneratedIndex(index)}
+                              >
+                                <img
+                                  src={url}
+                                  alt={`Generated avatar ${index + 1}`}
+                                  className="w-full aspect-[9/16] object-cover"
+                                />
+                                {selectedGeneratedIndex === index && (
+                                  <div className="absolute top-1 right-1 bg-purple-500 rounded-full p-0.5">
+                                    <Check className="w-3 h-3" />
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-400 text-center">Click to select, double-click to view full size</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Selected Avatar Preview */}
+                  {(selectedAvatar || generatedAvatarUrls.length > 0) && (
+                    <div className="mt-4 p-3 bg-gray-800 rounded-lg">
+                      <p className="text-sm text-gray-400 mb-2">Selected Avatar:</p>
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={generatedAvatarUrls[selectedGeneratedIndex] || selectedAvatar?.url || ''}
+                          alt="Selected avatar"
+                          className="w-16 h-24 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => setFullSizeAvatarUrl(generatedAvatarUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
+                        />
+                        <div>
+                          <p className="font-medium">
+                            {generatedAvatarUrls.length > 0
+                              ? `Generated Avatar ${selectedGeneratedIndex + 1}/${generatedAvatarUrls.length}`
+                              : selectedAvatar?.name}
+                          </p>
+                          <p className="text-xs text-gray-500">Click image to view full size</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Step 2: Script Generation */}
+                <div className="bg-gray-900 rounded-lg p-4">
+                  <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <span className="bg-purple-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">2</span>
+                    Generate Script
+                  </h2>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-2">App/Product Concept</label>
+                      <input
+                        type="text"
+                        value={scriptConcept}
+                        onChange={(e) => setScriptConcept(e.target.value)}
+                        placeholder="e.g., AI photo transformation app, fitness tracker, dating app..."
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Duration: {scriptDuration}s</label>
+                        <input
+                          type="range"
+                          min="10"
+                          max="60"
+                          value={scriptDuration}
+                          onChange={(e) => setScriptDuration(Number(e.target.value))}
+                          className="w-full accent-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-2">Tone</label>
+                        <select
+                          value={scriptTone}
+                          onChange={(e) => setScriptTone(e.target.value as typeof scriptTone)}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="energetic">Energetic</option>
+                          <option value="casual">Casual</option>
+                          <option value="professional">Professional</option>
+                          <option value="friendly">Friendly</option>
+                          <option value="dramatic">Dramatic</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleGenerateScript}
+                      disabled={scriptGenerating || !scriptConcept.trim()}
+                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
+                    >
+                      {scriptGenerating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Generating Script...
+                        </>
+                      ) : (
+                        <>
+                          <MessageSquare className="w-4 h-4" />
+                          Generate Script
+                        </>
+                      )}
+                    </button>
+
+                    {generatedScript && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">Generated Script:</span>
+                          <span className="text-xs text-gray-500">
+                            {scriptWordCount} words (~{scriptEstimatedDuration}s)
+                          </span>
+                        </div>
+                        <textarea
+                          value={generatedScript}
+                          onChange={(e) => setGeneratedScript(e.target.value)}
+                          rows={4}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                        />
+                        <button
+                          onClick={handleGenerateScript}
+                          disabled={scriptGenerating}
+                          className="text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Regenerate
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Voice & Video */}
+              <div className="space-y-6">
+                {/* Step 3: Voice Selection & TTS */}
+                <div className="bg-gray-900 rounded-lg p-4">
+                  <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <span className="bg-purple-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">3</span>
+                    Voice & Audio
+                  </h2>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-2">Select Voice</label>
+                      {voicesLoading ? (
+                        <div className="flex items-center gap-2 text-gray-500">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Loading voices...
+                        </div>
+                      ) : (
+                        <select
+                          value={selectedVoice?.id || ''}
+                          onChange={(e) => {
+                            const voice = voices.find(v => v.id === e.target.value)
+                            setSelectedVoice(voice || null)
+                          }}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
+                        >
+                          <option value="">Select a voice...</option>
+                          {voices.map((voice) => (
+                            <option key={voice.id} value={voice.id}>
+                              {voice.name} {voice.category ? `(${voice.category})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {selectedVoice?.previewUrl && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const audio = new Audio(selectedVoice.previewUrl)
+                            audio.play()
+                          }}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm"
+                        >
+                          <Volume2 className="w-4 h-4" />
+                          Preview Voice
+                        </button>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleGenerateTTS}
+                      disabled={ttsGenerating || !generatedScript || !selectedVoice}
+                      className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
+                    >
+                      {ttsGenerating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Generating Audio...
+                        </>
+                      ) : (
+                        <>
+                          <Mic className="w-4 h-4" />
+                          Generate Audio
+                        </>
+                      )}
+                    </button>
+
+                    {generatedAudioUrl && (
+                      <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
+                        <p className="text-green-400 text-sm flex items-center gap-2 mb-2">
+                          <CheckCircle className="w-4 h-4" />
+                          Audio generated!
+                        </p>
+                        <audio
+                          controls
+                          src={generatedAudioUrl}
+                          className="w-full"
+                          onPlay={() => setAudioPlaying(true)}
+                          onPause={() => setAudioPlaying(false)}
+                          onEnded={() => setAudioPlaying(false)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 4: Lipsync Video Generation */}
+                <div className="bg-gray-900 rounded-lg p-4">
+                  <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <span className="bg-purple-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">4</span>
+                    Generate Video
+                  </h2>
+
+                  <div className="space-y-4">
+                    {/* Requirements Check */}
+                    <div className="space-y-2 text-sm">
+                      <div className={`flex items-center gap-2 ${selectedAvatar || generatedAvatarUrls.length > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                        {selectedAvatar || generatedAvatarUrls.length > 0 ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                        Avatar selected
+                      </div>
+                      <div className={`flex items-center gap-2 ${generatedScript ? 'text-green-400' : 'text-gray-500'}`}>
+                        {generatedScript ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                        Script generated
+                      </div>
+                      <div className={`flex items-center gap-2 ${generatedAudioUrl ? 'text-green-400' : 'text-gray-500'}`}>
+                        {generatedAudioUrl ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                        Audio generated
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleCreateLipsyncVideo}
+                      disabled={lipsyncGenerating || !generatedAudioUrl || (!selectedAvatar && generatedAvatarUrls.length === 0)}
+                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-4 py-3 font-medium transition-all flex items-center justify-center gap-2"
+                    >
+                      {lipsyncGenerating ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Generating Video...
+                          {lipsyncJob?.progress !== undefined && ` (${lipsyncJob.progress}%)`}
+                        </>
+                      ) : (
+                        <>
+                          <Video className="w-5 h-5" />
+                          Create Talking Avatar Video
+                        </>
+                      )}
+                    </button>
+
+                    {lipsyncJob && (
+                      <div className={`p-3 rounded-lg ${
+                        lipsyncJob.status === 'complete' ? 'bg-green-900/30 border border-green-700' :
+                        lipsyncJob.status === 'error' ? 'bg-red-900/30 border border-red-700' :
+                        'bg-yellow-900/30 border border-yellow-700'
+                      }`}>
+                        <p className={`text-sm flex items-center gap-2 ${
+                          lipsyncJob.status === 'complete' ? 'text-green-400' :
+                          lipsyncJob.status === 'error' ? 'text-red-400' :
+                          'text-yellow-400'
+                        }`}>
+                          {lipsyncJob.status === 'complete' ? <CheckCircle className="w-4 h-4" /> :
+                           lipsyncJob.status === 'error' ? <XCircle className="w-4 h-4" /> :
+                           <Loader2 className="w-4 h-4 animate-spin" />}
+                          {lipsyncJob.status === 'pending' && 'Queued...'}
+                          {lipsyncJob.status === 'processing' && 'Processing video...'}
+                          {lipsyncJob.status === 'complete' && 'Video ready!'}
+                          {lipsyncJob.status === 'error' && (lipsyncJob.error || 'Generation failed')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 5: Video Output */}
+                {generatedVideoUrl && (
+                  <div className="bg-gray-900 rounded-lg p-4">
+                    <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <span className="bg-green-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">5</span>
+                      Output
+                    </h2>
+
+                    <div className="space-y-4">
+                      <video
+                        controls
+                        src={generatedVideoUrl}
+                        className="w-full rounded-lg"
+                      />
+
+                      <div className="flex gap-2">
+                        <a
+                          href={generatedVideoUrl}
+                          download
+                          className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download Video
+                        </a>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const response = await fetch('/api/generate/open-folder', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ folderPath: 'outputs' }),
+                              })
+                              if (!response.ok) {
+                                const data = await response.json()
+                                setAvatarsError({ message: data.error || 'Failed to open folder', type: 'error' })
+                              }
+                            } catch {
+                              setAvatarsError({ message: 'Failed to open folder', type: 'error' })
+                            }
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg"
+                        >
+                          <FolderOpen className="w-4 h-4" />
+                          Open Folder
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Image Preview Overlay */}
@@ -1997,6 +3049,23 @@ Examples:
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 cursor-pointer"
           onClick={() => setPreviewImage(null)}
         >
+          {/* Prev Button */}
+          {batchProgress && (() => {
+            const completedImages = batchProgress.images.filter(img => img.status === 'completed' && img.url)
+            const currentIndex = completedImages.findIndex(img => img.url === previewImage)
+            return currentIndex > 0 ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPreviewImage(completedImages[currentIndex - 1].url!)
+                }}
+                className="absolute left-4 bg-black/50 hover:bg-black/70 rounded-full p-3 transition-colors z-10"
+              >
+                <ChevronLeft className="w-8 h-8" />
+              </button>
+            ) : null
+          })()}
+
           <div className="relative" onClick={(e) => e.stopPropagation()}>
             <img
               src={previewImage}
@@ -2022,6 +3091,70 @@ Examples:
               </button>
               <button
                 onClick={() => setPreviewImage(null)}
+                className="bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            {/* Image counter */}
+            {batchProgress && (() => {
+              const completedImages = batchProgress.images.filter(img => img.status === 'completed' && img.url)
+              const currentIndex = completedImages.findIndex(img => img.url === previewImage)
+              return currentIndex >= 0 ? (
+                <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm text-gray-400 bg-black/50 px-3 py-1 rounded">
+                  {currentIndex + 1} / {completedImages.length}
+                </p>
+              ) : (
+                <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm text-gray-400 bg-black/50 px-3 py-1 rounded">
+                  Click anywhere to close
+                </p>
+              )
+            })()}
+          </div>
+
+          {/* Next Button */}
+          {batchProgress && (() => {
+            const completedImages = batchProgress.images.filter(img => img.status === 'completed' && img.url)
+            const currentIndex = completedImages.findIndex(img => img.url === previewImage)
+            return currentIndex < completedImages.length - 1 ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPreviewImage(completedImages[currentIndex + 1].url!)
+                }}
+                className="absolute right-4 bg-black/50 hover:bg-black/70 rounded-full p-3 transition-colors z-10"
+              >
+                <ChevronRight className="w-8 h-8" />
+              </button>
+            ) : null
+          })()}
+        </div>
+      )}
+
+      {/* Full Size Avatar Overlay */}
+      {fullSizeAvatarUrl && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 cursor-pointer"
+          onClick={() => setFullSizeAvatarUrl(null)}
+        >
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={fullSizeAvatarUrl}
+              alt="Generated Avatar"
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            />
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+              <a
+                href={fullSizeAvatarUrl}
+                download
+                className="bg-green-600 hover:bg-green-700 rounded-full p-2 transition-colors"
+                title="Download avatar"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Download className="w-6 h-6" />
+              </a>
+              <button
+                onClick={() => setFullSizeAvatarUrl(null)}
                 className="bg-black/50 hover:bg-black/70 rounded-full p-2 transition-colors"
               >
                 <X className="w-6 h-6" />

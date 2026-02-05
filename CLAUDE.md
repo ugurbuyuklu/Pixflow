@@ -63,6 +63,39 @@ Uses GPT-4 Vision to analyze images and extract:
 - Favorites allow naming and organizing best prompts
 - Both stored in `packages/server/data/` directory
 
+### Phase 05: Avatars (Talking Avatar Video Pipeline)
+| Feature | Input | Output |
+|---------|-------|--------|
+| A: Generate Avatars | Gender, age, ethnicity, outfit | AI-generated avatar images |
+| B: Avatar Gallery | - | Select from existing avatars |
+| C: Script Generation | Concept + duration | Voiceover script (GPT-4o) |
+| D: Text-to-Speech | Script + voice | Audio file (ElevenLabs) |
+| E: Lipsync Video | Avatar + audio | Talking avatar video (Hedra) |
+
+**Avatar Generation** uses fal.ai's `nano-banana-pro` model:
+- Generates avatars with green screen background (#1ebf1a)
+- 2K resolution (1536x2752) at 9:16 aspect ratio
+- Direct eye contact and camera-facing pose
+- Customizable: gender, age group, ethnicity, outfit style
+
+**Working Avatar Prompt Template:**
+```
+photo of the person in the reference image
+background: solid green color (1ebf1a)
+outfit: [casual/professional/etc]
+pose: at ease
+framing: medium shot
+slightly smiling
+```
+
+**Implementation Status:**
+- ✅ `avatar.ts` - fal.ai avatar generation (prompt-only + reference image)
+- ✅ `voiceover.ts` - GPT-4o script generation
+- ✅ `tts.ts` - ElevenLabs text-to-speech
+- ✅ `lipsync.ts` - Hedra video generation
+- ✅ `routes/avatars.ts` - All API endpoints
+- ⏳ Frontend UI - Avatars tab (pending)
+
 ---
 
 ## 🎯 Custom Prompt Features
@@ -204,8 +237,9 @@ Every prompt MUST follow this structure with `style` FIRST:
   "effects": {
     "vignette": "string (optional)",
     "color_grade": "string",
+    "contrast": "string - low/medium/high with description",
     "atmosphere": "string (optional)",
-    "grain": "string"
+    "grain": "string - film grain for B&W/vintage looks"
   }
 }
 ```
@@ -220,6 +254,296 @@ Use "CRITICAL:" prefix for elements that MUST be present:
 ```
 
 The model pays more attention to CRITICAL-tagged elements.
+
+---
+
+## 📜 Prompt Writing & Image-to-Prompt Rules
+
+> These rules are NON-NEGOTIABLE. They apply to ALL prompt generation:
+> - Concept-to-Prompt (research-based generation)
+> - Image-to-Prompt (reverse engineering from image)
+> - Manual prompt editing/refinement
+>
+> Accumulated from months of production work. Follow every rule.
+
+### 1. Language & Format
+
+**1.1 All prompts are written in English**
+No exceptions. User communication may be Turkish, but final prompt output is always English.
+
+**1.2 JSON format is required**
+- Keys must be clear, hierarchical, and readable
+- Follow the Version B schema defined above
+
+**1.3 Aspect ratio / resolution is NEVER in the prompt**
+- This is set in generation settings, not in the prompt
+- Including it in the prompt is FORBIDDEN
+
+**1.4 No literary embellishment**
+```
+❌ "A breathtaking scene that evokes the eternal dance of light and shadow"
+✅ "Low-key dramatic lighting with strong directional key light from camera-left"
+```
+Prompts are technical direction documents, not creative writing.
+
+### 2. Physical Appearance & Identity
+
+**2.1 NO physical descriptors**
+The following are BANNED from all prompts:
+```
+❌ body type, weight, beauty, skinny, curvy, slim, fit
+❌ attractive, perfect body, gorgeous figure
+❌ age descriptors (young, mature, youthful)
+❌ skin color, ethnicity, race
+```
+
+**2.2 NO gender/appearance section in JSON**
+No fields for gender, height, weight, measurements. Remove entirely.
+
+**2.3 NO hairstyle definition**
+```
+❌ "Long blonde wavy hair"
+❌ "Short dark pixie cut"
+✅ "Natural hair" (maximum allowed)
+```
+Hair color, length, and specific style are NEVER defined. They come from the user's reference photo.
+
+**2.4 Identity preservation is explicit when needed**
+Use dedicated fields:
+```json
+"identity": {
+  "preserve_identity": true,
+  "preserve_facial_structure": true
+}
+```
+
+### 3. Pose, Body Language & Composition
+
+**3.1 Pose is described in FULL DETAIL**
+```
+❌ "standing"
+✅ "Standing with weight shifted to left hip, right foot slightly forward,
+    torso angled 30 degrees from camera, shoulders relaxed and slightly back"
+```
+
+**3.2 Every limb position is explicitly defined**
+- Hands: where, doing what, fingers how
+- Arms: extended/bent, tension level, angle
+- Legs: weight distribution, stance width
+- Head: tilt, turn, angle relative to camera
+
+**3.3 Emotional posture is included**
+Beyond physical position, define the feeling:
+```
+"posture": "Relaxed and confident, weight shifted casually,
+            shoulders open suggesting ease and self-assurance"
+```
+Options: relaxed, tense, confident, withdrawn, playful, powerful, vulnerable, guarded, open
+
+### 4. Outfit, Makeup & Expression
+
+**4.1 Outfit is ALWAYS fully defined**
+```
+❌ "Wearing a dress"
+✅ "Black silk slip dress with thin spaghetti straps, midi length,
+    slight V-neckline, fabric draping loosely over body"
+```
+Required: Fabric type, Color, Style/cut, Fit, Length, Notable details
+
+**4.2 Makeup is detailed and controlled**
+```
+❌ "Natural makeup"
+✅ "Matte skin finish with subtle bronzer on cheekbones,
+    soft brown smoky eye with defined crease,
+    nude matte lip with slight over-line"
+```
+Required: Tone/color, Intensity, Texture, Regional application
+
+**4.3 Facial expression is PRECISE**
+```
+❌ "smiling" / "happy"
+✅ "subtle smirk, corner of mouth lifted"
+✅ "neutral gaze with soft intensity"
+✅ "distant look, eyes unfocused, introspective"
+✅ "genuine open laugh, eyes crinkled"
+```
+
+### 5. Lighting (MOST CRITICAL SECTION)
+
+> This is the #1 most corrected area. ALWAYS give maximum detail.
+
+**5.1 Lighting is ALWAYS described in full** - Never skip or abbreviate.
+
+**5.2 Lighting type is always specified**
+```
+"studio lighting" OR "cinematic lighting" OR "natural lighting"
+```
+
+**5.3 Light direction is always specified**
+- Key light: direction, intensity, quality
+- Fill light: direction, intensity, purpose
+- Rim light: if present, direction and intensity
+- Backlight: if present, effect
+
+**5.4 Light character is defined**
+- Soft / Hard
+- Diffused / Sharp
+- High contrast / Low contrast
+- Warm / Cool / Neutral
+
+**5.5 Shadow behavior is specified**
+```
+- "Deep dramatic shadows with hard falloff"
+- "Soft graduated shadows, minimal contrast"
+- "Chiaroscuro with strong directional modeling"
+- "Even, flat lighting with minimal shadow"
+```
+
+**5.6 Image-to-Prompt: Light direction detection**
+```
+Shadows on RIGHT side → Light comes from LEFT
+Shadows on LEFT side → Light comes from RIGHT
+Shadows below → Light from above
+Highlights on hair edges → Rim/back light present
+```
+ALWAYS verify direction by looking at shadow placement.
+
+### 6. Camera & Film Aesthetic
+
+**6.1 Camera info is always included**
+```json
+"camera": {
+  "lens": "85mm prime",
+  "aperture": "f/2.8",
+  "angle": "Slightly below eye level",
+  "focus": "Sharp on eyes, gradual falloff to background"
+}
+```
+
+**6.2 Lens choice is RESEARCH-BASED**
+```
+❌ "Portrait = always 85mm"
+✅ Research → This concept trends with 35mm environmental framing
+```
+
+**6.3 Film/photo aesthetic is specified**
+Options: Editorial, Fashion, Documentary, Cinematic still, Lifestyle, Fine art, Commercial
+
+**6.4 B&W requires additional details**
+```json
+"effects": {
+  "color_grade": "True B&W, Kodak Tri-X 400 emulation",
+  "grain": "Medium natural film grain",
+  "contrast": "Medium-high, rich blacks, bright whites, full tonal range"
+}
+```
+
+### 7. Imperfections & Realism
+
+**7.1 Imperfections are DELIBERATELY included**
+```json
+"skin": "Natural skin texture visible, subtle pores,
+         minor natural imperfections preserved"
+```
+
+**7.2 Over-smoothness is forbidden**
+```
+❌ Plastic look, Airbrushed skin, CGI perfection, "Flawless" skin
+```
+
+**7.3 Target: Photorealism, not sterility**
+Goal is "shot on a real camera by a real photographer" — not "rendered in 3D"
+
+### 8. Image-to-Image Specific Rules
+
+**8.1 Reference image usage is explicit**
+```json
+"reference": {
+  "strength": 0.7,
+  "preserve_composition": true,
+  "preserve_identity": true
+}
+```
+
+**8.2 Composition preservation** - If composition should be kept, state it explicitly.
+
+**8.3 Prompt does NOT fight the reference**
+```
+❌ Prompt says "outdoor beach" but reference is indoor studio
+✅ Prompt enhances/refines what the reference shows
+```
+
+### 9. Banned Words & Patterns
+
+**9.1 Beauty-contest language is minimized**
+```
+BANNED: gorgeous, perfect, flawless, stunning, breathtaking
+MINIMAL USE: beautiful (prefer specific descriptors)
+```
+
+**9.2 No vague words** - Replace with specific:
+```
+❌ "nice lighting" → ✅ "soft diffused key light from upper-left"
+❌ "cool outfit" → ✅ "oversized knit sweater, cream colored, dropped shoulders"
+❌ "beautiful setting" → ✅ "minimalist studio with white seamless backdrop"
+```
+
+### 10. Core Philosophy
+
+**10.1 Prompt = Technical direction document** - Not an inspiration piece.
+
+**10.2 Control is yours, randomness is the model's enemy** - If you want something, SAY IT EXPLICITLY.
+
+**10.3 Describe BEHAVIOR, POSTURE, and LIGHT — not physical traits**
+
+**10.4 Goal: Consistent, repeatable, professional output**
+```
+❌ One lucky shot out of 10 tries
+✅ 8/10 outputs match the brief
+```
+
+### Image-to-Prompt Workflow
+
+**Step 1: Observe (DO NOT SKIP)**
+1. Overall mood/aesthetic
+2. Light direction and quality (CHECK SHADOWS)
+3. Color palette (or B&W treatment)
+4. Camera angle and framing
+5. Environment/set design
+6. Outfit specifics (fabric, color, fit, details)
+7. Pose (every limb, weight distribution, head angle)
+8. Expression (precise, not generic)
+9. Hair (style only, NO COLOR)
+10. Makeup (intensity, colors, finish)
+
+**Step 2: Write** - Start with `style` field, use CRITICAL tags, be specific not poetic
+
+**Step 3: Validate Checklist**
+- [ ] No physical descriptors (body type, beauty, skin color)?
+- [ ] No hair color mentioned?
+- [ ] Outfit fully detailed (not "casual loungewear")?
+- [ ] Light direction matches shadow placement?
+- [ ] Expression is precise (not just "happy")?
+- [ ] Film/grain aesthetic noted if applicable?
+- [ ] Pose describes every visible limb?
+- [ ] No banned vague words?
+- [ ] CRITICAL tags on essential elements?
+- [ ] Technical, not poetic?
+
+### Quick Reference: Common Corrections
+
+| Mistake | Wrong | Correct |
+|---------|-------|---------|
+| Generic outfit | "Casual loungewear" | "Black lace bodysuit with thin straps, fitted" |
+| Missing grain | "Clean digital" (for B&W) | "Medium film grain, Tri-X emulation" |
+| Wrong light direction | "Light from right" | Check shadows, verify direction |
+| Vague expression | "Happy" | "Wide genuine laugh, eyes crinkled, mouth open" |
+| Beauty language | "Gorgeous woman in stunning dress" | "Silk midi dress draped loosely" |
+| Missing shadows | No shadow description | "Soft shadows on left side of face, falloff to neck" |
+| Hairstyle with color | "Long blonde waves" | "Long natural waves" (NO COLOR) |
+| Generic pose | "Standing" | "Weight on left hip, right hand on waist, chin tilted down 15 degrees" |
+| Sterile skin | "Flawless porcelain skin" | "Natural skin texture, subtle pores visible" |
+| Missing aperture context | "f/1.4" for group shot | "f/4 to keep both subjects sharp" |
 
 ---
 
@@ -306,10 +630,15 @@ For a set of n prompts, verify:
 
 ## 🖥️ UI Structure
 
-### Tab 1: Prompt Factory
+### Tab 1: Prompt Factory (with Sub-tabs)
+
+Two modes available via sub-tab toggle: **Concept to Prompts** and **Image to Prompt**
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
+│  [Concept to Prompts]  [Image to Prompt]  ← Sub-tab toggle     │
+├─────────────────────────────────────────────────────────────────┤
+│ (Concept to Prompts mode shown below)                           │
 │ Concept: [____________________________________]                 │
 │ Number of prompts: [●━━━━━━━━━] 8                              │
 │ [✨ Generate Prompts]                                           │
@@ -323,6 +652,33 @@ For a set of n prompts, verify:
 │ Selected: 3    [Export JSON] [➡️ Send to Batch Generate]       │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**Image to Prompt Mode** (GPT-4 Vision):
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  [Concept to Prompts]  [Image to Prompt]  ← Sub-tab toggle     │
+├─────────────────────────────────────────────────────────────────┤
+│ Upload an image to extract style details                        │
+│ ┌───────────────────────────────────────────┐                  │
+│ │         [Drag & drop image here]          │                  │
+│ └───────────────────────────────────────────┘                  │
+│ [🔍 Analyze Image]                                              │
+├─────────────────────────────────────────────────────────────────┤
+│ Generated Prompt:                                               │
+│ { "style": "CRITICAL: ...", "lighting": {...}, ... }           │
+│                                                                 │
+│ [📋 Copy] [💾 Use in Batch] [🚀 Asset Monster]                  │
+└─────────────────────────────────────────────────────────────────┘
+  🚀 Asset Monster = Sends prompt directly to Batch Generate tab
+```
+
+**Image Analysis Features:**
+- Shadow-based light direction detection (shadows on RIGHT = light from LEFT)
+- CRITICAL tags for most important/unique elements
+- Contrast level analysis (low/medium/high)
+- Film grain detection for B&W/vintage looks
+- Specific outfit descriptions (never generic terms like "casual wear")
 
 ### Tab 2: Batch Generate
 
@@ -358,19 +714,37 @@ Image Preview Overlay:
   📄 = Send to Image-to-Prompt (extracts prompt from generated image)
 ```
 
-### Tab 3: Image to Prompt (GPT-4 Vision)
+### Tab 3: Avatars
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ Upload an image to extract style details                        │
-│ ┌───────────────────────────────────────────┐                  │
-│ │         [Drag & drop image here]          │                  │
-│ └───────────────────────────────────────────┘                  │
-│ [Analyze Image]                                                 │
+│ [Gallery] [Generate]                                            │
 ├─────────────────────────────────────────────────────────────────┤
-│ Extracted Prompt:                                               │
-│ { "style": "...", "lighting": {...}, ... }                     │
-│ [Use in Batch Generate]                                         │
+│ Avatar Selection:                                               │
+│ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐                               │
+│ │ 9:16│ │ 9:16│ │ 9:16│ │ 9:16│  ← All thumbnails 9:16        │
+│ └─────┘ └─────┘ └─────┘ └─────┘                               │
+│                                                                 │
+│ Generate Options:                                               │
+│ Gender: [Female ▼]  Age: [Young Adult ▼]                       │
+│ Ethnicity: [Caucasian ▼]  Outfit: [Casual ▼]                   │
+│ Number of Avatars: [●━━━] 1-4                                  │
+│ [Generate Avatar]                                               │
+├─────────────────────────────────────────────────────────────────┤
+│ Script Generation:                                              │
+│ Concept: [____________________]  Duration: [30s]               │
+│ Tone: [Energetic ▼]                                            │
+│ [Generate Script]                                               │
+│ ┌─────────────────────────────────────────┐                    │
+│ │ Generated script text here...           │                    │
+│ └─────────────────────────────────────────┘                    │
+├─────────────────────────────────────────────────────────────────┤
+│ Voice & TTS:                                                    │
+│ Voice: [Select Voice ▼]  [Preview]                             │
+│ [Generate Audio]                                                │
+├─────────────────────────────────────────────────────────────────┤
+│ Lipsync Video:                                                  │
+│ [Create Talking Avatar Video]                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -378,7 +752,7 @@ Image Preview Overlay:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ [History] [Favorites]                                           │
+│ [Favorites] [History]                                           │
 ├──────────────────────┬──────────────────────────────────────────┤
 │ Recent Generations:  │ Preview:                                 │
 │ - Christmas (8)      │ Concept: Christmas                       │
@@ -395,20 +769,26 @@ Image Preview Overlay:
 borgflow/
 ├── CLAUDE.md                     # This file
 ├── package.json                  # Monorepo root
-├── .env                          # API keys (OPENAI_API_KEY, FAL_KEY)
+├── .env                          # API keys
+├── avatars/                      # Avatar images (user-managed)
 ├── packages/
 │   ├── server/                   # Backend
 │   │   ├── src/
 │   │   │   ├── index.ts          # Express server entry point
 │   │   │   ├── routes/
 │   │   │   │   ├── generate.ts   # Batch generation + fal.ai endpoints
-│   │   │   │   └── history.ts    # History & favorites endpoints
+│   │   │   │   ├── history.ts    # History & favorites endpoints
+│   │   │   │   └── avatars.ts    # Avatar generation & TTS endpoints
 │   │   │   └── services/
 │   │   │       ├── research.ts   # Web search + analysis (GPT-4o)
 │   │   │       ├── promptGenerator.ts  # Prompt generation (GPT-4o)
 │   │   │       ├── fal.ts        # fal.ai API wrapper
 │   │   │       ├── vision.ts     # GPT-4 Vision image analysis
-│   │   │       └── history.ts    # History & favorites storage
+│   │   │       ├── history.ts    # History & favorites storage
+│   │   │       ├── avatar.ts     # Avatar generation (fal.ai nano-banana-pro)
+│   │   │       ├── voiceover.ts  # Script generation (GPT-4o)
+│   │   │       ├── tts.ts        # Text-to-speech (ElevenLabs)
+│   │   │       └── lipsync.ts    # Lipsync video (Hedra)
 │   │   ├── data/                 # JSON data storage
 │   │   │   ├── history.json      # Generation history (auto-created)
 │   │   │   └── favorites.json    # Saved favorites (auto-created)
@@ -440,7 +820,10 @@ borgflow/
 | Backend | Node.js + Express + TypeScript |
 | AI (Research & Prompts) | OpenAI GPT-4o |
 | AI (Image Analysis) | OpenAI GPT-4 Vision |
-| AI (Image Generation) | fal.ai Nano Banana Pro Edit |
+| AI (Image Generation) | fal.ai Nano Banana Pro |
+| AI (Avatar Generation) | fal.ai Nano Banana Pro |
+| AI (Text-to-Speech) | ElevenLabs |
+| AI (Lipsync Video) | Hedra |
 | File Storage | Local filesystem (JSON for history/favorites) |
 
 ---
@@ -474,6 +857,17 @@ borgflow/
 | PATCH | `/api/history/favorites/:id` | Update favorite name |
 | DELETE | `/api/history/favorites/:id` | Remove from favorites |
 
+### Avatars
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/avatars` | List avatars from gallery |
+| POST | `/api/avatars/generate` | Generate new avatar (fal.ai) |
+| POST | `/api/avatars/script` | Generate voiceover script (GPT-4o) |
+| GET | `/api/avatars/voices` | List available TTS voices |
+| POST | `/api/avatars/tts` | Convert text to speech (ElevenLabs) |
+| POST | `/api/avatars/lipsync` | Create lipsync video (Hedra) |
+| GET | `/api/avatars/lipsync/:jobId` | Check lipsync job status |
+
 ### System
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -486,7 +880,9 @@ borgflow/
 ```env
 # .env (in project root)
 OPENAI_API_KEY=sk-...        # For GPT-4o research/prompts and GPT-4 Vision
-FAL_KEY=...                   # For fal.ai image generation
+FAL_API_KEY=...              # For fal.ai image/avatar generation
+ELEVENLABS_API_KEY=...       # For text-to-speech (optional)
+HEDRA_API_KEY=...            # For lipsync video generation (optional)
 PORT=3001                     # Backend server port (optional, default 3001)
 ```
 
@@ -553,3 +949,76 @@ A successful prompt generation:
 4. ✅ Technical choices are research-justified
 5. ✅ CRITICAL elements are properly tagged
 6. ✅ No locked parameters violated
+
+---
+
+## 🎨 UI Design Patterns
+
+### Button Styles
+All buttons use gradient styling for consistency:
+- **Purple actions**: `from-purple-600 to-pink-600`
+- **Green actions**: `from-green-600 to-emerald-600`
+- **Cancel/destructive**: `from-red-600 to-orange-600`
+- **Secondary**: `from-gray-700 to-gray-600`
+
+### Thumbnails
+All image thumbnails use **9:16 aspect ratio** (`aspect-[9/16]`)
+
+### Scrolling
+- Lists use `overflow-y-auto` (vertical only)
+- Text uses `break-words` and `whitespace-pre-wrap`
+
+### Tab Order
+Tabs appear in this order: **Prompt Factory** → **Asset Monster** → **Avatars** → **History**
+
+### Key Features
+- **Editable Prompt Preview**: Prompts can be edited directly in the preview pane
+- **Auto-format**: Plain text is auto-converted to JSON via `/api/prompts/text-to-json`
+- **Cancel Generation**: Long-running generations can be cancelled via AbortController
+- **Image Navigation**: Preview overlay has prev/next buttons and keyboard shortcuts (← → Esc)
+- **Send to Monster**: Full-width button below prompts list, auto-selects all prompts
+
+---
+
+## 🔧 Implementation Patterns
+
+### Cancellable Fetch Requests
+Uses `AbortController` with `useRef` for persistent reference:
+```typescript
+const generateAbortController = useRef<AbortController | null>(null)
+
+// In handler:
+if (generateAbortController.current) {
+  generateAbortController.current.abort()
+}
+generateAbortController.current = new AbortController()
+
+// Pass to fetch:
+fetch(url, { signal: generateAbortController.current.signal })
+
+// Cancel handler:
+const handleCancel = () => {
+  generateAbortController.current?.abort()
+  generateAbortController.current = null
+  setLoading(false)
+}
+```
+
+### Text-to-JSON Conversion Flow
+1. User enters text in prompt editor (JSON or plain text)
+2. On save, try `JSON.parse()` first
+3. If parse fails, call `/api/prompts/text-to-json` endpoint
+4. Endpoint uses GPT-4o to convert natural language to our prompt schema
+5. Update state with converted JSON
+
+### fal.ai Configuration Pattern
+```typescript
+let falConfigured = false
+function ensureFalConfig() {
+  if (!falConfigured) {
+    fal.config({ credentials: process.env.FAL_API_KEY })
+    falConfigured = true
+  }
+}
+```
+Call `ensureFalConfig()` at the start of any fal.ai service function.
