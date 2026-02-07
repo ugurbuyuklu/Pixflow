@@ -71,7 +71,7 @@ export function ImagePreviewOverlay() {
               <a
                 href={assetUrl(previewImage)}
                 download
-                className="bg-success hover:bg-emerald-600 rounded-full p-2 transition-colors text-white"
+                className="bg-success hover:bg-success-hover rounded-full p-2 transition-colors text-white"
                 title="Download image"
                 onClick={(e) => e.stopPropagation()}
               >

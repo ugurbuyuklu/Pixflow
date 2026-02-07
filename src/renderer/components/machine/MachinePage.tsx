@@ -45,23 +45,23 @@ export default function MachinePage() {
     <div className="space-y-6">
       {error && (
         <div className={`rounded-lg p-4 flex items-start gap-3 ${
-          error.type === 'warning' ? 'bg-yellow-900/50 border border-yellow-700' : 'bg-red-900/50 border border-red-700'
+          error.type === 'warning' ? 'bg-warning-muted/50 border border-warning/40' : 'bg-danger-muted/50 border border-danger/40'
         }`}>
           <AlertCircle className={`w-5 h-5 shrink-0 mt-0.5 ${error.type === 'warning' ? 'text-warning' : 'text-danger'}`} />
-          <p className={`flex-1 ${error.type === 'warning' ? 'text-yellow-200' : 'text-red-200'}`}>{error.message}</p>
+          <p className={`flex-1 ${error.type === 'warning' ? 'text-warning' : 'text-danger'}`}>{error.message}</p>
           <button onClick={() => useMachineStore.setState({ error: null })} className="text-surface-400 hover:text-surface-900"><X className="w-4 h-4" /></button>
         </div>
       )}
 
       {step === 'error' && (
         <div className="space-y-4">
-          <div className="bg-red-900/20 border border-red-700 rounded-lg p-6">
+          <div className="bg-danger-muted/20 border border-danger/40 rounded-lg p-6">
             <h2 className="text-lg font-semibold text-danger mb-2 flex items-center gap-2">
               <XCircle className="w-5 h-5" />
               Pipeline Failed at {capitalize(failedStep)}
             </h2>
             {error && (
-              <p className="text-sm text-red-300/80 mb-4 break-words">{error.message}</p>
+              <p className="text-sm text-danger/80 mb-4 break-words">{error.message}</p>
             )}
             <div className="flex gap-3">
               {failedStep !== 'idle' && (
@@ -281,7 +281,7 @@ export default function MachinePage() {
           <button
             onClick={() => run()}
             disabled={!concept.trim() || !selectedAvatar || !selectedVoice}
-            className="w-full py-4 rounded-lg font-semibold text-lg flex items-center justify-center gap-3 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            className="w-full py-4 rounded-lg font-semibold text-lg flex items-center justify-center gap-3 bg-gradient-to-r from-warning to-warning-hover hover:from-warning-hover hover:to-warning text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
           >
             <Zap className="w-6 h-6" />
             Run The Machine
@@ -327,7 +327,7 @@ export default function MachinePage() {
                         <div className="mt-1">
                           <div className="w-full bg-surface-200 rounded-full h-2">
                             <div
-                              className="bg-yellow-400 h-2 rounded-full transition-all"
+                              className="bg-warning h-2 rounded-full transition-all"
                               style={{ width: `${batchProgress.totalImages > 0 ? (batchProgress.completedImages / batchProgress.totalImages) * 100 : 0}%` }}
                             />
                           </div>
@@ -355,7 +355,7 @@ export default function MachinePage() {
 
           <button
             onClick={cancel}
-            className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 transition-all"
+            className="w-full py-3 rounded-lg font-medium flex items-center justify-center gap-2 bg-danger text-white hover:bg-danger-hover transition-all"
           >
             <X className="w-5 h-5" />
             Cancel
@@ -409,7 +409,7 @@ export default function MachinePage() {
                   <a
                     href={assetUrl(videoUrl)}
                     download
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 rounded-lg font-medium transition-all"
+                    className="flex items-center gap-2 px-4 py-2 bg-success text-white hover:bg-success-hover rounded-lg font-medium transition-all"
                   >
                     <Download className="w-4 h-4" />
                     Download Video

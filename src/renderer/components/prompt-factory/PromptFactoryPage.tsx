@@ -125,7 +125,7 @@ export default function PromptFactoryPage() {
             </button>
 
             {analyzeError && (
-              <div className="flex items-center gap-2 p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-red-300 text-sm">
+              <div className="flex items-center gap-2 p-3 bg-danger-muted/30 border border-danger/30 rounded-lg text-danger text-sm">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 {analyzeError.message}
               </div>
@@ -169,7 +169,7 @@ export default function PromptFactoryPage() {
                       setPrompts([analyzedPrompt])
                       navigate('generate')
                     }}
-                    className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-surface-900 font-medium rounded-lg hover:from-emerald-500 hover:to-emerald-400 transition-all flex items-center justify-center gap-2 text-sm"
+                    className="flex-1 py-2.5 bg-success text-white font-medium rounded-lg hover:bg-success-hover transition-all flex items-center justify-center gap-2 text-sm"
                   >
                     <ArrowRight className="w-4 h-4" />
                     Asset Monster
@@ -234,7 +234,7 @@ export default function PromptFactoryPage() {
             {loading ? (
               <button
                 onClick={cancelGenerate}
-                className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-surface-900 font-medium rounded-lg hover:from-red-500 hover:to-orange-500 transition-all flex items-center gap-2"
+                className="px-6 py-3 bg-danger text-white font-medium rounded-lg hover:bg-danger-hover transition-all flex items-center gap-2"
               >
                 <X className="w-5 h-5" />
                 Cancel
@@ -262,7 +262,7 @@ export default function PromptFactoryPage() {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 p-4 bg-red-900/30 border border-red-700/50 rounded-xl text-red-300">
+        <div className="flex items-center gap-3 p-4 bg-danger-muted/30 border border-danger/30 rounded-xl text-danger">
           {error.message.includes('network') || error.message.includes('fetch') ? (
             <WifiOff className="w-5 h-5 flex-shrink-0" />
           ) : error.message.includes('timeout') || error.message.includes('Timeout') ? (
@@ -274,7 +274,7 @@ export default function PromptFactoryPage() {
           {error.action && (
             <button
               onClick={error.action.onClick}
-              className="ml-auto px-3 py-1 bg-red-600/30 text-red-200 rounded hover:bg-red-600/50 transition-colors text-sm"
+              className="ml-auto px-3 py-1 bg-danger/30 text-danger rounded hover:bg-danger/50 transition-colors text-sm"
             >
               {error.action.label}
             </button>
@@ -376,7 +376,7 @@ export default function PromptFactoryPage() {
             </div>
             <button
               onClick={handleSendToMonster}
-              className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-surface-900 font-medium rounded-lg hover:from-emerald-500 hover:to-emerald-400 transition-all flex items-center justify-center gap-2 text-sm"
+              className="w-full py-3 bg-success text-white font-medium rounded-lg hover:bg-success-hover transition-all flex items-center justify-center gap-2 text-sm"
             >
               <ArrowRight className="w-4 h-4" />
               Send to Monster

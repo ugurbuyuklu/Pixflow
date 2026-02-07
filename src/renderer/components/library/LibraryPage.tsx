@@ -143,7 +143,7 @@ export default function LibraryPage() {
       </div>
 
       {favoriteAdded && (
-        <div className="fixed bottom-6 right-6 bg-emerald-600 text-surface-900 px-4 py-2 rounded-lg shadow-lg text-sm animate-fade-in">
+        <div className="fixed bottom-6 right-6 bg-success text-white px-4 py-2 rounded-lg shadow-lg text-sm animate-fade-in">
           Added to favorites!
         </div>
       )}

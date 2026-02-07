@@ -303,7 +303,7 @@ Examples:
 • {"style": "Romantic portrait...", "lighting": {...}}`}
                 className={`w-full h-64 bg-surface-100 rounded-lg p-3 text-sm resize-none border ${
                   customPromptError
-                    ? 'border-red-500 focus:border-red-500'
+                    ? 'border-danger focus:border-danger'
                     : 'border-transparent focus:border-brand-500'
                 } focus:outline-none`}
               />
@@ -398,7 +398,7 @@ Examples:
                     />
                     <button
                       onClick={() => removeReferenceImage(index)}
-                      className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="absolute -top-1 -right-1 bg-danger rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -545,7 +545,7 @@ Examples:
             referenceImages.length === 0 ||
             (promptSource === 'generated' ? selectedPrompts.size === 0 : !customPromptJson.trim())
           }
-          className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 disabled:bg-surface-200 disabled:from-surface-200 disabled:to-surface-200 disabled:cursor-not-allowed rounded-lg px-6 py-4 font-medium transition-all flex items-center justify-center gap-2"
+          className="w-full bg-success hover:bg-success-hover disabled:bg-surface-200 disabled:cursor-not-allowed text-white rounded-lg px-6 py-4 font-medium transition-all flex items-center justify-center gap-2"
         >
           {batchLoading ? (
             <>
@@ -563,8 +563,8 @@ Examples:
         {batchError && (
           <div className={`rounded-lg p-4 flex items-start gap-3 ${
             batchError.type === 'warning'
-              ? 'bg-yellow-900/50 border border-yellow-700'
-              : 'bg-red-900/50 border border-red-700'
+              ? 'bg-warning-muted/50 border border-warning/40'
+              : 'bg-danger-muted/50 border border-danger/40'
           }`}>
             {batchError.type === 'warning' ? (
               <Clock className="w-5 h-5 text-warning shrink-0 mt-0.5" />
@@ -574,14 +574,14 @@ Examples:
               <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
             )}
             <div className="flex-1">
-              <p className={batchError.type === 'warning' ? 'text-yellow-200' : 'text-red-200'}>
+              <p className={batchError.type === 'warning' ? 'text-warning' : 'text-danger'}>
                 {batchError.message}
               </p>
               {batchError.action && (
                 <button
                   onClick={batchError.action.onClick}
                   className={`mt-2 text-sm underline ${
-                    batchError.type === 'warning' ? 'text-yellow-300 hover:text-yellow-200' : 'text-red-300 hover:text-red-200'
+                    batchError.type === 'warning' ? 'text-warning hover:text-warning-hover' : 'text-danger hover:text-danger-hover'
                   }`}
                 >
                   {batchError.action.label}
@@ -598,9 +598,9 @@ Examples:
         )}
 
         {uploadError && (
-          <div className="bg-red-900/50 border border-red-700 rounded-lg p-4 flex items-start gap-3">
+          <div className="bg-danger-muted/50 border border-danger/40 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
-            <p className="flex-1 text-red-200">{uploadError}</p>
+            <p className="flex-1 text-danger">{uploadError}</p>
             <button
               onClick={() => setUploadError(null)}
               className="text-surface-400 hover:text-surface-900"
@@ -615,12 +615,12 @@ Examples:
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Generation Progress</h2>
               <div className="flex items-center gap-2">
-                <span className={`px-2 py-1 rounded text-xs ${
+                <span className={`px-2 py-1 rounded text-xs text-white ${
                   batchProgress.status === 'completed'
-                    ? 'bg-green-600'
+                    ? 'bg-success'
                     : batchProgress.status === 'failed'
-                    ? 'bg-red-600'
-                    : 'bg-yellow-600'
+                    ? 'bg-danger'
+                    : 'bg-warning'
                 }`}>
                   {batchProgress.status.toUpperCase()}
                 </span>
@@ -637,11 +637,11 @@ Examples:
                   onClick={() => img.status === 'completed' && img.url && setPreviewImage(img.url)}
                   className={`aspect-[9/16] rounded-lg border-2 flex items-center justify-center ${
                     img.status === 'completed'
-                      ? 'border-green-500 bg-green-500/10 cursor-pointer hover:border-green-400 hover:scale-105 transition-all'
+                      ? 'border-success bg-success/10 cursor-pointer hover:border-success-hover hover:scale-105 transition-all'
                       : img.status === 'generating'
-                      ? 'border-yellow-500 bg-yellow-500/10'
+                      ? 'border-warning bg-warning/10'
                       : img.status === 'failed'
-                      ? 'border-red-500 bg-red-500/10'
+                      ? 'border-danger bg-danger/10'
                       : 'border-surface-200 bg-surface-100'
                   }`}
                 >

@@ -35,7 +35,7 @@ export function AvatarPreviewOverlay() {
               <a
                 href={assetUrl(fullSizeAvatarUrl)}
                 download
-                className="bg-success hover:bg-emerald-600 rounded-full p-2 transition-colors text-white"
+                className="bg-success hover:bg-success-hover rounded-full p-2 transition-colors text-white"
                 title="Download avatar"
                 onClick={(e) => e.stopPropagation()}
               >
