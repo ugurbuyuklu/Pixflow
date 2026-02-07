@@ -6,6 +6,7 @@ import dotenv from 'dotenv'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createApp } from '../server/createApp.js'
 import { backupDatabase, closeDatabase } from '../server/db/index.js'
+import { stopJobCleanup } from '../server/services/fal.js'
 
 let mainWindow: BrowserWindow | null = null
 let serverPort = 3001
@@ -137,6 +138,7 @@ app.whenReady().then(async () => {
 })
 
 app.on('before-quit', () => {
+  stopJobCleanup()
   if (appDataDir) {
     try {
       backupDatabase(appDataDir)

@@ -68,6 +68,12 @@ interface AvatarState {
   lipsyncJob: LipsyncJob | null
   generatedVideoUrl: string | null
 
+  i2vPrompt: string
+  i2vDuration: '5' | '10'
+  i2vLoading: boolean
+  i2vVideoUrl: string | null
+  i2vError: ErrorInfo | null
+
   setMode: (mode: 'gallery' | 'generate') => void
   setSelectedAvatar: (avatar: Avatar | null) => void
   setFullSizeAvatarUrl: (url: string | null) => void
@@ -82,6 +88,8 @@ interface AvatarState {
   setScriptTone: (tone: ScriptTone) => void
   setGeneratedScript: (script: string) => void
   setSelectedVoice: (voice: Voice | null) => void
+  setI2vPrompt: (prompt: string) => void
+  setI2vDuration: (duration: '5' | '10') => void
 
   loadAvatars: () => Promise<void>
   loadVoices: () => Promise<void>
@@ -90,6 +98,7 @@ interface AvatarState {
   generateScript: () => Promise<void>
   generateTTS: () => Promise<void>
   createLipsync: () => Promise<void>
+  generateI2V: () => Promise<void>
   sendToImageToPrompt: (imageUrl: string) => Promise<File | null>
 }
 
@@ -131,6 +140,12 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
   lipsyncJob: null,
   generatedVideoUrl: null,
 
+  i2vPrompt: '',
+  i2vDuration: '5',
+  i2vLoading: false,
+  i2vVideoUrl: null,
+  i2vError: null,
+
   setMode: (mode) => set({ mode }),
   setSelectedAvatar: (selectedAvatar) => set({ selectedAvatar }),
   setFullSizeAvatarUrl: (fullSizeAvatarUrl) => set({ fullSizeAvatarUrl }),
@@ -145,6 +160,8 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
   setScriptTone: (scriptTone) => set({ scriptTone }),
   setGeneratedScript: (generatedScript) => set({ generatedScript }),
   setSelectedVoice: (selectedVoice) => set({ selectedVoice }),
+  setI2vPrompt: (i2vPrompt) => set({ i2vPrompt }),
+  setI2vDuration: (i2vDuration) => set({ i2vDuration }),
 
   loadAvatars: async () => {
     set({ avatarsLoading: true })
@@ -349,6 +366,41 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
       set({ error: parseError(err) })
     } finally {
       set({ lipsyncGenerating: false })
+    }
+  },
+
+  generateI2V: async () => {
+    const { generatedUrls, selectedGeneratedIndex, selectedAvatar, i2vPrompt, i2vDuration } = get()
+    const imageUrl = generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url
+    if (!imageUrl) {
+      set({ i2vError: { message: 'Please select or generate an avatar', type: 'warning' } })
+      return
+    }
+    if (!i2vPrompt.trim()) {
+      set({ i2vError: { message: 'Please enter a motion prompt', type: 'warning' } })
+      return
+    }
+
+    set({ i2vLoading: true, i2vError: null, i2vVideoUrl: null })
+
+    try {
+      const res = await authFetch(apiUrl('/api/avatars/i2v'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl, prompt: i2vPrompt, duration: i2vDuration }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to generate video')
+      }
+
+      const data = await res.json()
+      set({ i2vVideoUrl: data.localPath })
+    } catch (err) {
+      set({ i2vError: parseError(err) })
+    } finally {
+      set({ i2vLoading: false })
     }
   },
 

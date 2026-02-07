@@ -1,14 +1,6 @@
 import { create } from 'zustand'
 import { apiUrl, authFetch } from '../lib/api'
-
-interface Notification {
-  id: number
-  type: string
-  title: string
-  body: string
-  read: boolean
-  created_at: string
-}
+import type { Notification } from '../types'
 
 interface NotificationState {
   notifications: Notification[]
@@ -19,8 +11,6 @@ interface NotificationState {
   markAllRead: () => Promise<void>
   clear: () => void
 }
-
-export type { Notification }
 
 export const useNotificationStore = create<NotificationState>()((set, get) => ({
   notifications: [],
@@ -62,21 +52,19 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
   },
 
   markAllRead: async () => {
-    const unreadIds = get().notifications.filter((n) => !n.read).map((n) => n.id)
-    if (unreadIds.length === 0) return
+    if (get().unreadCount === 0) return
 
-    // Optimistic update
-    set((state) => ({
-      notifications: state.notifications.map((n) => ({ ...n, read: true })),
+    const prev = get().notifications
+    set({
+      notifications: prev.map((n) => ({ ...n, read: true })),
       unreadCount: 0,
-    }))
+    })
 
-    for (const id of unreadIds) {
-      try {
-        await authFetch(apiUrl(`/api/notifications/${id}/read`), { method: 'PATCH' })
-      } catch (err) {
-        console.error(`Failed to mark notification ${id} as read:`, err)
-      }
+    try {
+      await authFetch(apiUrl('/api/notifications/read-all'), { method: 'POST' })
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err)
+      set({ notifications: prev, unreadCount: prev.filter((n) => !n.read).length })
     }
   },
 

@@ -1,15 +1,7 @@
 import { fal } from '@fal-ai/client'
 import fs from 'fs/promises'
 import path from 'path'
-
-let falConfigured = false
-
-function ensureFalConfig() {
-  if (!falConfigured) {
-    fal.config({ credentials: process.env.FAL_API_KEY })
-    falConfigured = true
-  }
-}
+import { ensureFalConfig } from './falConfig.js'
 
 const OMNIHUMAN_MODEL = 'fal-ai/bytedance/omnihuman/v1.5'
 

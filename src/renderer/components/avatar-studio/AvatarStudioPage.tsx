@@ -16,9 +16,11 @@ export default function AvatarStudioPage() {
     scriptConcept, scriptDuration, scriptTone, scriptGenerating, generatedScript, scriptWordCount, scriptEstimatedDuration,
     voices, voicesLoading, selectedVoice, ttsGenerating, generatedAudioUrl,
     lipsyncGenerating, lipsyncJob, generatedVideoUrl,
+    i2vPrompt, i2vDuration, i2vLoading, i2vVideoUrl, i2vError,
     setMode, setSelectedAvatar, setFullSizeAvatarUrl, setGender, setAgeGroup, setEthnicity, setOutfit, setAvatarCount, setSelectedGeneratedIndex,
     setScriptConcept, setScriptDuration, setScriptTone, setGeneratedScript, setSelectedVoice,
-    loadAvatars, loadVoices, uploadAvatars, generateAvatar, generateScript, generateTTS, createLipsync,
+    setI2vPrompt, setI2vDuration,
+    loadAvatars, loadVoices, uploadAvatars, generateAvatar, generateScript, generateTTS, createLipsync, generateI2V,
   } = useAvatarStore()
 
   useEffect(() => {
@@ -613,6 +615,95 @@ export default function AvatarStudioPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Image to Video (Kling AI) */}
+        <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Video className="w-5 h-5 text-cyan-400" />
+            <h3 className="text-lg font-semibold text-white">Image to Video</h3>
+            <span className="text-xs text-gray-400 ml-auto">Powered by Kling AI</span>
+          </div>
+
+          {i2vError && (
+            <div className={`rounded-lg p-3 mb-4 flex items-start gap-2 ${
+              i2vError.type === 'warning' ? 'bg-yellow-900/50 border border-yellow-700' : 'bg-red-900/50 border border-red-700'
+            }`}>
+              <AlertCircle className={`w-4 h-4 shrink-0 mt-0.5 ${i2vError.type === 'warning' ? 'text-yellow-400' : 'text-red-400'}`} />
+              <p className={`text-sm ${i2vError.type === 'warning' ? 'text-yellow-200' : 'text-red-200'}`}>{i2vError.message}</p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Motion Prompt</label>
+              <textarea
+                value={i2vPrompt}
+                onChange={(e) => setI2vPrompt(e.target.value)}
+                placeholder="Describe the motion or scene... e.g., 'Camera slowly zooms in while the subject smiles and waves'"
+                className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition-colors resize-none h-20"
+              />
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Duration</label>
+                <div className="flex gap-2">
+                  {(['5', '10'] as const).map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setI2vDuration(d)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        i2vDuration === d
+                          ? 'bg-cyan-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      {d}s
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex-1 flex justify-end">
+                <button
+                  onClick={generateI2V}
+                  disabled={i2vLoading || !i2vPrompt.trim()}
+                  className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium rounded-lg hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                >
+                  {i2vLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Video className="w-5 h-5" />
+                      Generate Video
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {i2vVideoUrl && (
+              <div className="space-y-3">
+                <video
+                  controls
+                  src={assetUrl(i2vVideoUrl)}
+                  className="w-full rounded-lg"
+                />
+                <a
+                  href={assetUrl(i2vVideoUrl)}
+                  download
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg font-medium transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Video
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

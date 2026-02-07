@@ -16,6 +16,8 @@ import { requireAuth } from './middleware/auth.js'
 import { createAuthRouter } from './routes/auth.js'
 import { createProductsRouter } from './routes/products.js'
 import { createPresetsRouter } from './routes/presets.js'
+import { createFeedbackRouter } from './routes/feedback.js'
+import { createNotificationsRouter } from './routes/notifications.js'
 
 export interface ServerConfig {
   projectRoot: string
@@ -62,7 +64,7 @@ export function createApp(config: ServerConfig): express.Express {
 
   const avatarsDir = path.join(projectRoot, 'avatars')
 
-  app.get('/api/avatars', apiLimiter, async (_req, res) => {
+  app.get('/api/avatars', requireAuth, apiLimiter, async (_req, res) => {
     try {
       await fs.mkdir(avatarsDir, { recursive: true })
       const files = await fs.readdir(avatarsDir)
@@ -210,6 +212,20 @@ export function createApp(config: ServerConfig): express.Express {
   app.use('/api/history', requireAuth, createHistoryRouter())
   app.use('/api/avatars', requireAuth, createAvatarsRouter({ projectRoot }))
   app.use('/api/presets', requireAuth, createPresetsRouter())
+  app.use('/api/feedback', requireAuth, createFeedbackRouter())
+  app.use('/api/notifications', requireAuth, createNotificationsRouter())
+
+  app.get('/api/settings/status', requireAuth, (_req, res) => {
+    res.json({
+      apiKeys: {
+        openai: !!process.env.OPENAI_API_KEY,
+        fal: !!process.env.FAL_API_KEY,
+        elevenlabs: !!process.env.ELEVENLABS_API_KEY,
+        hedra: !!process.env.HEDRA_API_KEY,
+      },
+      version: '0.2.0',
+    })
+  })
 
   return app
 }

@@ -2,15 +2,8 @@ import { fal } from '@fal-ai/client'
 import fs from 'fs/promises'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
-
-let falConfigured = false
-
-function ensureFalConfig() {
-  if (!falConfigured) {
-    fal.config({ credentials: process.env.FAL_API_KEY })
-    falConfigured = true
-  }
-}
+import { notify } from './notifications.js'
+import { ensureFalConfig } from './falConfig.js'
 
 const MODEL_ID = 'fal-ai/nano-banana-pro/edit'
 
@@ -32,6 +25,7 @@ export interface BatchJob {
   images: GeneratedImage[]
   outputDir: string
   createdAt: Date
+  userId?: number
 }
 
 const activeJobs = new Map<string, BatchJob>()
@@ -47,7 +41,11 @@ function cleanupOldJobs() {
   }
 }
 
-setInterval(cleanupOldJobs, 5 * 60 * 1000) // Run every 5 minutes
+const cleanupInterval = setInterval(cleanupOldJobs, 5 * 60 * 1000)
+
+export function stopJobCleanup() {
+  clearInterval(cleanupInterval)
+}
 
 async function fileToDataUrl(filePath: string): Promise<string> {
   const buffer = await fs.readFile(filePath)
@@ -117,7 +115,8 @@ export async function downloadImage(url: string, outputPath: string): Promise<st
 export function createBatchJob(
   concept: string,
   promptCount: number,
-  outputDir: string
+  outputDir: string,
+  userId?: number,
 ): BatchJob {
   const job: BatchJob = {
     id: uuidv4(),
@@ -133,6 +132,7 @@ export function createBatchJob(
     })),
     outputDir,
     createdAt: new Date(),
+    userId,
   }
   activeJobs.set(job.id, job)
   return job
@@ -212,6 +212,16 @@ export async function generateBatch(
   await Promise.all(workers)
 
   job.status = job.images.every((img) => img.status === 'completed') ? 'completed' : 'failed'
+
+  if (job.userId) {
+    const ok = job.status === 'completed'
+    notify(
+      job.userId,
+      ok ? 'batch_complete' : 'batch_failed',
+      ok ? 'Batch Complete' : 'Batch Failed',
+      `${job.concept}: ${job.completedImages}/${job.totalImages} images`,
+    )
+  }
 }
 
 export function formatPromptForFal(promptJson: Record<string, unknown>): string {

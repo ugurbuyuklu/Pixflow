@@ -11,6 +11,7 @@ import {
   formatPromptForFal,
 } from '../services/fal.js'
 import { analyzeImage } from '../services/vision.js'
+import type { AuthRequest } from '../middleware/auth.js'
 
 const MAX_PROMPTS = 20
 
@@ -61,7 +62,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
 
   const MAX_REFERENCE_IMAGES = 4
 
-  router.post('/batch', upload.array('referenceImages', MAX_REFERENCE_IMAGES), async (req, res) => {
+  router.post('/batch', upload.array('referenceImages', MAX_REFERENCE_IMAGES), async (req: AuthRequest, res) => {
     try {
       const {
         concept,
@@ -114,7 +115,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
       const outputDir = path.join(outputsDir, `${safeConcept}_${timestamp}`)
       await fs.mkdir(outputDir, { recursive: true })
 
-      const job = createBatchJob(concept, totalImages, outputDir)
+      const job = createBatchJob(concept, totalImages, outputDir, req.user?.id)
 
       const referenceImageUrls = files.map((file) => `file://${file.path}`)
       const textPrompts = prompts.map((p) => formatPromptForFal(p))
@@ -148,11 +149,16 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
     }
   })
 
-  router.get('/progress/:jobId', (req, res) => {
+  router.get('/progress/:jobId', (req: AuthRequest, res) => {
     const { jobId } = req.params
     const job = getJob(jobId)
 
     if (!job) {
+      res.status(404).json({ error: 'Job not found' })
+      return
+    }
+
+    if (job.userId && job.userId !== req.user?.id) {
       res.status(404).json({ error: 'Job not found' })
       return
     }

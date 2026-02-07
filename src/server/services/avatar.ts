@@ -1,13 +1,5 @@
 import { fal } from '@fal-ai/client'
-
-let falConfigured = false
-
-function ensureFalConfig() {
-  if (!falConfigured) {
-    fal.config({ credentials: process.env.FAL_API_KEY })
-    falConfigured = true
-  }
-}
+import { ensureFalConfig } from './falConfig.js'
 
 const AVATAR_MODEL = 'fal-ai/nano-banana-pro'
 

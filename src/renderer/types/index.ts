@@ -137,6 +137,15 @@ export interface LipsyncJob {
   progress?: number
 }
 
+export interface Notification {
+  id: number
+  type: string
+  title: string
+  body: string | null
+  read: boolean
+  created_at: string
+}
+
 export type MachineStep = 'idle' | 'prompts' | 'images' | 'script' | 'tts' | 'lipsync' | 'done' | 'error'
 
 export function parseError(err: unknown, response?: Response): ErrorInfo {

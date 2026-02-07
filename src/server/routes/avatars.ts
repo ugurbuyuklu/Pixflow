@@ -7,6 +7,9 @@ import { generateAvatar, generateAvatarFromReference } from '../services/avatar.
 import { generateVoiceoverScript, refineScript } from '../services/voiceover.js'
 import { textToSpeech, listVoices, getAvailableModels } from '../services/tts.js'
 import { createHedraVideo, downloadHedraVideo } from '../services/hedra.js'
+import { generateKlingVideo, downloadKlingVideo } from '../services/kling.js'
+import { notify } from '../services/notifications.js'
+import type { AuthRequest } from '../middleware/auth.js'
 
 interface AvatarsRouterConfig {
   projectRoot: string
@@ -265,7 +268,7 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
     }
   })
 
-  router.post('/lipsync', generationLimiter, async (req, res) => {
+  router.post('/lipsync', generationLimiter, async (req: AuthRequest, res) => {
     req.setTimeout(660_000)
     res.setTimeout(660_000)
 
@@ -306,6 +309,8 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
       const outputFilename = `lipsync_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp4`
       await downloadHedraVideo(result.videoUrl, path.join(outputsDir, outputFilename))
 
+      if (req.user?.id) notify(req.user.id, 'lipsync_complete', 'Lipsync Video Ready', 'Your talking avatar video is ready to download')
+
       res.json({
         success: true,
         videoUrl: result.videoUrl,
@@ -316,6 +321,60 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
       console.error('[Lipsync] Generation failed:', error)
       res.status(500).json({
         error: 'Failed to create lipsync video',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  })
+
+  router.post('/i2v', generationLimiter, async (req: AuthRequest, res) => {
+    req.setTimeout(300_000)
+    res.setTimeout(300_000)
+
+    try {
+      const { imageUrl, prompt, duration, aspectRatio } = req.body
+      if (!imageUrl || typeof imageUrl !== 'string') { res.status(400).json({ error: 'Image URL is required' }); return }
+      if (!prompt || typeof prompt !== 'string') { res.status(400).json({ error: 'Prompt is required' }); return }
+      if (prompt.length > MAX_PROMPT_LENGTH) { res.status(400).json({ error: `Prompt too long (max ${MAX_PROMPT_LENGTH} characters)` }); return }
+      if (duration && !['5', '10'].includes(String(duration))) { res.status(400).json({ error: 'Duration must be 5 or 10' }); return }
+      if (aspectRatio && !VALID_ASPECT_RATIOS.includes(aspectRatio)) { res.status(400).json({ error: 'Invalid aspect ratio' }); return }
+
+      let imagePath: string | null = null
+      if (imageUrl.startsWith('/avatars/')) {
+        imagePath = sanitizePath(avatarsDir, path.basename(decodeURIComponent(imageUrl)))
+      } else if (imageUrl.startsWith('/outputs/')) {
+        imagePath = sanitizePath(outputsDir, path.basename(decodeURIComponent(imageUrl)))
+      }
+      if (!imagePath) { res.status(400).json({ error: 'Invalid image path — must be a local avatar or output' }); return }
+
+      try { await fs.access(imagePath) } catch {
+        res.status(400).json({ error: `Image file not found: ${path.basename(imagePath)}` })
+        return
+      }
+
+      console.log(`[I2V] Generating video with Kling AI from ${path.basename(imagePath)}...`)
+      const result = await generateKlingVideo({
+        imagePath,
+        prompt,
+        duration: String(duration || '5') as '5' | '10',
+        aspectRatio: aspectRatio || '9:16',
+      })
+
+      await fs.mkdir(outputsDir, { recursive: true })
+      const outputFilename = `i2v_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp4`
+      await downloadKlingVideo(result.videoUrl, path.join(outputsDir, outputFilename))
+
+      if (req.user?.id) notify(req.user.id, 'i2v_complete', 'Video Ready', 'Your image-to-video is ready to download')
+
+      res.json({
+        success: true,
+        videoUrl: result.videoUrl,
+        localPath: `/outputs/${outputFilename}`,
+        requestId: result.requestId,
+      })
+    } catch (error) {
+      console.error('[I2V] Generation failed:', error)
+      res.status(500).json({
+        error: 'Failed to generate video',
         details: error instanceof Error ? error.message : 'Unknown error',
       })
     }
