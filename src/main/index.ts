@@ -5,9 +5,11 @@ import net from 'net'
 import dotenv from 'dotenv'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createApp } from '../server/createApp.js'
+import { backupDatabase, closeDatabase } from '../server/db/index.js'
 
 let mainWindow: BrowserWindow | null = null
 let serverPort = 3001
+let appDataDir = ''
 
 function findAvailablePort(start: number): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -35,15 +37,15 @@ async function startEmbeddedServer(): Promise<number> {
 
   const projectRoot = is.dev
     ? process.cwd()
-    : path.join(app.getPath('documents'), 'Borgflow')
+    : path.join(app.getPath('documents'), 'Pixflow')
 
-  const dataDir = is.dev
+  appDataDir = is.dev
     ? path.join(process.cwd(), 'data')
     : path.join(app.getPath('userData'), 'data')
 
   const expressApp = createApp({
     projectRoot,
-    dataDir,
+    dataDir: appDataDir,
     openFolder: async (p) => {
       const err = await shell.openPath(p)
       if (err) throw new Error(err)
@@ -95,7 +97,7 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.borgflow.app')
+  electronApp.setAppUserModelId('com.pixery.pixflow')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -105,12 +107,23 @@ app.whenReady().then(async () => {
     serverPort = await startEmbeddedServer()
   } catch (err) {
     console.error('[Electron] Failed to start embedded server:', err)
-    dialog.showErrorBox('Borgflow', `Failed to start server: ${err instanceof Error ? err.message : err}`)
+    dialog.showErrorBox('Pixflow', `Failed to start server: ${err instanceof Error ? err.message : err}`)
     app.quit()
     return
   }
 
   ipcMain.handle('get-server-port', () => serverPort)
+
+  setInterval(() => {
+    if (appDataDir) {
+      try {
+        backupDatabase(appDataDir)
+        console.log('[Electron] Periodic database backup complete')
+      } catch (err) {
+        console.error('[Electron] Periodic backup failed:', err)
+      }
+    }
+  }, 30 * 60 * 1000)
 
   ipcMain.handle('open-path', async (_, filePath: string) => {
     return shell.openPath(filePath)
@@ -121,6 +134,18 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('before-quit', () => {
+  if (appDataDir) {
+    try {
+      backupDatabase(appDataDir)
+      console.log('[Electron] Database backed up on quit')
+    } catch (err) {
+      console.error('[Electron] Backup failed:', err)
+    }
+    closeDatabase()
+  }
 })
 
 app.on('window-all-closed', () => {

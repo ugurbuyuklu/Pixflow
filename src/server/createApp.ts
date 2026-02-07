@@ -9,6 +9,12 @@ import { initHistory, addToHistory } from './services/history.js'
 import { createGenerateRouter } from './routes/generate.js'
 import { createHistoryRouter } from './routes/history.js'
 import { createAvatarsRouter } from './routes/avatars.js'
+import { initDatabase, getDb } from './db/index.js'
+import { migrateJsonToSqlite } from './db/migrations.js'
+import { ensureAdminExists } from './services/auth.js'
+import { requireAuth } from './middleware/auth.js'
+import { createAuthRouter } from './routes/auth.js'
+import { createProductsRouter } from './routes/products.js'
 
 export interface ServerConfig {
   projectRoot: string
@@ -28,6 +34,9 @@ function sanitizeConcept(input: unknown): string | null {
 export function createApp(config: ServerConfig): express.Express {
   const { projectRoot, dataDir } = config
 
+  initDatabase(dataDir)
+  migrateJsonToSqlite(getDb(), dataDir)
+  ensureAdminExists()
   initHistory(dataDir)
 
   const app = express()
@@ -71,7 +80,7 @@ export function createApp(config: ServerConfig): express.Express {
     }
   })
 
-  app.post('/api/prompts/generate', apiLimiter, async (req, res) => {
+  app.post('/api/prompts/generate', requireAuth, apiLimiter, async (req, res) => {
     req.setTimeout(300_000)
     res.setTimeout(300_000)
 
@@ -143,7 +152,7 @@ export function createApp(config: ServerConfig): express.Express {
     }
   })
 
-  app.get('/api/prompts/research/:concept', apiLimiter, async (req, res) => {
+  app.get('/api/prompts/research/:concept', requireAuth, apiLimiter, async (req, res) => {
     const concept = sanitizeConcept(req.params.concept)
 
     if (!concept) {
@@ -165,7 +174,7 @@ export function createApp(config: ServerConfig): express.Express {
     }
   })
 
-  app.post('/api/prompts/text-to-json', apiLimiter, async (req, res) => {
+  app.post('/api/prompts/text-to-json', requireAuth, apiLimiter, async (req, res) => {
     const text = req.body.text
 
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
@@ -191,9 +200,14 @@ export function createApp(config: ServerConfig): express.Express {
     }
   })
 
-  app.use('/api/generate', createGenerateRouter({ projectRoot, openFolder: config.openFolder }))
-  app.use('/api/history', createHistoryRouter())
-  app.use('/api/avatars', createAvatarsRouter({ projectRoot }))
+  // Public routes
+  app.use('/api/auth', createAuthRouter())
+  app.use('/api/products', createProductsRouter())
+
+  // Protected routes
+  app.use('/api/generate', requireAuth, createGenerateRouter({ projectRoot, openFolder: config.openFolder }))
+  app.use('/api/history', requireAuth, createHistoryRouter())
+  app.use('/api/avatars', requireAuth, createAvatarsRouter({ projectRoot }))
 
   return app
 }

@@ -70,7 +70,7 @@ Uses GPT-4 Vision to analyze images and extract:
 | B: Avatar Gallery | - | Select from existing avatars |
 | C: Script Generation | Concept + duration | Voiceover script (GPT-4o) |
 | D: Text-to-Speech | Script + voice | Audio file (ElevenLabs) |
-| E: Lipsync Video | Avatar + audio | Talking avatar video (Hedra) |
+| E: Lipsync Video | Avatar + audio | Talking avatar video (Hedra Character-3) |
 
 **Avatar Generation** uses fal.ai's `nano-banana-pro` model:
 - Generates avatars with green screen background (#1ebf1a)
@@ -92,9 +92,46 @@ slightly smiling
 - ✅ `avatar.ts` - fal.ai avatar generation (prompt-only + reference image)
 - ✅ `voiceover.ts` - GPT-4o script generation
 - ✅ `tts.ts` - ElevenLabs text-to-speech
-- ✅ `lipsync.ts` - Hedra video generation
+- ✅ `hedra.ts` - Hedra Character-3 lipsync video generation (polling API)
+- ✅ `lipsync.ts` - Legacy OmniHuman wrapper (kept for reference)
 - ✅ `routes/avatars.ts` - All API endpoints
-- ⏳ Frontend UI - Avatars tab (pending)
+- ✅ Frontend UI - Avatars tab with download button
+
+**Lipsync Video Generation (Hedra Character-3):**
+- Uses Hedra Character-3 API (`https://api.hedra.com/web-app/public`)
+- Async polling API (NOT synchronous)
+- Workflow: createAsset → uploadAsset → createGeneration → pollGeneration → downloadVideo
+- Takes local `imagePath` + `audioPath` as input (files uploaded to Hedra)
+- Polling interval: 5 seconds, timeout: 10 minutes
+- Video is automatically downloaded and saved to `/outputs/`
+- Frontend shows "Video ready!" with Download button when complete
+- Route-level timeout: 660 seconds (11 minutes)
+- File existence validation before Hedra API calls
+- Lazy getter functions for env vars (avoids dotenv timing issue)
+
+### Phase 06: The Machine (Full Pipeline Orchestration)
+| Feature | Input | Output |
+|---------|-------|--------|
+| A: Pipeline Run | Concept + avatar + voice | Prompts + images + script + audio + video |
+| B: Error Recovery | Failed step | Retry from failed step, keep completed results |
+
+**Pipeline Steps (sequential):**
+1. **Prompts** → POST `/api/prompts/generate` (research + GPT-4o)
+2. **Images** → POST `/api/generate/batch` + polling (fal.ai, avatar = primary reference)
+3. **Script** → POST `/api/avatars/script` (GPT-4o voiceover)
+4. **TTS** → POST `/api/avatars/tts` (ElevenLabs)
+5. **Lipsync** → POST `/api/avatars/lipsync` (Hedra Character-3)
+
+**Key Behaviors:**
+- Avatar is the **primary reference image** for batch generation (auto-fetched as File)
+- Additional people optional (up to 3) for couple/family concepts
+- Lipsync has auto-retry (1 retry with 3s delay before showing error)
+- On failure: error view shows which step failed + "Retry from X" + "Start Over"
+- Completed step results are preserved on failure (prompts, images, script, audio)
+- Uses local variables to prevent stale closure bugs in sequential async pipeline
+- All fetch calls use AbortController signal for cancellation support
+
+**Estimated Duration:** ~12-15 minutes total (prompts ~2m, images ~4m, script ~15s, TTS ~20s, lipsync ~5m)
 
 ---
 
@@ -748,7 +785,43 @@ Image Preview Overlay:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Tab 4: History & Favorites
+### Tab 4: The Machine
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ ⚡ The Machine                                                  │
+├─────────────────────────────────────────────────────────────────┤
+│ IDLE (Settings):                                                │
+│ Concept: [____________________________________]                 │
+│ Prompts: Count [●━━━] 6                                        │
+│ Avatar: [Gallery grid - select one]                             │
+│ Additional People: [Upload] (optional, up to 3)                │
+│ Script: Duration [30s]  Tone [Energetic ▼]                     │
+│ Voice: [Select Voice ▼]                                         │
+│ [⚡ Run The Machine]                                             │
+├─────────────────────────────────────────────────────────────────┤
+│ RUNNING (Progress):                                             │
+│ ✅ Prompts: 6 generated                                        │
+│ ⏳ Images: Generating 3/6...                                    │
+│ ⏸ Script: Waiting...                                            │
+│ ⏸ Audio: Waiting...                                             │
+│ ⏸ Video: Waiting...                                             │
+│ [Cancel]                                                        │
+├─────────────────────────────────────────────────────────────────┤
+│ ERROR:                                                          │
+│ ❌ Pipeline Failed at Lipsync                                   │
+│ "Hedra API /generations failed (500): ..."                      │
+│ Completed: ✅ 6 prompts ✅ 6 images ✅ script ✅ audio          │
+│ [Retry from Lipsync] [Start Over]                               │
+├─────────────────────────────────────────────────────────────────┤
+│ DONE:                                                           │
+│ ✅ Pipeline Complete!                                           │
+│ Prompts (6) │ Images (6) │ Video [Download]                    │
+│ [Run Again]                                                     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Tab 5: History & Favorites
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -788,7 +861,8 @@ borgflow/
 │   │   │       ├── avatar.ts     # Avatar generation (fal.ai nano-banana-pro)
 │   │   │       ├── voiceover.ts  # Script generation (GPT-4o)
 │   │   │       ├── tts.ts        # Text-to-speech (ElevenLabs)
-│   │   │       └── lipsync.ts    # Lipsync video (Hedra)
+│   │   │       ├── hedra.ts      # Hedra Character-3 lipsync (polling API)
+│   │   │       └── lipsync.ts    # Legacy OmniHuman wrapper (kept for reference)
 │   │   ├── data/                 # JSON data storage
 │   │   │   ├── history.json      # Generation history (auto-created)
 │   │   │   └── favorites.json    # Saved favorites (auto-created)
@@ -796,7 +870,7 @@ borgflow/
 │   │
 │   └── web/                      # Frontend
 │       ├── src/
-│       │   ├── App.tsx           # Main app with 4 tabs
+│       │   ├── App.tsx           # Main app with 5 tabs (single-file, ~3700 lines)
 │       │   └── main.tsx          # Entry point
 │       ├── index.html
 │       └── package.json
@@ -823,7 +897,7 @@ borgflow/
 | AI (Image Generation) | fal.ai Nano Banana Pro |
 | AI (Avatar Generation) | fal.ai Nano Banana Pro |
 | AI (Text-to-Speech) | ElevenLabs |
-| AI (Lipsync Video) | Hedra |
+| AI (Lipsync Video) | Hedra Character-3 |
 | File Storage | Local filesystem (JSON for history/favorites) |
 
 ---
@@ -865,8 +939,8 @@ borgflow/
 | POST | `/api/avatars/script` | Generate voiceover script (GPT-4o) |
 | GET | `/api/avatars/voices` | List available TTS voices |
 | POST | `/api/avatars/tts` | Convert text to speech (ElevenLabs) |
-| POST | `/api/avatars/lipsync` | Create lipsync video (Hedra) |
-| GET | `/api/avatars/lipsync/:jobId` | Check lipsync job status |
+| POST | `/api/avatars/upload` | Upload avatar image to gallery |
+| POST | `/api/avatars/lipsync` | Create lipsync video (Hedra Character-3, async polling) |
 
 ### System
 | Method | Endpoint | Description |
@@ -881,8 +955,9 @@ borgflow/
 # .env (in project root)
 OPENAI_API_KEY=sk-...        # For GPT-4o research/prompts and GPT-4 Vision
 FAL_API_KEY=...              # For fal.ai image/avatar generation
-ELEVENLABS_API_KEY=...       # For text-to-speech (optional)
-HEDRA_API_KEY=...            # For lipsync video generation (optional)
+ELEVENLABS_API_KEY=...       # For text-to-speech
+HEDRA_API_KEY=sk_hedra_...   # For Hedra Character-3 lipsync video
+HEDRA_MODEL_ID=...           # Hedra model ID (optional, has default)
 PORT=3001                     # Backend server port (optional, default 3001)
 ```
 
@@ -929,6 +1004,42 @@ halloween_fashion_mysterious_01.jpg
 
 ---
 
+## 🛡️ Server Resilience
+
+### Timeout Configuration
+
+| Scope | Value | Location |
+|-------|-------|----------|
+| Express global | `server.setTimeout(600_000)` (10 min) | `index.ts` |
+| Express `keepAliveTimeout` | 620,000ms | `index.ts` |
+| Express `headersTimeout` | 621,000ms | `index.ts` |
+| Prompt generate route | `req/res.setTimeout(300_000)` (5 min) | `index.ts` |
+| Lipsync route | `req/res.setTimeout(660_000)` (11 min) | `avatars.ts` |
+| Vite proxy (all routes) | `timeout: 600_000` (10 min) | `vite.config.ts` |
+| Hedra poll timeout | 600,000ms (10 min) | `hedra.ts` |
+| OpenAI client | 60,000ms + 2 retries | `promptGenerator.ts`, `research.ts` |
+
+### Crash Prevention
+
+Global handlers in `index.ts` prevent silent crashes:
+```typescript
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception:', err)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Unhandled rejection:', reason)
+})
+```
+
+### Lipsync File Validation
+
+Before calling Hedra API, the lipsync endpoint validates files exist on disk:
+- `fs.access(imagePath)` — returns 400 if avatar image missing
+- `fs.access(audioPath)` — returns 400 if TTS audio file missing
+- Error details passed to frontend via `details` field in JSON response
+
+---
+
 ## ⚠️ Common Pitfalls
 
 1. **Don't copy-paste technical styles** - Every concept needs fresh research
@@ -969,7 +1080,7 @@ All image thumbnails use **9:16 aspect ratio** (`aspect-[9/16]`)
 - Text uses `break-words` and `whitespace-pre-wrap`
 
 ### Tab Order
-Tabs appear in this order: **Prompt Factory** → **Asset Monster** → **Avatars** → **History**
+Tabs appear in this order: **Prompt Factory** → **Asset Monster** → **Avatars** → **The Machine** → **History** (History is ALWAYS rightmost)
 
 ### Key Features
 - **Editable Prompt Preview**: Prompts can be edited directly in the preview pane
@@ -1010,6 +1121,38 @@ const handleCancel = () => {
 3. If parse fails, call `/api/prompts/text-to-json` endpoint
 4. Endpoint uses GPT-4o to convert natural language to our prompt schema
 5. Update state with converted JSON
+
+### Machine Pipeline Orchestration (Stale Closure Prevention)
+Sequential async steps must use local variables to avoid stale React state:
+```typescript
+const handleRunMachine = async (resumeFrom?: MachineStep) => {
+  // Local vars — updated synchronously, setState for UI only
+  let localPrompts = machinePrompts
+  let localScript = machineScript
+  let localAudioUrl = machineAudioUrl
+  let currentStep: MachineStep = 'idle'
+
+  // Step 1: localPrompts = data.prompts; setMachinePrompts(localPrompts)
+  // Step 2: uses localPrompts for batch generation
+  // Step 3: localScript = data.script; setMachineScript(localScript)
+  // Step 4: uses localScript for TTS → localAudioUrl = data.audioUrl
+  // Step 5: uses localAudioUrl for lipsync
+
+  // On error: setMachineFailedStep(currentStep) — NOT machineStep (stale!)
+}
+```
+
+### Machine Error Recovery
+- `machineStep === 'error'` shows dedicated error view (not settings panel)
+- "Retry from X" calls `handleRunMachine(machineFailedStep)` — skips completed steps
+- State vars (`machinePrompts`, `machineScript`, etc.) preserved during error
+- "Start Over" explicitly resets all state via `handleCancelMachine()`
+
+### Lipsync Auto-Retry
+Step 5 in Machine pipeline wraps lipsync in a 2-attempt loop:
+- First attempt fails → log, wait 3 seconds
+- Second attempt fails → throw to error handler
+- AbortError always re-thrown immediately (user cancelled)
 
 ### fal.ai Configuration Pattern
 ```typescript
