@@ -24,24 +24,24 @@ export function NotificationBell() {
     <div ref={ref} className="relative">
       <button
         onClick={handleOpen}
-        className="relative p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-800"
+        className="relative p-2 text-surface-400 hover:text-surface-900 transition-colors rounded-lg hover:bg-surface-100"
       >
         <Bell className="w-4 h-4" />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center font-medium">
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-danger rounded-full text-[10px] flex items-center justify-center font-medium text-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-80 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800">
+        <div className="absolute right-0 top-full mt-1 w-80 bg-surface-50 border border-surface-100 rounded-xl shadow-xl z-50">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-surface-100">
             <span className="text-sm font-medium">Notifications</span>
             {unreadCount > 0 && (
               <button
                 onClick={markAllRead}
-                className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
               >
                 <Check className="w-3 h-3" />
                 Mark all read
@@ -50,21 +50,21 @@ export function NotificationBell() {
           </div>
           <div className="max-h-64 overflow-y-auto">
             {notifications.length === 0 ? (
-              <p className="text-center text-sm text-gray-500 py-6">No notifications</p>
+              <p className="text-center text-sm text-surface-400 py-6">No notifications</p>
             ) : (
               notifications.slice(0, 20).map((n) => (
                 <button
                   key={n.id}
                   onClick={() => { if (!n.read) markRead(n.id) }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-800 transition-colors ${
-                    n.read ? 'text-gray-500' : 'text-gray-200'
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-surface-100 transition-colors ${
+                    n.read ? 'text-surface-400' : 'text-surface-800'
                   }`}
                 >
                   <div className="flex items-start gap-2">
-                    {!n.read && <span className="w-1.5 h-1.5 bg-purple-500 rounded-full mt-1.5 shrink-0" />}
+                    {!n.read && <span className="w-1.5 h-1.5 bg-brand-500 rounded-full mt-1.5 shrink-0" />}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{n.title}</p>
-                      <p className="text-xs text-gray-500 truncate">{n.body}</p>
+                      <p className="text-xs text-surface-400 truncate">{n.body}</p>
                     </div>
                   </div>
                 </button>

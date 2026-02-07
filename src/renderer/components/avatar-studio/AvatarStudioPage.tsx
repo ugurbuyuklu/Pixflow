@@ -3,7 +3,7 @@ import {
   Check, CheckCircle, XCircle, Upload, Loader2, FolderOpen, AlertCircle, X,
   Users, Wand2, MessageSquare, Mic, Volume2, RefreshCw, Download, Video, AlertTriangle,
 } from 'lucide-react'
-import { apiUrl, assetUrl, authFetch } from '../../lib/api'
+import { apiUrl, assetUrl, authFetch, getApiError } from '../../lib/api'
 import { useAvatarStore } from '../../stores/avatarStore'
 import type { AvatarGender, AvatarAgeGroup, AvatarEthnicity, AvatarOutfit, ScriptTone } from '../../stores/avatarStore'
 
@@ -37,7 +37,7 @@ export default function AvatarStudioPage() {
             : 'bg-red-900/50 border border-red-700'
         }`}>
           <AlertCircle className={`w-5 h-5 shrink-0 mt-0.5 ${
-            error.type === 'warning' ? 'text-yellow-400' : 'text-red-400'
+            error.type === 'warning' ? 'text-warning' : 'text-danger'
           }`} />
           <p className={`flex-1 ${
             error.type === 'warning' ? 'text-yellow-200' : 'text-red-200'
@@ -46,7 +46,7 @@ export default function AvatarStudioPage() {
           </p>
           <button
             onClick={() => useAvatarStore.setState({ error: null })}
-            className="text-gray-400 hover:text-white"
+            className="text-surface-400 hover:text-surface-900"
           >
             <X className="w-4 h-4" />
           </button>
@@ -57,20 +57,20 @@ export default function AvatarStudioPage() {
         {/* Left Column: Avatar Selection */}
         <div className="space-y-6">
           {/* Step 1: Avatar Selection */}
-          <div className="bg-gray-900 rounded-lg p-4">
+          <div className="bg-surface-50 rounded-lg p-4">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <span className="bg-purple-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">1</span>
+              <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">1</span>
               Select Avatar
             </h2>
 
             {/* Mode Toggle */}
-            <div className="flex bg-gray-800 rounded-lg p-1 mb-4">
+            <div className="flex bg-surface-100 rounded-lg p-1 mb-4">
               <button
                 onClick={() => setMode('gallery')}
                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
                   mode === 'gallery'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'bg-brand-600 text-surface-900'
+                    : 'text-surface-400 hover:text-surface-900'
                 }`}
               >
                 <Users className="w-4 h-4" />
@@ -78,7 +78,7 @@ export default function AvatarStudioPage() {
               </button>
               <button
                 onClick={() => avatarFileInputRef.current?.click()}
-                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors text-gray-400 hover:text-white"
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors text-surface-400 hover:text-surface-900"
               >
                 <Upload className="w-4 h-4" />
                 Upload
@@ -100,8 +100,8 @@ export default function AvatarStudioPage() {
                 onClick={() => setMode('generate')}
                 className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
                   mode === 'generate'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'bg-brand-600 text-surface-900'
+                    : 'text-surface-400 hover:text-surface-900'
                 }`}
               >
                 <Wand2 className="w-4 h-4" />
@@ -113,13 +113,13 @@ export default function AvatarStudioPage() {
               <div>
                 {avatarsLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+                    <Loader2 className="w-6 h-6 animate-spin text-surface-400" />
                   </div>
                 ) : avatars.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-700 rounded-lg">
+                  <div className="text-center py-8 text-surface-400 border-2 border-dashed border-surface-200 rounded-lg">
                     <Users className="w-10 h-10 mx-auto mb-3 opacity-50" />
                     <p>No avatars in gallery</p>
-                    <p className="text-sm mt-1">Generate a new avatar or add images to <code className="bg-gray-800 px-1 rounded">avatars/</code></p>
+                    <p className="text-sm mt-1">Generate a new avatar or add images to <code className="bg-surface-100 px-1 rounded">avatars/</code></p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-5 gap-2 max-h-[300px] overflow-auto">
@@ -132,8 +132,8 @@ export default function AvatarStudioPage() {
                         }}
                         className={`aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 relative ${
                           selectedAvatar?.filename === avatar.filename
-                            ? 'border-purple-500 ring-2 ring-purple-500/50'
-                            : 'border-transparent hover:border-gray-600'
+                            ? 'border-brand-500 ring-2 ring-brand-500/50'
+                            : 'border-transparent hover:border-surface-200'
                         }`}
                       >
                         <img
@@ -142,7 +142,7 @@ export default function AvatarStudioPage() {
                           className="w-full h-full object-cover"
                         />
                         {selectedAvatar?.filename === avatar.filename && (
-                          <div className="absolute top-1 right-1 bg-purple-500 rounded-full p-0.5">
+                          <div className="absolute top-1 right-1 bg-brand-500 rounded-full p-0.5">
                             <Check className="w-3 h-3" />
                           </div>
                         )}
@@ -155,22 +155,22 @@ export default function AvatarStudioPage() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm text-gray-400 mb-2">Gender</label>
+                    <label className="block text-sm text-surface-400 mb-2">Gender</label>
                     <select
                       value={gender}
                       onChange={(e) => setGender(e.target.value as AvatarGender)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                      className="w-full bg-surface-100 border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-brand-500"
                     >
                       <option value="female">Female</option>
                       <option value="male">Male</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-400 mb-2">Age Group</label>
+                    <label className="block text-sm text-surface-400 mb-2">Age Group</label>
                     <select
                       value={ageGroup}
                       onChange={(e) => setAgeGroup(e.target.value as AvatarAgeGroup)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                      className="w-full bg-surface-100 border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-brand-500"
                     >
                       <option value="young-adult">Young Adult (20s)</option>
                       <option value="adult">Adult (30s)</option>
@@ -178,11 +178,11 @@ export default function AvatarStudioPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-400 mb-2">Ethnicity</label>
+                    <label className="block text-sm text-surface-400 mb-2">Ethnicity</label>
                     <select
                       value={ethnicity}
                       onChange={(e) => setEthnicity(e.target.value as AvatarEthnicity)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                      className="w-full bg-surface-100 border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-brand-500"
                     >
                       <option value="caucasian">Caucasian</option>
                       <option value="black">Black / African</option>
@@ -193,11 +193,11 @@ export default function AvatarStudioPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-400 mb-2">Outfit</label>
+                    <label className="block text-sm text-surface-400 mb-2">Outfit</label>
                     <select
                       value={outfit}
                       onChange={(e) => setOutfit(e.target.value as AvatarOutfit)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                      className="w-full bg-surface-100 border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-brand-500"
                     >
                       <option value="casual">Casual</option>
                       <option value="business">Business</option>
@@ -208,16 +208,16 @@ export default function AvatarStudioPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-400 mb-2">Number of Avatars: {avatarCount}</label>
+                  <label className="block text-sm text-surface-400 mb-2">Number of Avatars: {avatarCount}</label>
                   <input
                     type="range"
                     min="1"
                     max="4"
                     value={avatarCount}
                     onChange={(e) => setAvatarCount(Number(e.target.value))}
-                    className="w-full accent-purple-500"
+                    className="w-full accent-brand-500"
                   />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <div className="flex justify-between text-xs text-surface-400 mt-1">
                     <span>1</span>
                     <span>2</span>
                     <span>3</span>
@@ -227,7 +227,7 @@ export default function AvatarStudioPage() {
                 <button
                   onClick={generateAvatar}
                   disabled={generating}
-                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-700 hover:to-brand-600 disabled:bg-surface-200 disabled:from-surface-200 disabled:to-surface-200 disabled:cursor-not-allowed rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
                 >
                   {generating ? (
                     <>
@@ -243,7 +243,7 @@ export default function AvatarStudioPage() {
                 </button>
                 {generatedUrls.length > 0 && (
                   <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg space-y-3">
-                    <p className="text-green-400 text-sm flex items-center gap-2">
+                    <p className="text-success text-sm flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" />
                       {generatedUrls.length} avatar{generatedUrls.length > 1 ? 's' : ''} generated and saved to gallery!
                     </p>
@@ -253,8 +253,8 @@ export default function AvatarStudioPage() {
                           key={index}
                           className={`cursor-pointer transition-all relative rounded-lg overflow-hidden border-2 ${
                             selectedGeneratedIndex === index
-                              ? 'border-purple-500 ring-2 ring-purple-500/50'
-                              : 'border-transparent hover:border-gray-600'
+                              ? 'border-brand-500 ring-2 ring-brand-500/50'
+                              : 'border-transparent hover:border-surface-200'
                           }`}
                           onClick={() => setSelectedGeneratedIndex(index)}
                         >
@@ -264,22 +264,22 @@ export default function AvatarStudioPage() {
                             className="w-full aspect-[9/16] object-cover"
                           />
                           {selectedGeneratedIndex === index && (
-                            <div className="absolute top-1 right-1 bg-purple-500 rounded-full p-0.5">
+                            <div className="absolute top-1 right-1 bg-brand-500 rounded-full p-0.5">
                               <Check className="w-3 h-3" />
                             </div>
                           )}
                         </div>
                       ))}
                     </div>
-                    <p className="text-xs text-gray-400 text-center">Click to select, double-click to view full size</p>
+                    <p className="text-xs text-surface-400 text-center">Click to select, double-click to view full size</p>
                   </div>
                 )}
               </div>
             )}
 
             {(selectedAvatar || generatedUrls.length > 0) && (
-              <div className="mt-4 p-3 bg-gray-800 rounded-lg">
-                <p className="text-sm text-gray-400 mb-2">Selected Avatar:</p>
+              <div className="mt-4 p-3 bg-surface-100 rounded-lg">
+                <p className="text-sm text-surface-400 mb-2">Selected Avatar:</p>
                 <div className="flex items-center gap-3">
                   <img
                     src={assetUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
@@ -293,7 +293,7 @@ export default function AvatarStudioPage() {
                         ? `Generated Avatar ${selectedGeneratedIndex + 1}/${generatedUrls.length}`
                         : selectedAvatar?.name}
                     </p>
-                    <p className="text-xs text-gray-500">Click image to view full size</p>
+                    <p className="text-xs text-surface-400">Click image to view full size</p>
                   </div>
                 </div>
               </div>
@@ -301,42 +301,42 @@ export default function AvatarStudioPage() {
           </div>
 
           {/* Step 2: Script Generation */}
-          <div className="bg-gray-900 rounded-lg p-4">
+          <div className="bg-surface-50 rounded-lg p-4">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <span className="bg-purple-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">2</span>
+              <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">2</span>
               Generate Script
             </h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-2">App/Product Concept</label>
+                <label className="block text-sm text-surface-400 mb-2">App/Product Concept</label>
                 <input
                   type="text"
                   value={scriptConcept}
                   onChange={(e) => setScriptConcept(e.target.value)}
                   placeholder="e.g., AI photo transformation app, fitness tracker, dating app..."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
+                  className="w-full bg-surface-100 border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-brand-500"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-400 mb-2">Duration: {scriptDuration}s</label>
+                  <label className="block text-sm text-surface-400 mb-2">Duration: {scriptDuration}s</label>
                   <input
                     type="range"
                     min="10"
                     max="60"
                     value={scriptDuration}
                     onChange={(e) => setScriptDuration(Number(e.target.value))}
-                    className="w-full accent-purple-500"
+                    className="w-full accent-brand-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-400 mb-2">Tone</label>
+                  <label className="block text-sm text-surface-400 mb-2">Tone</label>
                   <select
                     value={scriptTone}
                     onChange={(e) => setScriptTone(e.target.value as ScriptTone)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
+                    className="w-full bg-surface-100 border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-brand-500"
                   >
                     <option value="energetic">Energetic</option>
                     <option value="casual">Casual</option>
@@ -350,7 +350,7 @@ export default function AvatarStudioPage() {
               <button
                 onClick={generateScript}
                 disabled={scriptGenerating || !scriptConcept.trim()}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-700 hover:to-brand-600 disabled:bg-surface-200 disabled:from-surface-200 disabled:to-surface-200 disabled:cursor-not-allowed rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
               >
                 {scriptGenerating ? (
                   <>
@@ -374,8 +374,8 @@ export default function AvatarStudioPage() {
               {generatedScript && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-400">Generated Script:</span>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-sm text-surface-400">Generated Script:</span>
+                    <span className="text-xs text-surface-400">
                       {scriptWordCount} words (~{scriptEstimatedDuration}s)
                     </span>
                   </div>
@@ -383,12 +383,12 @@ export default function AvatarStudioPage() {
                     value={generatedScript}
                     onChange={(e) => setGeneratedScript(e.target.value)}
                     rows={4}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                    className="w-full bg-surface-100 border border-surface-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-brand-500"
                   />
                   <button
                     onClick={generateScript}
                     disabled={scriptGenerating}
-                    className="text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                    className="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1"
                   >
                     <RefreshCw className="w-3 h-3" />
                     Regenerate
@@ -402,17 +402,17 @@ export default function AvatarStudioPage() {
         {/* Right Column: Voice & Video */}
         <div className="space-y-6">
           {/* Step 3: Voice Selection & TTS */}
-          <div className="bg-gray-900 rounded-lg p-4">
+          <div className="bg-surface-50 rounded-lg p-4">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <span className="bg-purple-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">3</span>
+              <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">3</span>
               Voice & Audio
             </h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-2">Select Voice</label>
+                <label className="block text-sm text-surface-400 mb-2">Select Voice</label>
                 {voicesLoading ? (
-                  <div className="flex items-center gap-2 text-gray-500">
+                  <div className="flex items-center gap-2 text-surface-400">
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Loading voices...
                   </div>
@@ -420,7 +420,7 @@ export default function AvatarStudioPage() {
                   <select
                     value={selectedVoice?.id || ''}
                     onChange={(e) => setSelectedVoice(voices.find(v => v.id === e.target.value) || null)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500"
+                    className="w-full bg-surface-100 border border-surface-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-brand-500"
                   >
                     <option value="">Select a voice...</option>
                     {voices.map((voice) => (
@@ -436,7 +436,7 @@ export default function AvatarStudioPage() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => new Audio(selectedVoice.previewUrl).play()}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm"
+                    className="flex items-center gap-2 px-3 py-1.5 bg-surface-100 hover:bg-surface-200 rounded-lg text-sm"
                   >
                     <Volume2 className="w-4 h-4" />
                     Preview Voice
@@ -447,7 +447,7 @@ export default function AvatarStudioPage() {
               <button
                 onClick={generateTTS}
                 disabled={ttsGenerating || !generatedScript || !selectedVoice}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-700 hover:to-brand-600 disabled:bg-surface-200 disabled:from-surface-200 disabled:to-surface-200 disabled:cursor-not-allowed rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
               >
                 {ttsGenerating ? (
                   <>
@@ -470,7 +470,7 @@ export default function AvatarStudioPage() {
 
               {generatedAudioUrl && (
                 <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
-                  <p className="text-green-400 text-sm flex items-center gap-2 mb-2">
+                  <p className="text-success text-sm flex items-center gap-2 mb-2">
                     <CheckCircle className="w-4 h-4" />
                     Audio generated!
                   </p>
@@ -485,23 +485,23 @@ export default function AvatarStudioPage() {
           </div>
 
           {/* Step 4: Lipsync Video Generation */}
-          <div className="bg-gray-900 rounded-lg p-4">
+          <div className="bg-surface-50 rounded-lg p-4">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <span className="bg-purple-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">4</span>
+              <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">4</span>
               Generate Video
             </h2>
 
             <div className="space-y-4">
               <div className="space-y-2 text-sm">
-                <div className={`flex items-center gap-2 ${selectedAvatar || generatedUrls.length > 0 ? 'text-green-400' : 'text-gray-500'}`}>
+                <div className={`flex items-center gap-2 ${selectedAvatar || generatedUrls.length > 0 ? 'text-success' : 'text-surface-400'}`}>
                   {selectedAvatar || generatedUrls.length > 0 ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                   Avatar selected
                 </div>
-                <div className={`flex items-center gap-2 ${generatedScript ? 'text-green-400' : 'text-gray-500'}`}>
+                <div className={`flex items-center gap-2 ${generatedScript ? 'text-success' : 'text-surface-400'}`}>
                   {generatedScript ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                   Script generated
                 </div>
-                <div className={`flex items-center gap-2 ${generatedAudioUrl ? 'text-green-400' : 'text-gray-500'}`}>
+                <div className={`flex items-center gap-2 ${generatedAudioUrl ? 'text-success' : 'text-surface-400'}`}>
                   {generatedAudioUrl ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                   Audio generated
                 </div>
@@ -510,7 +510,7 @@ export default function AvatarStudioPage() {
               <button
                 onClick={createLipsync}
                 disabled={lipsyncGenerating || !generatedAudioUrl || (!selectedAvatar && generatedUrls.length === 0)}
-                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-4 py-3 font-medium transition-all flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 disabled:bg-surface-200 disabled:from-surface-200 disabled:to-surface-200 disabled:cursor-not-allowed rounded-lg px-4 py-3 font-medium transition-all flex items-center justify-center gap-2"
               >
                 {lipsyncGenerating ? (
                   <>
@@ -542,9 +542,9 @@ export default function AvatarStudioPage() {
                 }`}>
                   <div className="flex items-center justify-between">
                     <p className={`text-sm flex items-center gap-2 ${
-                      lipsyncJob.status === 'complete' ? 'text-green-400' :
-                      lipsyncJob.status === 'error' ? 'text-red-400' :
-                      'text-yellow-400'
+                      lipsyncJob.status === 'complete' ? 'text-success' :
+                      lipsyncJob.status === 'error' ? 'text-danger' :
+                      'text-warning'
                     }`}>
                       {lipsyncJob.status === 'complete' ? <CheckCircle className="w-4 h-4" /> :
                        lipsyncJob.status === 'error' ? <XCircle className="w-4 h-4" /> :
@@ -558,7 +558,7 @@ export default function AvatarStudioPage() {
                       <a
                         href={assetUrl(generatedVideoUrl)}
                         download
-                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg px-3 py-1.5 text-sm font-medium transition-all flex items-center gap-1.5"
+                        className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 rounded-lg px-3 py-1.5 text-sm font-medium transition-all flex items-center gap-1.5"
                       >
                         <Download className="w-3.5 h-3.5" />
                         Download
@@ -572,9 +572,9 @@ export default function AvatarStudioPage() {
 
           {/* Step 5: Video Output */}
           {generatedVideoUrl && (
-            <div className="bg-gray-900 rounded-lg p-4">
+            <div className="bg-surface-50 rounded-lg p-4">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <span className="bg-green-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">5</span>
+                <span className="bg-emerald-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">5</span>
                 Output
               </h2>
 
@@ -589,7 +589,7 @@ export default function AvatarStudioPage() {
                   <a
                     href={assetUrl(generatedVideoUrl)}
                     download
-                    className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
+                    className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
                   >
                     <Download className="w-4 h-4" />
                     Download Video
@@ -602,11 +602,11 @@ export default function AvatarStudioPage() {
                         body: JSON.stringify({ folderPath: 'outputs' }),
                       })
                       if (!response.ok) {
-                        const data = await response.json().catch(() => ({}))
-                        useAvatarStore.setState({ error: { message: data.error || 'Failed to open folder', type: 'error' } })
+                        const raw = await response.json().catch(() => ({}))
+                        useAvatarStore.setState({ error: { message: getApiError(raw, 'Failed to open folder'), type: 'error' } })
                       }
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg"
+                    className="flex items-center gap-2 px-4 py-2 bg-surface-100 hover:bg-surface-200 rounded-lg"
                   >
                     <FolderOpen className="w-4 h-4" />
                     Open Folder
@@ -618,36 +618,36 @@ export default function AvatarStudioPage() {
         </div>
 
         {/* Image to Video (Kling AI) */}
-        <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-6">
+        <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-6">
           <div className="flex items-center gap-2 mb-4">
             <Video className="w-5 h-5 text-cyan-400" />
-            <h3 className="text-lg font-semibold text-white">Image to Video</h3>
-            <span className="text-xs text-gray-400 ml-auto">Powered by Kling AI</span>
+            <h3 className="text-lg font-semibold text-surface-900">Image to Video</h3>
+            <span className="text-xs text-surface-400 ml-auto">Powered by Kling AI</span>
           </div>
 
           {i2vError && (
             <div className={`rounded-lg p-3 mb-4 flex items-start gap-2 ${
               i2vError.type === 'warning' ? 'bg-yellow-900/50 border border-yellow-700' : 'bg-red-900/50 border border-red-700'
             }`}>
-              <AlertCircle className={`w-4 h-4 shrink-0 mt-0.5 ${i2vError.type === 'warning' ? 'text-yellow-400' : 'text-red-400'}`} />
+              <AlertCircle className={`w-4 h-4 shrink-0 mt-0.5 ${i2vError.type === 'warning' ? 'text-warning' : 'text-danger'}`} />
               <p className={`text-sm ${i2vError.type === 'warning' ? 'text-yellow-200' : 'text-red-200'}`}>{i2vError.message}</p>
             </div>
           )}
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Motion Prompt</label>
+              <label className="block text-sm font-medium text-surface-500 mb-2">Motion Prompt</label>
               <textarea
                 value={i2vPrompt}
                 onChange={(e) => setI2vPrompt(e.target.value)}
                 placeholder="Describe the motion or scene... e.g., 'Camera slowly zooms in while the subject smiles and waves'"
-                className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 transition-colors resize-none h-20"
+                className="w-full px-4 py-3 bg-surface-50/50 border border-surface-200 rounded-lg text-surface-900 placeholder-surface-400 focus:outline-none focus:border-cyan-500 transition-colors resize-none h-20"
               />
             </div>
 
             <div className="flex items-center gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Duration</label>
+                <label className="block text-sm font-medium text-surface-500 mb-2">Duration</label>
                 <div className="flex gap-2">
                   {(['5', '10'] as const).map((d) => (
                     <button
@@ -655,8 +655,8 @@ export default function AvatarStudioPage() {
                       onClick={() => setI2vDuration(d)}
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                         i2vDuration === d
-                          ? 'bg-cyan-600 text-white'
-                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          ? 'bg-cyan-600 text-surface-900'
+                          : 'bg-surface-200 text-surface-500 hover:bg-surface-200'
                       }`}
                     >
                       {d}s
@@ -669,7 +669,7 @@ export default function AvatarStudioPage() {
                 <button
                   onClick={generateI2V}
                   disabled={i2vLoading || !i2vPrompt.trim()}
-                  className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium rounded-lg hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                  className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-surface-900 font-medium rounded-lg hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
                 >
                   {i2vLoading ? (
                     <>
@@ -696,7 +696,7 @@ export default function AvatarStudioPage() {
                 <a
                   href={assetUrl(i2vVideoUrl)}
                   download
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 rounded-lg font-medium transition-all"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 rounded-lg font-medium transition-all"
                 >
                   <Download className="w-4 h-4" />
                   Download Video

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { apiUrl, authFetch } from '../lib/api'
+import { apiUrl, authFetch, unwrapApiData } from '../lib/api'
 import type { HistoryEntry, FavoritePrompt, GeneratedPrompt } from '../types'
 
 interface HistoryState {
@@ -36,11 +36,13 @@ export const useHistoryStore = create<HistoryState>()((set, get) => ({
         authFetch(apiUrl('/api/history/favorites')),
       ])
       if (historyRes.ok) {
-        const data = await historyRes.json()
+        const raw = await historyRes.json()
+        const data = unwrapApiData<{ history: HistoryEntry[] }>(raw)
         set({ entries: data.history })
       }
       if (favoritesRes.ok) {
-        const data = await favoritesRes.json()
+        const raw = await favoritesRes.json()
+        const data = unwrapApiData<{ favorites: FavoritePrompt[] }>(raw)
         set({ favorites: data.favorites })
       }
     } catch (err) {
@@ -54,7 +56,8 @@ export const useHistoryStore = create<HistoryState>()((set, get) => ({
     try {
       const res = await authFetch(apiUrl('/api/history/favorites'))
       if (res.ok) {
-        const data = await res.json()
+        const raw = await res.json()
+        const data = unwrapApiData<{ favorites: FavoritePrompt[] }>(raw)
         set({ favorites: data.favorites })
       }
     } catch {
@@ -70,7 +73,8 @@ export const useHistoryStore = create<HistoryState>()((set, get) => ({
         body: JSON.stringify({ prompt, name, concept }),
       })
       if (res.ok) {
-        const data = await res.json()
+        const raw = await res.json()
+        const data = unwrapApiData<{ favorite: FavoritePrompt }>(raw)
         set((state) => ({
           favorites: [data.favorite, ...state.favorites],
           favoriteAdded: name,

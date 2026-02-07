@@ -1,5 +1,6 @@
 import fs from 'fs/promises'
 import path from 'path'
+import { isMockProvidersEnabled, makeMockDataUrl, makeMockId, recordMockProviderSuccess, runWithRetries } from './providerRuntime.js'
 
 const HEDRA_BASE_URL = 'https://api.hedra.com/web-app/public'
 const POLL_INTERVAL_MS = 5000
@@ -120,6 +121,18 @@ async function pollGeneration(generationId: string): Promise<string> {
 }
 
 export async function createHedraVideo(options: HedraLipsyncOptions): Promise<HedraLipsyncResult> {
+  if (isMockProvidersEnabled()) {
+    await recordMockProviderSuccess({
+      pipeline: 'avatars.lipsync.provider',
+      provider: 'hedra',
+      metadata: { aspectRatio: options.aspectRatio || '9:16', resolution: options.resolution || '720p' },
+    })
+    return {
+      videoUrl: makeMockDataUrl('video/mp4', 'mock-hedra-video'),
+      generationId: makeMockId('hedra'),
+    }
+  }
+
   if (!getApiKey()) {
     throw new Error('HEDRA_API_KEY is not configured')
   }
@@ -131,18 +144,41 @@ export async function createHedraVideo(options: HedraLipsyncOptions): Promise<He
   const imageName = path.basename(options.imagePath)
   const audioName = path.basename(options.audioPath)
 
-  const [imageAssetId, audioAssetId] = await Promise.all([
-    createAsset(imageName, 'image'),
-    createAsset(audioName, 'audio'),
-  ])
+  const [imageAssetId, audioAssetId] = await runWithRetries(
+    () => Promise.all([
+      createAsset(imageName, 'image'),
+      createAsset(audioName, 'audio'),
+    ]),
+    {
+      pipeline: 'avatars.lipsync.provider',
+      provider: 'hedra',
+      metadata: { stage: 'asset_create' },
+    }
+  )
 
   await Promise.all([
     uploadAsset(imageAssetId, options.imagePath),
     uploadAsset(audioAssetId, options.audioPath),
   ])
 
-  const generationId = await createGeneration(imageAssetId, audioAssetId, options)
-  const videoUrl = await pollGeneration(generationId)
+  const generationId = await runWithRetries(
+    () => createGeneration(imageAssetId, audioAssetId, options),
+    {
+      pipeline: 'avatars.lipsync.provider',
+      provider: 'hedra',
+      metadata: { stage: 'generation_create' },
+    }
+  )
+  const videoUrl = await runWithRetries(
+    () => pollGeneration(generationId),
+    {
+      pipeline: 'avatars.lipsync.provider',
+      provider: 'hedra',
+      metadata: { stage: 'generation_poll' },
+      retries: 1,
+      baseDelayMs: 1000,
+    }
+  )
 
   return { videoUrl, generationId }
 }

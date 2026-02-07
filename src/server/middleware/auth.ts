@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import { verifyToken, getUserById } from '../services/auth.js'
+import { sendError } from '../utils/http.js'
 
 export interface AuthRequest extends Request {
   user?: { id: number; email: string; name: string; role: string }
@@ -8,19 +9,19 @@ export interface AuthRequest extends Request {
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
   const header = req.headers.authorization
   if (!header?.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Missing authorization header' })
+    sendError(res, 401, 'Missing authorization header', 'AUTH_HEADER_MISSING')
     return
   }
 
   const payload = verifyToken(header.slice(7))
   if (!payload) {
-    res.status(401).json({ error: 'Invalid or expired token' })
+    sendError(res, 401, 'Invalid or expired token', 'AUTH_TOKEN_INVALID')
     return
   }
 
   const user = getUserById(payload.userId)
   if (!user) {
-    res.status(401).json({ error: 'User not found' })
+    sendError(res, 401, 'User not found', 'AUTH_USER_NOT_FOUND')
     return
   }
 
@@ -30,7 +31,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
 
 export function requireAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
   if (req.user?.role !== 'admin') {
-    res.status(403).json({ error: 'Admin access required' })
+    sendError(res, 403, 'Admin access required', 'ADMIN_REQUIRED')
     return
   }
   next()

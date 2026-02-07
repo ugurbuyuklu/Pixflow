@@ -1,5 +1,12 @@
 import { fal } from '@fal-ai/client'
 import { ensureFalConfig } from './falConfig.js'
+import {
+  isMockProvidersEnabled,
+  makeMockId,
+  makeMockPngDataUrl,
+  recordMockProviderSuccess,
+  runWithRetries,
+} from './providerRuntime.js'
 
 const AVATAR_MODEL = 'fal-ai/nano-banana-pro'
 
@@ -21,22 +28,41 @@ export async function generateAvatar(
   prompt: string,
   options: AvatarGenerationOptions = {}
 ): Promise<AvatarGenerationResult> {
+  if (isMockProvidersEnabled()) {
+    await recordMockProviderSuccess({
+      pipeline: 'avatars.generate',
+      provider: 'fal',
+      metadata: { mock: true, aspectRatio: options.aspectRatio || '9:16', promptLength: prompt.length },
+    })
+    return {
+      imageUrl: makeMockPngDataUrl(),
+      requestId: makeMockId('avatar'),
+    }
+  }
+
   ensureFalConfig()
 
-  const result = await fal.subscribe(AVATAR_MODEL, {
-    input: {
-      prompt,
-      resolution: options.resolution || '2K',
-      aspect_ratio: options.aspectRatio || '9:16',
-      output_format: 'png',
-    },
-    logs: true,
-    onQueueUpdate: (update) => {
-      if (update.status === 'IN_PROGRESS' && update.logs) {
-        update.logs.forEach((log) => console.log(`[fal.ai avatar] ${log.message}`))
-      }
-    },
-  })
+  const result = await runWithRetries(
+    () => fal.subscribe(AVATAR_MODEL, {
+      input: {
+        prompt,
+        resolution: options.resolution || '2K',
+        aspect_ratio: options.aspectRatio || '9:16',
+        output_format: 'png',
+      },
+      logs: true,
+      onQueueUpdate: (update) => {
+        if (update.status === 'IN_PROGRESS' && update.logs) {
+          update.logs.forEach((log) => console.log(`[fal.ai avatar] ${log.message}`))
+        }
+      },
+    }),
+    {
+      pipeline: 'avatars.generate',
+      provider: 'fal',
+      metadata: { aspectRatio: options.aspectRatio || '9:16', promptLength: prompt.length },
+    }
+  )
 
   const imageUrl = result.data?.images?.[0]?.url
   if (!imageUrl) {
@@ -58,23 +84,42 @@ export async function generateAvatarFromReference(
   prompt: string,
   options: AvatarGenerationOptions = {}
 ): Promise<AvatarGenerationResult> {
+  if (isMockProvidersEnabled()) {
+    await recordMockProviderSuccess({
+      pipeline: 'avatars.generateFromReference',
+      provider: 'fal',
+      metadata: { mock: true, aspectRatio: options.aspectRatio || '9:16', promptLength: prompt.length },
+    })
+    return {
+      imageUrl: makeMockPngDataUrl(),
+      requestId: makeMockId('avatar-ref'),
+    }
+  }
+
   ensureFalConfig()
 
-  const result = await fal.subscribe(AVATAR_MODEL, {
-    input: {
-      prompt,
-      image_urls: [referenceImageUrl],
-      resolution: options.resolution || '2K',
-      aspect_ratio: options.aspectRatio || '9:16',
-      output_format: 'png',
-    },
-    logs: true,
-    onQueueUpdate: (update) => {
-      if (update.status === 'IN_PROGRESS' && update.logs) {
-        update.logs.forEach((log) => console.log(`[fal.ai avatar i2i] ${log.message}`))
-      }
-    },
-  })
+  const result = await runWithRetries(
+    () => fal.subscribe(AVATAR_MODEL, {
+      input: {
+        prompt,
+        image_urls: [referenceImageUrl],
+        resolution: options.resolution || '2K',
+        aspect_ratio: options.aspectRatio || '9:16',
+        output_format: 'png',
+      },
+      logs: true,
+      onQueueUpdate: (update) => {
+        if (update.status === 'IN_PROGRESS' && update.logs) {
+          update.logs.forEach((log) => console.log(`[fal.ai avatar i2i] ${log.message}`))
+        }
+      },
+    }),
+    {
+      pipeline: 'avatars.generateFromReference',
+      provider: 'fal',
+      metadata: { aspectRatio: options.aspectRatio || '9:16', promptLength: prompt.length },
+    }
+  )
 
   const imageUrl = result.data?.images?.[0]?.url
   if (!imageUrl) {

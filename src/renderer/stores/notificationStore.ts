@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { apiUrl, authFetch } from '../lib/api'
+import { apiUrl, authFetch, unwrapApiData } from '../lib/api'
 import type { Notification } from '../types'
 
 interface NotificationState {
@@ -20,7 +20,8 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
     try {
       const res = await authFetch(apiUrl('/api/notifications'))
       if (res.ok) {
-        const data = await res.json()
+        const raw = await res.json()
+        const data = unwrapApiData<{ notifications: Notification[] }>(raw)
         const notifications = data.notifications || []
         set({
           notifications,

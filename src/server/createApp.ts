@@ -5,19 +5,24 @@ import path from 'path'
 import fs from 'fs/promises'
 import { performResearch, analyzeResearchResults } from './services/research.js'
 import { generatePrompts, validateAllPrompts, textToPrompt } from './services/promptGenerator.js'
-import { initHistory, addToHistory } from './services/history.js'
+import { addToHistory } from './services/history.js'
 import { createGenerateRouter } from './routes/generate.js'
 import { createHistoryRouter } from './routes/history.js'
 import { createAvatarsRouter } from './routes/avatars.js'
 import { initDatabase, getDb } from './db/index.js'
 import { migrateJsonToSqlite } from './db/migrations.js'
-import { ensureAdminExists } from './services/auth.js'
+import { ensureBootstrapAdminIfConfigured } from './services/auth.js'
 import { requireAuth } from './middleware/auth.js'
 import { createAuthRouter } from './routes/auth.js'
 import { createProductsRouter } from './routes/products.js'
 import { createPresetsRouter } from './routes/presets.js'
 import { createFeedbackRouter } from './routes/feedback.js'
 import { createNotificationsRouter } from './routes/notifications.js'
+import { validateServerEnv } from './config/validation.js'
+import type { AuthRequest } from './middleware/auth.js'
+import { sendError, sendSuccess } from './utils/http.js'
+import { PROMPT_GENERATE_DEFAULT, PROMPT_GENERATE_MAX, PROMPT_GENERATE_MIN } from '../constants/limits.js'
+import { createPipelineSpan } from './services/telemetry.js'
 
 export interface ServerConfig {
   projectRoot: string
@@ -37,19 +42,21 @@ function sanitizeConcept(input: unknown): string | null {
 export function createApp(config: ServerConfig): express.Express {
   const { projectRoot, dataDir } = config
 
+  validateServerEnv()
   initDatabase(dataDir)
   migrateJsonToSqlite(getDb(), dataDir)
-  ensureAdminExists()
-  initHistory(dataDir)
+  ensureBootstrapAdminIfConfigured()
 
   const app = express()
 
   const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 10,
-    message: { error: 'Too many requests, please try again later' },
     standardHeaders: true,
     legacyHeaders: false,
+    handler: (_req, res) => {
+      sendError(res, 429, 'Too many requests, please try again later', 'RATE_LIMITED')
+    },
   })
 
   app.use(cors())
@@ -59,7 +66,7 @@ export function createApp(config: ServerConfig): express.Express {
   app.use('/avatars', express.static(path.join(projectRoot, 'avatars')))
 
   app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() })
+    sendSuccess(res, { status: 'ok', timestamp: new Date().toISOString() })
   })
 
   const avatarsDir = path.join(projectRoot, 'avatars')
@@ -76,31 +83,36 @@ export function createApp(config: ServerConfig): express.Express {
           filename: file,
           url: `/avatars/${encodeURIComponent(file)}`,
         }))
-      res.json({ avatars })
+      sendSuccess(res, { avatars })
     } catch (error) {
       console.error('[Error] Failed to list avatars:', error)
-      res.status(500).json({ error: 'Failed to list avatars' })
+      sendError(res, 500, 'Failed to list avatars', 'AVATAR_LIST_FAILED')
     }
   })
 
-  app.post('/api/prompts/generate', requireAuth, apiLimiter, async (req, res) => {
+  app.post('/api/prompts/generate', requireAuth, apiLimiter, async (req: AuthRequest, res) => {
     req.setTimeout(300_000)
     res.setTimeout(300_000)
 
     const concept = sanitizeConcept(req.body.concept)
-    const count = req.body.count ?? 8
+    const count = req.body.count ?? PROMPT_GENERATE_DEFAULT
 
     if (!concept) {
-      res.status(400).json({ error: 'Concept is required (1-100 characters)' })
+      sendError(res, 400, 'Concept is required (1-100 characters)', 'INVALID_CONCEPT')
       return
     }
 
     if (typeof count !== 'number' || !Number.isInteger(count)) {
-      res.status(400).json({ error: 'Count must be an integer' })
+      sendError(res, 400, 'Count must be an integer', 'INVALID_COUNT')
       return
     }
 
-    const clampedCount = Math.max(1, Math.min(10, count))
+    const clampedCount = Math.max(PROMPT_GENERATE_MIN, Math.min(PROMPT_GENERATE_MAX, count))
+    const span = createPipelineSpan({
+      pipeline: 'prompts.generate',
+      userId: req.user?.id,
+      metadata: { count: clampedCount, conceptLength: concept.length },
+    })
 
     try {
       console.log(`[Research] Starting research for "${concept}"...`)
@@ -123,14 +135,20 @@ export function createApp(config: ServerConfig): express.Express {
 
       console.log(`[Complete] Generated ${prompts.length} prompts, variety score: ${varietyScore.passed ? 'PASS' : 'FAIL'}`)
 
-      await addToHistory({
+      await addToHistory(req.user!.id, {
         concept,
         prompts,
         promptCount: prompts.length,
         source: 'generated',
       })
 
-      res.json({
+      span.success({
+        generatedCount: prompts.length,
+        varietyPassed: varietyScore.passed,
+        warningCount: analysis.warnings.length,
+      })
+
+      sendSuccess(res, {
         prompts,
         concept,
         count: prompts.length,
@@ -148,10 +166,14 @@ export function createApp(config: ServerConfig): express.Express {
       })
     } catch (error) {
       console.error('[Error]', error)
-      res.status(500).json({
-        error: 'Failed to generate prompts',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      })
+      span.error(error)
+      sendError(
+        res,
+        500,
+        'Failed to generate prompts',
+        'PROMPT_GENERATION_FAILED',
+        error instanceof Error ? error.message : 'Unknown error'
+      )
     }
   })
 
@@ -159,7 +181,7 @@ export function createApp(config: ServerConfig): express.Express {
     const concept = sanitizeConcept(req.params.concept)
 
     if (!concept) {
-      res.status(400).json({ error: 'Invalid concept (1-100 characters)' })
+      sendError(res, 400, 'Invalid concept (1-100 characters)', 'INVALID_CONCEPT')
       return
     }
 
@@ -167,13 +189,16 @@ export function createApp(config: ServerConfig): express.Express {
       console.log(`[Research] Performing research only for "${concept}"...`)
       const researchBrief = await performResearch(concept)
       const analysis = analyzeResearchResults(researchBrief)
-      res.json({ research: researchBrief, analysis })
+      sendSuccess(res, { research: researchBrief, analysis })
     } catch (error) {
       console.error('[Error]', error)
-      res.status(500).json({
-        error: 'Failed to perform research',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      })
+      sendError(
+        res,
+        500,
+        'Failed to perform research',
+        'RESEARCH_FAILED',
+        error instanceof Error ? error.message : 'Unknown error'
+      )
     }
   })
 
@@ -181,25 +206,28 @@ export function createApp(config: ServerConfig): express.Express {
     const text = req.body.text
 
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
-      res.status(400).json({ error: 'Text description is required' })
+      sendError(res, 400, 'Text description is required', 'INVALID_TEXT')
       return
     }
 
     if (text.length > 1000) {
-      res.status(400).json({ error: 'Text too long (max 1000 characters)' })
+      sendError(res, 400, 'Text too long (max 1000 characters)', 'INVALID_TEXT')
       return
     }
 
     try {
       console.log(`[TextToPrompt] Converting text prompt...`)
       const prompt = await textToPrompt(text.trim())
-      res.json({ prompt })
+      sendSuccess(res, { prompt })
     } catch (error) {
       console.error('[Error] Text to prompt conversion failed:', error)
-      res.status(500).json({
-        error: 'Failed to convert text to prompt',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      })
+      sendError(
+        res,
+        500,
+        'Failed to convert text to prompt',
+        'TEXT_TO_PROMPT_FAILED',
+        error instanceof Error ? error.message : 'Unknown error'
+      )
     }
   })
 
@@ -216,7 +244,7 @@ export function createApp(config: ServerConfig): express.Express {
   app.use('/api/notifications', requireAuth, createNotificationsRouter())
 
   app.get('/api/settings/status', requireAuth, (_req, res) => {
-    res.json({
+    sendSuccess(res, {
       apiKeys: {
         openai: !!process.env.OPENAI_API_KEY,
         fal: !!process.env.FAL_API_KEY,
@@ -225,6 +253,12 @@ export function createApp(config: ServerConfig): express.Express {
       },
       version: '0.2.0',
     })
+  })
+
+  app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (res.headersSent) return
+    const message = error instanceof Error ? error.message : 'Unexpected server error'
+    sendError(res, 500, 'Internal server error', 'INTERNAL_SERVER_ERROR', message)
   })
 
   return app

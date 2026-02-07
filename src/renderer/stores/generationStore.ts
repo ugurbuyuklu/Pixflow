@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { apiUrl, assetUrl, authFetch } from '../lib/api'
+import { apiUrl, assetUrl, authFetch, getApiError, unwrapApiData } from '../lib/api'
 import type { GeneratedPrompt, BatchProgress, ErrorInfo, Avatar } from '../types'
 import { parseError } from '../types'
 
@@ -148,7 +148,8 @@ export const useGenerationStore = create<GenerationState>()((set, get) => ({
     try {
       const res = await authFetch(apiUrl('/api/avatars'))
       if (!res.ok) throw new Error(`Failed to load avatars: ${res.status}`)
-      const data = await res.json()
+      const raw = await res.json()
+      const data = unwrapApiData<{ avatars: Avatar[] }>(raw)
       set({
         avatars: data.avatars,
         imageSource: data.avatars.length > 0 ? 'gallery' : 'upload',
@@ -226,11 +227,17 @@ export const useGenerationStore = create<GenerationState>()((set, get) => ({
       })
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Batch generation failed')
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Batch generation failed'))
       }
 
-      const data = await res.json()
+      const raw = await res.json()
+      const data = unwrapApiData<{
+        jobId: string
+        status: string
+        totalImages: number
+        outputDir: string
+      }>(raw)
       set({
         batchProgress: {
           jobId: data.jobId,
@@ -253,7 +260,8 @@ export const useGenerationStore = create<GenerationState>()((set, get) => ({
           })
           if (!pollRes.ok) throw new Error(`${pollRes.status}`)
           failedPolls = 0
-          const progress: BatchProgress = await pollRes.json()
+          const progressRaw = await pollRes.json()
+          const progress = unwrapApiData<BatchProgress>(progressRaw)
           set({ batchProgress: progress })
           if (progress.status === 'completed' || progress.status === 'failed') break
         } catch (err) {

@@ -2,6 +2,7 @@ import { fal } from '@fal-ai/client'
 import fs from 'fs/promises'
 import path from 'path'
 import { ensureFalConfig } from './falConfig.js'
+import { isMockProvidersEnabled, makeMockDataUrl, makeMockId, recordMockProviderSuccess, runWithRetries } from './providerRuntime.js'
 
 const MODEL_ID = 'fal-ai/kling-video/v2.1/master/image-to-video'
 
@@ -27,6 +28,18 @@ export interface KlingI2VResult {
 }
 
 export async function generateKlingVideo(options: KlingI2VOptions): Promise<KlingI2VResult> {
+  if (isMockProvidersEnabled()) {
+    await recordMockProviderSuccess({
+      pipeline: 'avatars.i2v.provider',
+      provider: 'kling',
+      metadata: { duration: options.duration || '5', aspectRatio: options.aspectRatio || '9:16' },
+    })
+    return {
+      videoUrl: makeMockDataUrl('video/mp4', 'mock-kling-video'),
+      requestId: makeMockId('kling'),
+    }
+  }
+
   ensureFalConfig()
 
   const resolved = path.resolve(options.imagePath)
@@ -36,22 +49,29 @@ export async function generateKlingVideo(options: KlingI2VOptions): Promise<Klin
 
   const imageUrl = await fileToDataUrl(resolved)
 
-  const result = await fal.subscribe(MODEL_ID, {
-    input: {
-      prompt: options.prompt,
-      image_url: imageUrl,
-      duration: options.duration || '5',
-      aspect_ratio: options.aspectRatio || '9:16',
-      negative_prompt: options.negativePrompt || 'blur, distort, and low quality',
-      cfg_scale: options.cfgScale ?? 0.5,
-    },
-    logs: true,
-    onQueueUpdate: (update) => {
-      if (update.status === 'IN_PROGRESS' && update.logs) {
-        update.logs.forEach((log) => console.log(`[Kling] ${log.message}`))
-      }
-    },
-  })
+  const result = await runWithRetries(
+    () => fal.subscribe(MODEL_ID, {
+      input: {
+        prompt: options.prompt,
+        image_url: imageUrl,
+        duration: options.duration || '5',
+        aspect_ratio: options.aspectRatio || '9:16',
+        negative_prompt: options.negativePrompt || 'blur, distort, and low quality',
+        cfg_scale: options.cfgScale ?? 0.5,
+      },
+      logs: true,
+      onQueueUpdate: (update) => {
+        if (update.status === 'IN_PROGRESS' && update.logs) {
+          update.logs.forEach((log) => console.log(`[Kling] ${log.message}`))
+        }
+      },
+    }),
+    {
+      pipeline: 'avatars.i2v.provider',
+      provider: 'kling',
+      metadata: { duration: options.duration || '5', aspectRatio: options.aspectRatio || '9:16' },
+    }
+  )
 
   const data = result.data as Record<string, unknown> | undefined
   const videoUrl = (typeof data?.video_url === 'string' && data.video_url)

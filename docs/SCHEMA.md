@@ -90,8 +90,9 @@ interface MakeupConfig {
 interface EffectsConfig {
   vignette?: string;    // Optional
   color_grade: string;  // Color treatment
+  contrast: string;     // Low/medium/high with description
   atmosphere?: string;  // Fog, haze, etc.
-  grain: string;        // Film grain or clean
+  grain: string;        // Film grain or clean (detect from B&W/vintage)
 }
 ```
 
@@ -174,6 +175,30 @@ Don't use fixed rules. Research what works for each concept.
 }
 ```
 
+### Light Direction Detection (Shadow Analysis)
+
+When analyzing images with Image-to-Prompt, light direction is determined by analyzing shadow placement:
+
+**Rule: Shadows fall OPPOSITE to light source**
+
+| Shadow Location | Light Direction |
+|-----------------|-----------------|
+| Shadows on RIGHT side of face | Light from LEFT |
+| Shadows on LEFT side of face | Light from RIGHT |
+| Shadow under nose pointing down-right | Light from upper-left |
+| Shadow under nose pointing down-left | Light from upper-right |
+| Shadows below features (short shadows) | Light from above (high angle) |
+| Long shadows on one side | Low-angle side light |
+
+**Example key_light descriptions:**
+```json
+// Shadows on right side of face
+"key_light": "Key light from camera-LEFT at 45° angle (determined by shadows falling on right side of face)"
+
+// Shadows below and slightly left
+"key_light": "Key light from upper-right (determined by shadows falling below-left of features)"
+```
+
 ### set_design.backdrop (Often CRITICAL)
 
 The backdrop often defines the entire mood. Use CRITICAL tag when essential.
@@ -240,6 +265,7 @@ Don't copy effects between concepts. Each should be justified.
   "lens_distortion": "CRITICAL: Strong fish-eye barrel distortion",
   "vignette": "Heavy circular vignette, tunnel framing",
   "color_grade": "Rich saturated reds, warm skin tones",
+  "contrast": "Medium contrast, balanced tones for romantic feel",
   "grain": "None, clean digital"
 }
 
@@ -247,6 +273,7 @@ Don't copy effects between concepts. Each should be justified.
 "effects": {
   "vignette": "Dark edges, spotlight on subject",
   "color_grade": "Warm orange/amber, deep blacks",
+  "contrast": "High contrast with deep blacks and bright highlights",
   "atmosphere": "Subtle fog in background",
   "grain": "Fine film grain for vintage horror feel"
 }
@@ -254,8 +281,16 @@ Don't copy effects between concepts. Each should be justified.
 // Christmas - warm and cozy
 "effects": {
   "color_grade": "Warm golden tones, Portra-like skin",
+  "contrast": "Low contrast, flat and muted for dreamy feel",
   "atmosphere": "Soft glow from lights",
   "grain": "Subtle grain for nostalgic feel"
+}
+
+// B&W Editorial - classic film look
+"effects": {
+  "color_grade": "True B&W with rich midtones",
+  "contrast": "High contrast, punchy blacks and bright whites",
+  "grain": "Medium film grain consistent with Tri-X pushed one stop"
 }
 ```
 

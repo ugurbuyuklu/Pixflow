@@ -270,7 +270,8 @@
 
   "effects": {
     "color_grade": "Black and white, Kodak Tri-X 400 emulation",
-    "grain": "Fine natural film grain",
+    "contrast": "Medium-high contrast with rich midtones and deep blacks",
+    "grain": "Fine natural film grain consistent with Tri-X",
     "vignette": "Subtle",
     "atmosphere": "Soft highlights, rich midtones, gentle blacks"
   }

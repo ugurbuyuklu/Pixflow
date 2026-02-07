@@ -2,6 +2,13 @@ import { getToken } from './auth'
 
 let _baseUrl = ''
 
+type ApiEnvelope<T> = {
+  success?: boolean
+  data?: T
+  error?: string
+  details?: string
+}
+
 export async function initApi(): Promise<void> {
   try {
     if (window.api?.getServerPort) {
@@ -34,4 +41,19 @@ export function authFetch(url: string, options: RequestInit = {}): Promise<Respo
   const token = getToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
   return fetch(url, { ...options, headers })
+}
+
+export function unwrapApiData<T>(payload: unknown): T {
+  if (payload && typeof payload === 'object' && 'data' in (payload as Record<string, unknown>)) {
+    return (payload as ApiEnvelope<T>).data as T
+  }
+  return payload as T
+}
+
+export function getApiError(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== 'object') return fallback
+  const p = payload as ApiEnvelope<unknown>
+  if (typeof p.error === 'string' && p.error.trim()) return p.error
+  if (typeof p.details === 'string' && p.details.trim()) return p.details
+  return fallback
 }

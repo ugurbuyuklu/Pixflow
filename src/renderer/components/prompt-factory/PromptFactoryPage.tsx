@@ -9,6 +9,7 @@ import { useGenerationStore } from '../../stores/generationStore'
 import { useHistoryStore } from '../../stores/historyStore'
 import { useNavigationStore } from '../../stores/navigationStore'
 import type { GeneratedPrompt } from '../../types'
+import { PROMPT_GENERATE_MAX, PROMPT_GENERATE_MIN } from '../../../constants/limits'
 
 function extractMood(prompt: GeneratedPrompt): string {
   return prompt.lighting?.mood || prompt.effects?.atmosphere || 'N/A'
@@ -56,13 +57,13 @@ export default function PromptFactoryPage() {
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={() => setPromptMode('concept')}
-            className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+            className="px-4 py-2 text-sm font-medium text-surface-400 hover:text-surface-900 transition-colors"
           >
             Concept to Prompts
           </button>
           <button
             onClick={() => setPromptMode('image')}
-            className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg"
+            className="px-4 py-2 text-sm font-medium text-surface-900 bg-gradient-to-r from-brand-600 to-brand-500 rounded-lg"
           >
             Image to Prompt
           </button>
@@ -70,10 +71,10 @@ export default function PromptFactoryPage() {
 
         <div className="grid grid-cols-2 gap-6">
           {/* Left: Upload */}
-          <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-6 space-y-4">
+          <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-6 space-y-4">
             <div className="flex items-center gap-2 mb-2">
-              <ScanSearch className="w-5 h-5 text-purple-400" />
-              <h3 className="text-lg font-semibold text-white">Analyze Image</h3>
+              <ScanSearch className="w-5 h-5 text-brand-400" />
+              <h3 className="text-lg font-semibold text-surface-900">Analyze Image</h3>
             </div>
 
             <div className="relative">
@@ -86,15 +87,15 @@ export default function PromptFactoryPage() {
                   />
                   <button
                     onClick={() => setAnalyzeImage(null, null)}
-                    className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-white hover:bg-black/80 transition-colors"
+                    className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full text-surface-900 hover:bg-black/80 transition-colors"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               ) : (
-                <label className="flex flex-col items-center justify-center w-full aspect-[9/16] border-2 border-dashed border-gray-600 rounded-lg cursor-pointer hover:border-purple-500 transition-colors">
-                  <Upload className="w-8 h-8 text-gray-500 mb-2" />
-                  <span className="text-sm text-gray-400">Drop image or click to upload</span>
+                <label className="flex flex-col items-center justify-center w-full aspect-[9/16] border-2 border-dashed border-surface-200 rounded-lg cursor-pointer hover:border-brand-500 transition-colors">
+                  <Upload className="w-8 h-8 text-surface-400 mb-2" />
+                  <span className="text-sm text-surface-400">Drop image or click to upload</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -108,7 +109,7 @@ export default function PromptFactoryPage() {
             <button
               onClick={analyzeCurrentImage}
               disabled={!analyzePreview || analyzeLoading}
-              className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium rounded-lg hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              className="w-full py-3 bg-gradient-to-r from-brand-600 to-brand-500 text-surface-900 font-medium rounded-lg hover:from-brand-500 hover:to-brand-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
             >
               {analyzeLoading ? (
                 <>
@@ -132,16 +133,16 @@ export default function PromptFactoryPage() {
           </div>
 
           {/* Right: Result */}
-          <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-6 flex flex-col">
+          <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-6 flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Generated Prompt</h3>
+              <h3 className="text-lg font-semibold text-surface-900">Generated Prompt</h3>
               {analyzedPrompt && (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={copyAnalyzed}
-                    className="p-1.5 text-gray-400 hover:text-white transition-colors"
+                    className="p-1.5 text-surface-400 hover:text-surface-900 transition-colors"
                   >
-                    {analyzeCopied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                    {analyzeCopied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
                   </button>
                 </div>
               )}
@@ -149,7 +150,7 @@ export default function PromptFactoryPage() {
 
             {analyzedPrompt ? (
               <>
-                <pre className="flex-1 overflow-y-auto text-xs text-gray-300 bg-gray-900/50 rounded-lg p-4 whitespace-pre-wrap break-words mb-4">
+                <pre className="flex-1 overflow-y-auto text-xs text-surface-500 bg-surface-50/50 rounded-lg p-4 whitespace-pre-wrap break-words mb-4">
                   {JSON.stringify(analyzedPrompt, null, 2)}
                 </pre>
                 <div className="flex gap-3">
@@ -158,7 +159,7 @@ export default function PromptFactoryPage() {
                       setPrompts([analyzedPrompt])
                       setPromptMode('concept')
                     }}
-                    className="flex-1 py-2.5 bg-gradient-to-r from-gray-700 to-gray-600 text-white font-medium rounded-lg hover:from-gray-600 hover:to-gray-500 transition-all flex items-center justify-center gap-2 text-sm"
+                    className="flex-1 py-2.5 bg-surface-200 text-surface-900 font-medium rounded-lg hover:bg-surface-100 transition-all flex items-center justify-center gap-2 text-sm"
                   >
                     <Layers className="w-4 h-4" />
                     Use in Factory
@@ -168,7 +169,7 @@ export default function PromptFactoryPage() {
                       setPrompts([analyzedPrompt])
                       navigate('generate')
                     }}
-                    className="flex-1 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-500 hover:to-emerald-500 transition-all flex items-center justify-center gap-2 text-sm"
+                    className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 text-surface-900 font-medium rounded-lg hover:from-emerald-500 hover:to-emerald-400 transition-all flex items-center justify-center gap-2 text-sm"
                   >
                     <ArrowRight className="w-4 h-4" />
                     Asset Monster
@@ -176,7 +177,7 @@ export default function PromptFactoryPage() {
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+              <div className="flex-1 flex items-center justify-center text-surface-400 text-sm">
                 Upload and analyze an image to generate a prompt
               </div>
             )}
@@ -191,49 +192,49 @@ export default function PromptFactoryPage() {
       <div className="flex items-center gap-4 mb-6">
         <button
           onClick={() => setPromptMode('concept')}
-          className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg"
+          className="px-4 py-2 text-sm font-medium text-surface-900 bg-gradient-to-r from-brand-600 to-brand-500 rounded-lg"
         >
           Concept to Prompts
         </button>
         <button
           onClick={() => setPromptMode('image')}
-          className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+          className="px-4 py-2 text-sm font-medium text-surface-400 hover:text-surface-900 transition-colors"
         >
           Image to Prompt
         </button>
       </div>
 
       {/* Input Area */}
-      <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-6">
+      <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-6">
         <div className="flex items-end gap-4">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-gray-300 mb-2">Concept</label>
+            <label className="block text-sm font-medium text-surface-500 mb-2">Concept</label>
             <input
               type="text"
               value={concept}
               onChange={(e) => setConcept(e.target.value)}
               placeholder="e.g., Christmas, Halloween, Summer Beach..."
-              className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+              className="w-full px-4 py-3 bg-surface-50/50 border border-surface-200 rounded-lg text-surface-900 placeholder-surface-400 focus:outline-none focus:border-brand-500 transition-colors"
             />
           </div>
           <div className="w-48">
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-surface-500 mb-2">
               Prompts: {count}
             </label>
             <input
               type="range"
-              min={1}
-              max={20}
+              min={PROMPT_GENERATE_MIN}
+              max={PROMPT_GENERATE_MAX}
               value={count}
               onChange={(e) => setCount(Number(e.target.value))}
-              className="w-full accent-purple-500"
+              className="w-full accent-brand-500"
             />
           </div>
           <div>
             {loading ? (
               <button
                 onClick={cancelGenerate}
-                className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white font-medium rounded-lg hover:from-red-500 hover:to-orange-500 transition-all flex items-center gap-2"
+                className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-surface-900 font-medium rounded-lg hover:from-red-500 hover:to-orange-500 transition-all flex items-center gap-2"
               >
                 <X className="w-5 h-5" />
                 Cancel
@@ -242,7 +243,7 @@ export default function PromptFactoryPage() {
               <button
                 onClick={generate}
                 disabled={!concept.trim()}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium rounded-lg hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                className="px-6 py-3 bg-gradient-to-r from-brand-600 to-brand-500 text-surface-900 font-medium rounded-lg hover:from-brand-500 hover:to-brand-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
               >
                 <Sparkles className="w-5 h-5" />
                 Generate
@@ -252,7 +253,7 @@ export default function PromptFactoryPage() {
         </div>
 
         {loading && (
-          <div className="mt-4 flex items-center gap-3 text-purple-300 text-sm">
+          <div className="mt-4 flex items-center gap-3 text-brand-300 text-sm">
             <Loader2 className="w-5 h-5 animate-spin" />
             Researching &amp; generating prompts...
           </div>
@@ -283,17 +284,17 @@ export default function PromptFactoryPage() {
 
       {/* Research Insights */}
       {research && (
-        <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-6">
+        <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-6">
           <div className="grid grid-cols-2 gap-6">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <Lightbulb className="w-5 h-5 text-yellow-400" />
-                <h3 className="text-sm font-semibold text-white">Key Insights</h3>
+                <Lightbulb className="w-5 h-5 text-warning" />
+                <h3 className="text-sm font-semibold text-surface-900">Key Insights</h3>
               </div>
               <ul className="space-y-1.5">
                 {research.insights?.map((insight, i) => (
-                  <li key={i} className="text-xs text-gray-300 flex items-start gap-2">
-                    <CheckCircle className="w-3.5 h-3.5 text-green-400 mt-0.5 flex-shrink-0" />
+                  <li key={i} className="text-xs text-surface-500 flex items-start gap-2">
+                    <CheckCircle className="w-3.5 h-3.5 text-success mt-0.5 flex-shrink-0" />
                     {insight}
                   </li>
                 ))}
@@ -301,30 +302,30 @@ export default function PromptFactoryPage() {
             </div>
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <Tags className="w-5 h-5 text-purple-400" />
-                <h3 className="text-sm font-semibold text-white">Sub-themes</h3>
+                <Tags className="w-5 h-5 text-brand-400" />
+                <h3 className="text-sm font-semibold text-surface-900">Sub-themes</h3>
               </div>
               <div className="flex flex-wrap gap-2">
                 {research.subThemes?.map((theme, i) => (
-                  <span key={i} className="px-2.5 py-1 bg-purple-600/20 text-purple-300 rounded-full text-xs">
+                  <span key={i} className="px-2.5 py-1 bg-brand-600/20 text-brand-300 rounded-full text-xs">
                     {theme}
                   </span>
                 ))}
               </div>
               {varietyScore && (
-                <div className="mt-4 p-3 bg-gray-900/50 rounded-lg">
+                <div className="mt-4 p-3 bg-surface-50/50 rounded-lg">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-gray-400">Variety Score</span>
-                    <span className={`text-xs font-medium ${varietyScore.passed ? 'text-green-400' : 'text-red-400'}`}>
+                    <span className="text-xs text-surface-400">Variety Score</span>
+                    <span className={`text-xs font-medium ${varietyScore.passed ? 'text-success' : 'text-danger'}`}>
                       {varietyScore.passed ? 'Passed' : 'Low Variety'}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500 space-y-0.5">
+                  <div className="text-xs text-surface-400 space-y-0.5">
                     <div>{varietyScore.aesthetics_used.length} aesthetics</div>
                     <div>{varietyScore.emotions_used.length} emotions</div>
                     <div>{varietyScore.lighting_setups_used.length} lighting setups</div>
                     {varietyScore.has_duplicates && (
-                      <div className="text-red-400">Duplicate combinations detected</div>
+                      <div className="text-danger">Duplicate combinations detected</div>
                     )}
                   </div>
                 </div>
@@ -338,9 +339,9 @@ export default function PromptFactoryPage() {
       {prompts.length > 0 && (
         <div className="grid grid-cols-3 gap-6">
           {/* Prompt List */}
-          <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-4 flex flex-col">
+          <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-4 flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-white">Prompts ({prompts.length})</h3>
+              <h3 className="text-sm font-semibold text-surface-900">Prompts ({prompts.length})</h3>
             </div>
             <div className="flex-1 overflow-y-auto space-y-2 mb-4">
               {prompts.map((prompt, i) => (
@@ -348,16 +349,16 @@ export default function PromptFactoryPage() {
                   key={i}
                   className={`p-3 rounded-lg cursor-pointer transition-colors flex items-center justify-between ${
                     selectedIndex === i
-                      ? 'bg-purple-600/30 border border-purple-500/50'
-                      : 'bg-gray-700/30 hover:bg-gray-700/50'
+                      ? 'bg-brand-600/30 border border-brand-500/50'
+                      : 'bg-surface-200/30 hover:bg-surface-200/50'
                   }`}
                   onClick={() => setSelectedIndex(i)}
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-white truncate">
+                    <div className="text-sm font-medium text-surface-900 truncate">
                       #{i + 1} — {prompt.style?.split(' ').slice(0, 5).join(' ') || 'Untitled'}
                     </div>
-                    <div className="text-xs text-gray-400 mt-0.5">
+                    <div className="text-xs text-surface-400 mt-0.5">
                       {extractMood(prompt)}
                     </div>
                   </div>
@@ -366,7 +367,7 @@ export default function PromptFactoryPage() {
                       e.stopPropagation()
                       addToFavorites(prompt, generateFavoriteName(prompt, i))
                     }}
-                    className="p-1 text-gray-500 hover:text-yellow-400 transition-colors flex-shrink-0"
+                    className="p-1 text-surface-400 hover:text-warning transition-colors flex-shrink-0"
                   >
                     <Star className="w-4 h-4" />
                   </button>
@@ -375,7 +376,7 @@ export default function PromptFactoryPage() {
             </div>
             <button
               onClick={handleSendToMonster}
-              className="w-full py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-500 hover:to-emerald-500 transition-all flex items-center justify-center gap-2 text-sm"
+              className="w-full py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 text-surface-900 font-medium rounded-lg hover:from-emerald-500 hover:to-emerald-400 transition-all flex items-center justify-center gap-2 text-sm"
             >
               <ArrowRight className="w-4 h-4" />
               Send to Monster
@@ -383,31 +384,31 @@ export default function PromptFactoryPage() {
           </div>
 
           {/* Preview + Edit */}
-          <div className="col-span-2 bg-gray-800/50 rounded-xl border border-gray-700/50 p-4 flex flex-col">
+          <div className="col-span-2 bg-surface-100/50 rounded-xl border border-surface-200/50 p-4 flex flex-col">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-white">
+              <h3 className="text-sm font-semibold text-surface-900">
                 Prompt #{(selectedIndex ?? 0) + 1}
               </h3>
               <div className="flex items-center gap-2">
                 <button
                   onClick={copyPrompt}
-                  className="p-1.5 text-gray-400 hover:text-white transition-colors"
+                  className="p-1.5 text-surface-400 hover:text-surface-900 transition-colors"
                 >
-                  {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                  {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
                 </button>
                 <button
                   onClick={() => {
                     const prompt = prompts[selectedIndex ?? 0]
                     if (prompt) addToFavorites(prompt, generateFavoriteName(prompt, selectedIndex ?? 0))
                   }}
-                  className="p-1.5 text-gray-400 hover:text-yellow-400 transition-colors"
+                  className="p-1.5 text-surface-400 hover:text-warning transition-colors"
                 >
                   <Star className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => saveEdit(editingPromptText)}
                   disabled={promptSaving}
-                  className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm font-medium rounded-lg hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 transition-all flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-gradient-to-r from-brand-600 to-brand-500 text-surface-900 text-sm font-medium rounded-lg hover:from-brand-500 hover:to-brand-400 disabled:opacity-50 transition-all flex items-center gap-1.5"
                 >
                   {promptSaving ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -421,7 +422,7 @@ export default function PromptFactoryPage() {
             <textarea
               value={editingPromptText ?? (selectedIndex != null ? JSON.stringify(prompts[selectedIndex], null, 2) : '')}
               onChange={(e) => setEditingPromptText(e.target.value)}
-              className="flex-1 w-full bg-gray-900/50 border border-gray-600 rounded-lg p-4 text-xs text-gray-300 font-mono resize-none focus:outline-none focus:border-purple-500 transition-colors whitespace-pre-wrap"
+              className="flex-1 w-full bg-surface-50/50 border border-surface-200 rounded-lg p-4 text-xs text-surface-500 font-mono resize-none focus:outline-none focus:border-brand-500 transition-colors whitespace-pre-wrap"
               spellCheck={false}
             />
           </div>

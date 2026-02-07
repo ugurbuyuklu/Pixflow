@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { apiUrl } from '../lib/api'
+import { apiUrl, getApiError, unwrapApiData } from '../lib/api'
 import { getToken, setToken, clearToken } from '../lib/auth'
 
 interface User {
@@ -43,7 +43,8 @@ export const useAuthStore = create<AuthState>()((set) => ({
         set({ loading: false })
         return
       }
-      const { user } = await res.json()
+      const raw = await res.json()
+      const { user } = unwrapApiData<{ user: User }>(raw)
       set({ user, isAuthenticated: true, loading: false })
     } catch {
       clearToken()
@@ -61,12 +62,13 @@ export const useAuthStore = create<AuthState>()((set) => ({
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        set({ error: data.error || 'Login failed' })
+        const raw = await res.json().catch(() => ({}))
+        set({ error: getApiError(raw, 'Login failed') })
         return false
       }
 
-      const { user, token } = await res.json()
+      const raw = await res.json()
+      const { user, token } = unwrapApiData<{ user: User; token: string }>(raw)
       setToken(token)
       set({ user, isAuthenticated: true, error: null })
       return true
@@ -94,8 +96,8 @@ export const useAuthStore = create<AuthState>()((set) => ({
       })
 
       if (!res.ok) {
-        const data = await res.json()
-        return data.error || 'Failed to change password'
+        const raw = await res.json().catch(() => ({}))
+        return getApiError(raw, 'Failed to change password')
       }
 
       return null

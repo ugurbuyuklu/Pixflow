@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { apiUrl, assetUrl, authFetch } from '../lib/api'
+import { apiUrl, assetUrl, authFetch, getApiError, unwrapApiData } from '../lib/api'
 import type { Avatar, Voice, LipsyncJob, ErrorInfo } from '../types'
 import { parseError } from '../types'
 
@@ -167,8 +167,12 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
     set({ avatarsLoading: true })
     try {
       const res = await authFetch(apiUrl('/api/avatars'))
-      if (!res.ok) throw new Error(`Failed to load avatars: ${res.status}`)
-      const data = await res.json()
+      if (!res.ok) {
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, `Failed to load avatars: ${res.status}`))
+      }
+      const raw = await res.json()
+      const data = unwrapApiData<{ avatars: Avatar[] }>(raw)
       set({ avatars: data.avatars })
     } catch (err) {
       console.error('Failed to load avatars:', err)
@@ -183,14 +187,17 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
     set({ voicesLoading: true })
     try {
       const res = await authFetch(apiUrl('/api/avatars/voices'))
-      if (res.ok) {
-        const data = await res.json()
-        const loadedVoices = data.voices || []
-        set({
-          voices: loadedVoices,
-          selectedVoice: get().selectedVoice || loadedVoices[0] || null,
-        })
+      if (!res.ok) {
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Failed to load voices'))
       }
+      const raw = await res.json()
+      const data = unwrapApiData<{ voices?: Voice[] }>(raw)
+      const loadedVoices = data.voices || []
+      set({
+        voices: loadedVoices,
+        selectedVoice: get().selectedVoice || loadedVoices[0] || null,
+      })
     } catch (err) {
       console.error('Failed to load voices:', err)
     } finally {
@@ -208,8 +215,8 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
         body: formData,
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Upload failed')
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Upload failed'))
       }
       await get().loadAvatars()
     } catch (err) {
@@ -244,11 +251,12 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
         })
 
         if (!res.ok) {
-          const data = await res.json().catch(() => ({}))
-          throw new Error(data.error || 'Failed to generate avatar')
+          const raw = await res.json().catch(() => ({}))
+          throw new Error(getApiError(raw, 'Failed to generate avatar'))
         }
 
-        const data = await res.json()
+        const raw = await res.json()
+        const data = unwrapApiData<{ localPath: string }>(raw)
         urls.push(data.localPath)
         set({ generatedUrls: [...urls] })
       }
@@ -278,11 +286,12 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
       })
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to generate script')
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Failed to generate script'))
       }
 
-      const data = await res.json()
+      const raw = await res.json()
+      const data = unwrapApiData<{ script: string; wordCount: number; estimatedDuration: number }>(raw)
       set({
         generatedScript: data.script,
         scriptWordCount: data.wordCount,
@@ -316,11 +325,12 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
       })
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to generate audio')
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Failed to generate audio'))
       }
 
-      const data = await res.json()
+      const raw = await res.json()
+      const data = unwrapApiData<{ audioUrl: string }>(raw)
       set({ generatedAudioUrl: data.audioUrl })
     } catch (err) {
       set({ error: parseError(err) })
@@ -351,12 +361,13 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
       })
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to create lipsync video')
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Failed to create lipsync video'))
       }
 
-      const data = await res.json()
-      if (data.success && data.localPath) {
+      const raw = await res.json()
+      const data = unwrapApiData<{ localPath?: string }>(raw)
+      if (data.localPath) {
         set({
           generatedVideoUrl: data.localPath,
           lipsyncJob: { id: `lipsync_${Date.now()}`, status: 'complete', videoUrl: data.localPath },
@@ -391,11 +402,12 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
       })
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to generate video')
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Failed to generate video'))
       }
 
-      const data = await res.json()
+      const raw = await res.json()
+      const data = unwrapApiData<{ localPath: string }>(raw)
       set({ i2vVideoUrl: data.localPath })
     } catch (err) {
       set({ i2vError: parseError(err) })

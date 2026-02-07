@@ -4,6 +4,8 @@ import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import { notify } from './notifications.js'
 import { ensureFalConfig } from './falConfig.js'
+import { createPipelineSpan } from './telemetry.js'
+import { isMockProvidersEnabled, makeMockId, makeMockPngDataUrl, recordMockProviderSuccess, runWithRetries } from './providerRuntime.js'
 
 const MODEL_ID = 'fal-ai/nano-banana-pro/edit'
 
@@ -60,6 +62,15 @@ export async function generateImage(
   prompt: string,
   options: { resolution?: string; aspectRatio?: string; numImages?: number; outputFormat?: string } = {}
 ): Promise<{ urls: string[]; requestId: string }> {
+  if (isMockProvidersEnabled()) {
+    await recordMockProviderSuccess({
+      pipeline: 'generate.batch.provider',
+      provider: 'fal',
+      metadata: { promptLength: prompt.length, numImages: options.numImages || 1 },
+    })
+    return { urls: [makeMockPngDataUrl()], requestId: makeMockId('batch-image') }
+  }
+
   ensureFalConfig()
 
   const paths = Array.isArray(referenceImagePaths) ? referenceImagePaths : [referenceImagePaths]
@@ -76,22 +87,33 @@ export async function generateImage(
 
   const numImages = options.numImages || 1
 
-  const result = await fal.subscribe(MODEL_ID, {
-    input: {
-      prompt,
-      image_urls: imageUrls,
-      resolution: (options.resolution || '2K') as '1K' | '2K' | '4K',
-      aspect_ratio: (options.aspectRatio || '9:16') as '9:16' | '16:9' | '1:1' | '4:3' | '3:4' | '4:5' | '5:4' | '3:2' | '2:3' | '21:9',
-      num_images: numImages,
-      output_format: (options.outputFormat || 'png') as 'png' | 'jpeg' | 'webp',
-    },
-    logs: true,
-    onQueueUpdate: (update) => {
-      if (update.status === 'IN_PROGRESS' && update.logs) {
-        update.logs.forEach((log) => console.log(`[fal.ai] ${log.message}`))
-      }
-    },
-  })
+  const result = await runWithRetries(
+    () => fal.subscribe(MODEL_ID, {
+      input: {
+        prompt,
+        image_urls: imageUrls,
+        resolution: (options.resolution || '2K') as '1K' | '2K' | '4K',
+        aspect_ratio: (options.aspectRatio || '9:16') as '9:16' | '16:9' | '1:1' | '4:3' | '3:4' | '4:5' | '5:4' | '3:2' | '2:3' | '21:9',
+        num_images: numImages,
+        output_format: (options.outputFormat || 'png') as 'png' | 'jpeg' | 'webp',
+      },
+      logs: true,
+      onQueueUpdate: (update) => {
+        if (update.status === 'IN_PROGRESS' && update.logs) {
+          update.logs.forEach((log) => console.log(`[fal.ai] ${log.message}`))
+        }
+      },
+    }),
+    {
+      pipeline: 'generate.batch.provider',
+      provider: 'fal',
+      metadata: {
+        promptLength: prompt.length,
+        referenceCount: imageUrls.length,
+        numImages,
+      },
+    }
+  )
 
   const generatedUrls = result.data?.images?.map((img: { url: string }) => img.url) || []
   if (generatedUrls.length === 0) {
@@ -150,77 +172,99 @@ export async function generateBatch(
 ): Promise<void> {
   const job = activeJobs.get(jobId)
   if (!job) throw new Error('Job not found')
-
-  job.status = 'in_progress'
-  const concurrency = options.concurrency || 2
-  const numImagesPerPrompt = options.numImages || 1
-  const outputFormat = options.outputFormat || 'png'
-
-  const generateOne = async (imageIndex: number): Promise<void> => {
-    const image = job.images[imageIndex]
-    if (!image) return
-
-    const promptIndex = Math.floor(imageIndex / numImagesPerPrompt)
-    const variantIndex = imageIndex % numImagesPerPrompt
-
-    image.status = 'generating'
-
-    try {
-      const { urls } = await generateImage(referenceImageUrls, prompts[promptIndex], {
-        resolution: options.resolution,
-        aspectRatio: options.aspectRatio,
-        numImages: 1,
-        outputFormat,
-      })
-
-      const url = urls[0]
-      image.url = url
-      image.status = 'completed'
-
-      const safeConcept = job.concept.toLowerCase().replace(/\.\./g, '').replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, '_').slice(0, 50)
-      const fileName = numImagesPerPrompt > 1
-        ? `${safeConcept}_${String(promptIndex + 1).padStart(2, '0')}_v${variantIndex + 1}.${outputFormat}`
-        : `${safeConcept}_${String(imageIndex + 1).padStart(2, '0')}.${outputFormat}`
-      const localPath = path.join(job.outputDir, fileName)
-
-      try {
-        await downloadImage(url, localPath)
-        image.localPath = localPath
-        console.log(`[Batch] Saved: ${fileName}`)
-      } catch (downloadErr) {
-        console.error(`[Batch] Download failed for ${fileName}:`, downloadErr)
-      }
-
-      job.completedImages++
-    } catch (err) {
-      image.status = 'failed'
-      image.error = err instanceof Error ? err.message : 'Unknown error'
-      console.error(`[Batch] Failed image ${imageIndex + 1}:`, err)
-    }
-  }
-
-  const queue = [...Array(job.totalImages).keys()]
-  const workers = Array.from({ length: Math.min(concurrency, job.totalImages) }, async () => {
-    while (queue.length > 0) {
-      const index = queue.shift()
-      if (index !== undefined) {
-        await generateOne(index)
-      }
-    }
+  const span = createPipelineSpan({
+    pipeline: 'generate.batch.execute',
+    userId: job.userId,
+    metadata: {
+      jobId: job.id,
+      totalImages: job.totalImages,
+      promptCount: prompts.length,
+      concurrency: options.concurrency || 2,
+    },
   })
 
-  await Promise.all(workers)
+  try {
+    job.status = 'in_progress'
+    const concurrency = options.concurrency || 2
+    const numImagesPerPrompt = options.numImages || 1
+    const outputFormat = options.outputFormat || 'png'
 
-  job.status = job.images.every((img) => img.status === 'completed') ? 'completed' : 'failed'
+    const generateOne = async (imageIndex: number): Promise<void> => {
+      const image = job.images[imageIndex]
+      if (!image) return
 
-  if (job.userId) {
-    const ok = job.status === 'completed'
-    notify(
-      job.userId,
-      ok ? 'batch_complete' : 'batch_failed',
-      ok ? 'Batch Complete' : 'Batch Failed',
-      `${job.concept}: ${job.completedImages}/${job.totalImages} images`,
-    )
+      const promptIndex = Math.floor(imageIndex / numImagesPerPrompt)
+      const variantIndex = imageIndex % numImagesPerPrompt
+
+      image.status = 'generating'
+
+      try {
+        const { urls } = await generateImage(referenceImageUrls, prompts[promptIndex], {
+          resolution: options.resolution,
+          aspectRatio: options.aspectRatio,
+          numImages: 1,
+          outputFormat,
+        })
+
+        const url = urls[0]
+        image.url = url
+        image.status = 'completed'
+
+        const safeConcept = job.concept.toLowerCase().replace(/\.\./g, '').replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, '_').slice(0, 50)
+        const fileName = numImagesPerPrompt > 1
+          ? `${safeConcept}_${String(promptIndex + 1).padStart(2, '0')}_v${variantIndex + 1}.${outputFormat}`
+          : `${safeConcept}_${String(imageIndex + 1).padStart(2, '0')}.${outputFormat}`
+        const localPath = path.join(job.outputDir, fileName)
+
+        try {
+          await downloadImage(url, localPath)
+          image.localPath = localPath
+          console.log(`[Batch] Saved: ${fileName}`)
+        } catch (downloadErr) {
+          console.error(`[Batch] Download failed for ${fileName}:`, downloadErr)
+        }
+
+        job.completedImages++
+      } catch (err) {
+        image.status = 'failed'
+        image.error = err instanceof Error ? err.message : 'Unknown error'
+        console.error(`[Batch] Failed image ${imageIndex + 1}:`, err)
+      }
+    }
+
+    const queue = [...Array(job.totalImages).keys()]
+    const workers = Array.from({ length: Math.min(concurrency, job.totalImages) }, async () => {
+      while (queue.length > 0) {
+        const index = queue.shift()
+        if (index !== undefined) {
+          await generateOne(index)
+        }
+      }
+    })
+
+    await Promise.all(workers)
+
+    job.status = job.images.every((img) => img.status === 'completed') ? 'completed' : 'failed'
+
+    if (job.userId) {
+      const ok = job.status === 'completed'
+      notify(
+        job.userId,
+        ok ? 'batch_complete' : 'batch_failed',
+        ok ? 'Batch Complete' : 'Batch Failed',
+        `${job.concept}: ${job.completedImages}/${job.totalImages} images`,
+      )
+    }
+
+    const failedImages = job.images.filter((img) => img.status === 'failed').length
+    span.success({
+      finalStatus: job.status,
+      completedImages: job.completedImages,
+      failedImages,
+    })
+  } catch (error) {
+    span.error(error, { finalStatus: job.status })
+    throw error
   }
 }
 

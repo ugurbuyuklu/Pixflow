@@ -1,0 +1,3 @@
+export const PROMPT_GENERATE_MIN = 1
+export const PROMPT_GENERATE_MAX = 10
+export const PROMPT_GENERATE_DEFAULT = 8

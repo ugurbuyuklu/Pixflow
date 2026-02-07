@@ -12,6 +12,8 @@ import {
 } from '../services/fal.js'
 import { analyzeImage } from '../services/vision.js'
 import type { AuthRequest } from '../middleware/auth.js'
+import { sendError, sendSuccess } from '../utils/http.js'
+import { createPipelineSpan, recordPipelineEvent } from '../services/telemetry.js'
 
 const MAX_PROMPTS = 20
 
@@ -27,6 +29,20 @@ function sanitizeConcept(concept: string): string {
 interface GenerateRouterConfig {
   projectRoot: string
   openFolder?: (folderPath: string) => Promise<void>
+}
+
+function resolvePathInsideRoot(root: string, unsafePath: string): string | null {
+  if (unsafePath.includes('\0')) return null
+
+  const resolvedRoot = path.resolve(root)
+  const candidate = path.resolve(unsafePath)
+  const relative = path.relative(resolvedRoot, candidate)
+
+  if (relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
+    return candidate
+  }
+
+  return null
 }
 
 export function createGenerateRouter(config: GenerateRouterConfig): Router {
@@ -63,6 +79,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
   const MAX_REFERENCE_IMAGES = 4
 
   router.post('/batch', upload.array('referenceImages', MAX_REFERENCE_IMAGES), async (req: AuthRequest, res) => {
+    let span: ReturnType<typeof createPipelineSpan> | null = null
     try {
       const {
         concept,
@@ -75,17 +92,17 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
       const files = req.files as Express.Multer.File[]
 
       if (!files || files.length === 0) {
-        res.status(400).json({ error: 'At least one reference image is required' })
+        sendError(res, 400, 'At least one reference image is required', 'MISSING_REFERENCE_IMAGE')
         return
       }
 
       if (files.length > MAX_REFERENCE_IMAGES) {
-        res.status(400).json({ error: `Maximum ${MAX_REFERENCE_IMAGES} reference images allowed` })
+        sendError(res, 400, `Maximum ${MAX_REFERENCE_IMAGES} reference images allowed`, 'TOO_MANY_REFERENCE_IMAGES')
         return
       }
 
       if (!concept || !promptsJson) {
-        res.status(400).json({ error: 'Concept and prompts are required' })
+        sendError(res, 400, 'Concept and prompts are required', 'INVALID_BATCH_PAYLOAD')
         return
       }
 
@@ -93,22 +110,34 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
       try {
         prompts = JSON.parse(promptsJson)
       } catch {
-        res.status(400).json({ error: 'Invalid prompts JSON' })
+        sendError(res, 400, 'Invalid prompts JSON', 'INVALID_PROMPTS_JSON')
         return
       }
 
       if (!Array.isArray(prompts) || prompts.length === 0) {
-        res.status(400).json({ error: 'Prompts must be a non-empty array' })
+        sendError(res, 400, 'Prompts must be a non-empty array', 'INVALID_PROMPTS')
         return
       }
 
       if (prompts.length > MAX_PROMPTS) {
-        res.status(400).json({ error: `Maximum ${MAX_PROMPTS} prompts allowed per batch` })
+        sendError(res, 400, `Maximum ${MAX_PROMPTS} prompts allowed per batch`, 'TOO_MANY_PROMPTS')
         return
       }
 
       const numImages = Math.min(4, Math.max(1, parseInt(numImagesPerPrompt, 10) || 1))
       const totalImages = prompts.length * numImages
+      span = createPipelineSpan({
+        pipeline: 'generate.batch.start',
+        userId: req.user?.id,
+        metadata: {
+          promptCount: prompts.length,
+          totalImages,
+          referenceImageCount: files.length,
+          aspectRatio,
+          resolution,
+          outputFormat,
+        },
+      })
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
       const safeConcept = sanitizeConcept(concept)
@@ -130,9 +159,18 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
         concurrency: 4,
       }).catch((err) => {
         console.error('[Batch] Generation failed:', err)
+        void recordPipelineEvent({
+          pipeline: 'generate.batch.async',
+          status: 'error',
+          userId: req.user?.id,
+          metadata: { jobId: job.id },
+          error: err instanceof Error ? err.message : 'Unknown error',
+        })
       })
 
-      res.json({
+      span.success({ jobId: job.id, outputDir: job.outputDir })
+
+      sendSuccess(res, {
         jobId: job.id,
         status: job.status,
         totalImages: job.totalImages,
@@ -142,10 +180,8 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
       })
     } catch (error) {
       console.error('[Batch] Error:', error)
-      res.status(500).json({
-        error: 'Failed to start batch generation',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      })
+      span?.error(error)
+      sendError(res, 500, 'Failed to start batch generation', 'BATCH_START_FAILED', error instanceof Error ? error.message : 'Unknown error')
     }
   })
 
@@ -154,16 +190,16 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
     const job = getJob(jobId)
 
     if (!job) {
-      res.status(404).json({ error: 'Job not found' })
+      sendError(res, 404, 'Job not found', 'JOB_NOT_FOUND')
       return
     }
 
     if (job.userId && job.userId !== req.user?.id) {
-      res.status(404).json({ error: 'Job not found' })
+      sendError(res, 404, 'Job not found', 'JOB_NOT_FOUND')
       return
     }
 
-    res.json({
+    sendSuccess(res, {
       jobId: job.id,
       status: job.status,
       progress: Math.round((job.completedImages / job.totalImages) * 100),
@@ -184,20 +220,17 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
     try {
       const file = req.file
       if (!file) {
-        res.status(400).json({ error: 'Image is required' })
+        sendError(res, 400, 'Image is required', 'MISSING_IMAGE')
         return
       }
-      res.json({
+      sendSuccess(res, {
         path: file.path,
         filename: file.filename,
         size: file.size,
         mimetype: file.mimetype,
       })
     } catch (error) {
-      res.status(500).json({
-        error: 'Failed to upload image',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      })
+      sendError(res, 500, 'Failed to upload image', 'UPLOAD_FAILED', error instanceof Error ? error.message : 'Unknown error')
     }
   })
 
@@ -205,7 +238,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
     try {
       const file = req.file
       if (!file) {
-        res.status(400).json({ error: 'Image is required' })
+        sendError(res, 400, 'Image is required', 'MISSING_IMAGE')
         return
       }
 
@@ -213,7 +246,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
       const prompt = await analyzeImage(file.path)
       console.log(`[Vision] Analysis complete`)
 
-      res.json({
+      sendSuccess(res, {
         prompt,
         sourceImage: {
           path: file.path,
@@ -223,10 +256,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
       })
     } catch (error) {
       console.error('[Vision] Error:', error)
-      res.status(500).json({
-        error: 'Failed to analyze image',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      })
+      sendError(res, 500, 'Failed to analyze image', 'IMAGE_ANALYSIS_FAILED', error instanceof Error ? error.message : 'Unknown error')
     }
   })
 
@@ -234,38 +264,38 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
     const { folderPath } = req.body
 
     if (!folderPath || typeof folderPath !== 'string') {
-      res.status(400).json({ error: 'Folder path is required' })
+      sendError(res, 400, 'Folder path is required', 'MISSING_FOLDER_PATH')
       return
     }
 
-    const normalizedPath = path.normalize(folderPath)
-    if (!normalizedPath.startsWith(projectRoot)) {
-      res.status(403).json({ error: 'Access denied: path outside project directory' })
+    const resolvedPath = resolvePathInsideRoot(projectRoot, folderPath)
+    if (!resolvedPath) {
+      sendError(res, 403, 'Access denied: path outside project directory', 'FORBIDDEN_PATH')
       return
     }
 
     try {
-      await fs.access(normalizedPath)
+      await fs.access(resolvedPath)
     } catch {
-      res.status(404).json({ error: 'Folder not found' })
+      sendError(res, 404, 'Folder not found', 'FOLDER_NOT_FOUND')
       return
     }
 
     if (config.openFolder) {
       try {
-        await config.openFolder(normalizedPath)
-        res.json({ success: true, path: normalizedPath })
+        await config.openFolder(resolvedPath)
+        sendSuccess(res, { path: resolvedPath })
       } catch {
-        res.status(500).json({ error: 'Failed to open folder' })
+        sendError(res, 500, 'Failed to open folder', 'OPEN_FOLDER_FAILED')
       }
     } else {
       const command = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open'
-      execFile(command, [normalizedPath], (err) => {
+      execFile(command, [resolvedPath], (err) => {
         if (err) {
-          res.status(500).json({ error: 'Failed to open folder' })
+          sendError(res, 500, 'Failed to open folder', 'OPEN_FOLDER_FAILED')
           return
         }
-        res.json({ success: true, path: normalizedPath })
+        sendSuccess(res, { path: resolvedPath })
       })
     }
   })

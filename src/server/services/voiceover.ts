@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { isMockProvidersEnabled, recordMockProviderSuccess, runWithRetries } from './providerRuntime.js'
 
 let openaiClient: OpenAI | null = null
 
@@ -36,6 +37,22 @@ export async function generateVoiceoverScript(
   const targetWords = Math.floor(options.duration * WORDS_PER_SECOND)
   const tolerance = Math.floor(targetWords * 0.1)
 
+  if (isMockProvidersEnabled()) {
+    await recordMockProviderSuccess({
+      pipeline: 'avatars.script.provider',
+      provider: 'openai',
+      metadata: { duration: options.duration, tone: options.tone || 'energetic' },
+    })
+    const words = Array.from({ length: Math.max(8, targetWords) }, () => 'pixflow').join(' ')
+    const script = `${options.concept}. ${words}. Try Pixflow today.`
+    const wordCount = script.split(/\s+/).filter(Boolean).length
+    return {
+      script,
+      wordCount,
+      estimatedDuration: Math.round(wordCount / WORDS_PER_SECOND),
+    }
+  }
+
   const toneDescriptions: Record<string, string> = {
     casual: 'casual and conversational, like talking to a friend',
     professional: 'professional and authoritative, building trust',
@@ -68,15 +85,22 @@ Target word count: ${targetWords} words
 
 ${options.examples && options.examples.length > 0 ? `\nReference examples for style (but create original content):\n${options.examples.join('\n\n')}` : ''}`
 
-  const response = await getOpenAI().chat.completions.create({
-    model: 'gpt-4o',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    temperature: 0.8,
-    max_tokens: 500,
-  })
+  const response = await runWithRetries(
+    () => getOpenAI().chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.8,
+      max_tokens: 500,
+    }),
+    {
+      pipeline: 'avatars.script.provider',
+      provider: 'openai',
+      metadata: { duration: options.duration, tone: options.tone || 'energetic' },
+    }
+  )
 
   const script = response.choices[0]?.message?.content?.trim()
   if (!script) {
@@ -102,23 +126,45 @@ export async function refineScript(
 ): Promise<ScriptGenerationResult> {
   const targetWords = Math.floor(targetDuration * WORDS_PER_SECOND)
 
-  const response = await getOpenAI().chat.completions.create({
-    model: 'gpt-4o',
-    messages: [
-      {
-        role: 'system',
-        content: `You are a creative copywriter. Refine the voiceover script based on feedback.
+  if (isMockProvidersEnabled()) {
+    await recordMockProviderSuccess({
+      pipeline: 'avatars.script.refine.provider',
+      provider: 'openai',
+      metadata: { targetDuration },
+    })
+    const script = `${originalScript} ${feedback}`.trim()
+    const wordCount = script.split(/\s+/).filter(Boolean).length
+    return {
+      script,
+      wordCount,
+      estimatedDuration: Math.round(wordCount / WORDS_PER_SECOND),
+    }
+  }
+
+  const response = await runWithRetries(
+    () => getOpenAI().chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a creative copywriter. Refine the voiceover script based on feedback.
 Output ONLY the refined spoken text, no formatting or directions.
 Target word count: ${targetWords} words.`,
-      },
-      {
-        role: 'user',
-        content: `Original script:\n${originalScript}\n\nFeedback:\n${feedback}`,
-      },
-    ],
-    temperature: 0.7,
-    max_tokens: 500,
-  })
+        },
+        {
+          role: 'user',
+          content: `Original script:\n${originalScript}\n\nFeedback:\n${feedback}`,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
+    }),
+    {
+      pipeline: 'avatars.script.refine.provider',
+      provider: 'openai',
+      metadata: { targetDuration },
+    }
+  )
 
   const script = response.choices[0]?.message?.content?.trim()
   if (!script) {

@@ -1,0 +1,47 @@
+{
+  "$schema": "./playbook-registry.schema.json",
+  "version": "1.0.0",
+  "updatedAt": "2026-02-07",
+  "playbooks": [
+    {
+      "provider": "openai",
+      "id": "PB-AI-OPENAI",
+      "version": "1.0.0",
+      "ownerTeam": "ai-platform",
+      "ownerOncall": "@ai-oncall",
+      "runbookPath": "docs/ops/runbooks/openai-provider.md"
+    },
+    {
+      "provider": "fal",
+      "id": "PB-AI-FAL",
+      "version": "1.0.0",
+      "ownerTeam": "ai-platform",
+      "ownerOncall": "@ai-oncall",
+      "runbookPath": "docs/ops/runbooks/fal-provider.md"
+    },
+    {
+      "provider": "hedra",
+      "id": "PB-VIDEO-HEDRA",
+      "version": "1.0.0",
+      "ownerTeam": "video-platform",
+      "ownerOncall": "@video-oncall",
+      "runbookPath": "docs/ops/runbooks/hedra-provider.md"
+    },
+    {
+      "provider": "kling",
+      "id": "PB-VIDEO-KLING",
+      "version": "1.0.0",
+      "ownerTeam": "video-platform",
+      "ownerOncall": "@video-oncall",
+      "runbookPath": "docs/ops/runbooks/kling-provider.md"
+    },
+    {
+      "provider": "none",
+      "id": "PB-CORE-GENERIC",
+      "version": "1.0.0",
+      "ownerTeam": "core-platform",
+      "ownerOncall": "@core-oncall",
+      "runbookPath": "docs/ops/runbooks/nightly-failure.md"
+    }
+  ]
+}

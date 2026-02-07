@@ -1,0 +1,142 @@
+name: Nightly Real Smoke
+
+on:
+  schedule:
+    - cron: '15 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  nightly-real:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
+      HEDRA_API_KEY: ${{ secrets.HEDRA_API_KEY }}
+      NIGHTLY_ALERT_WEBHOOK: ${{ secrets.NIGHTLY_ALERT_WEBHOOK }}
+      NIGHTLY_ALERT_WEBHOOK_CRITICAL: ${{ secrets.NIGHTLY_ALERT_WEBHOOK_CRITICAL }}
+      NIGHTLY_ALERT_WEBHOOK_WARNING: ${{ secrets.NIGHTLY_ALERT_WEBHOOK_WARNING }}
+      PIXFLOW_SMOKE_REAL_MAX_BUDGET_USD: '0.50'
+      PIXFLOW_SMOKE_REAL_MAX_RUNTIME_MS: '1200000'
+      PIXFLOW_GATE_MIN_OVERALL_SUCCESS_RATE: '0.90'
+      PIXFLOW_GATE_MIN_PROVIDER_SUCCESS_RATE: '0.80'
+      PIXFLOW_GATE_MAX_P95_MS: '600000'
+      PIXFLOW_REGRESSION_MAX_SUCCESS_DROP: '0.03'
+      PIXFLOW_REGRESSION_MAX_P95_INCREASE_MS: '30000'
+      PIXFLOW_REGRESSION_MAX_PROVIDER_FAILRATE_INCREASE: '0.10'
+      PIXFLOW_REGRESSION_PROVIDER_THRESHOLDS_JSON: '{"openai":0.08,"fal":0.12,"hedra":0.12,"kling":0.15}'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate required secrets
+        run: |
+          test -n "$OPENAI_API_KEY"
+          test -n "$FAL_API_KEY"
+          test -n "$HEDRA_API_KEY"
+
+      - name: Validate playbook registry
+        run: npm run validate:playbooks
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Real External Smoke
+        run: npm run smoke:external:real
+
+      - name: Telemetry Report
+        run: |
+          npm run telemetry:report -- --out telemetry-report.txt
+          npm run telemetry:report:json -- --out telemetry-report.json
+          npm run telemetry:trends -- --out logs/telemetry-trends.json --window 500
+          npm run telemetry:dashboard -- --report telemetry-report.json --trends logs/telemetry-trends.json --out docs/ops/telemetry-dashboard.md
+          npm run telemetry:highlights -- --trends logs/telemetry-trends.json --out docs/ops/telemetry-highlights.md
+          npm run telemetry:baseline -- --trends logs/telemetry-trends.json --history logs/telemetry-trends-history.jsonl --out-json docs/ops/telemetry-baseline.json --out-md docs/ops/telemetry-baseline.md
+          npm run threshold:propose -- --baseline docs/ops/telemetry-baseline.json --out-env docs/ops/proposed-thresholds.env --out-md docs/ops/proposed-thresholds.md
+          npm run preflight:nightly -- --report telemetry-report.json --trends logs/telemetry-trends.json --baseline docs/ops/telemetry-baseline.json --registry docs/ops/playbook-registry.json --out-json docs/ops/release-preflight.json --out-md docs/ops/release-preflight.md
+          npm run preflight:history -- --preflight docs/ops/release-preflight.json --history logs/preflight-history.jsonl --out docs/ops/preflight-history.md
+
+      - name: Telemetry Threshold Check
+        run: npm run telemetry:check:nightly
+
+      - name: Telemetry Regression Check (warning mode)
+        run: npm run telemetry:check:regression:warn
+
+      - name: Publish telemetry highlights to run summary
+        if: always()
+        run: |
+          if [ -f docs/ops/telemetry-highlights.md ]; then
+            cat docs/ops/telemetry-highlights.md >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f docs/ops/telemetry-baseline.md ]; then
+            cat docs/ops/telemetry-baseline.md >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f docs/ops/release-preflight.md ]; then
+            cat docs/ops/release-preflight.md >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f docs/ops/proposed-thresholds.md ]; then
+            cat docs/ops/proposed-thresholds.md >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f docs/ops/preflight-history.md ]; then
+            cat docs/ops/preflight-history.md >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload nightly artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: telemetry-nightly-real
+          path: |
+            telemetry-report.txt
+            telemetry-report.json
+            logs/telemetry-trends.json
+            logs/telemetry-trends-history.jsonl
+            docs/ops/telemetry-dashboard.md
+            docs/ops/telemetry-highlights.md
+            docs/ops/telemetry-baseline.json
+            docs/ops/telemetry-baseline.md
+            docs/ops/release-preflight.json
+            docs/ops/release-preflight.md
+            docs/ops/proposed-thresholds.env
+            docs/ops/proposed-thresholds.md
+            docs/ops/preflight-history.md
+            logs/preflight-history.jsonl
+            logs/pipeline-events.jsonl
+          if-no-files-found: warn
+
+      - name: Build structured alert payload
+        if: failure()
+        run: |
+          node scripts/build-nightly-alert.js
+
+      - name: Alert de-duplication
+        if: failure()
+        run: |
+          npm run alert:dedup
+
+      - name: Notify nightly failure webhook
+        if: failure()
+        run: |
+          WEBHOOK_URL="$(cat nightly-alert-webhook.txt || true)"
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "No nightly alert webhook configured for selected severity route; skipping."
+            exit 0
+          fi
+          curl -sS -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            --data @nightly-alert.json

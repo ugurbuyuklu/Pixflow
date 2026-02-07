@@ -6,6 +6,7 @@ import { useHistoryStore } from '../../stores/historyStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { NotificationBell } from './NotificationBell'
 import { UserMenu } from './UserMenu'
+import { Badge } from '../ui/Badge'
 
 const TABS: { id: TabId; label: string; icon: typeof Wand2 }[] = [
   { id: 'prompts', label: 'Prompt Factory', icon: Wand2 },
@@ -24,17 +25,17 @@ export function TopNav() {
 
   return (
     <>
-      <div className="border-b border-gray-800 app-drag-region">
+      <div className="border-b border-surface-100 app-drag-region">
         <div className="max-w-6xl mx-auto px-8 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold flex items-center gap-3 app-no-drag">
-            <span className="text-purple-400">⚡</span>
+            <span className="text-brand-400">⚡</span>
             Pixflow
           </h1>
           <div className="flex items-center gap-2 app-no-drag">
             <NotificationBell />
             <button
               onClick={toggleMode}
-              className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-800"
+              className="p-2 text-surface-400 hover:text-surface-900 transition-colors rounded-lg hover:bg-surface-100"
               title={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {mode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -44,7 +45,7 @@ export function TopNav() {
         </div>
       </div>
 
-      <div className="border-b border-gray-800">
+      <div className="border-b border-surface-100">
         <div className="max-w-6xl mx-auto px-8">
           <div className="flex gap-1">
             {TABS.map(({ id, label, icon: Icon }) => (
@@ -52,24 +53,24 @@ export function TopNav() {
                 key={id}
                 onClick={() => navigate(id)}
                 className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 ${
-                  activeTab === id ? 'text-purple-400' : 'text-gray-400 hover:text-white'
+                  activeTab === id ? 'text-brand-400' : 'text-surface-400 hover:text-surface-900'
                 }`}
               >
                 <Icon className="w-4 h-4" />
                 {label}
                 {id === 'generate' && promptCount > 0 && (
-                  <span className="ml-2 px-2 py-0.5 bg-gray-800 rounded text-xs">{promptCount}</span>
+                  <Badge>{promptCount}</Badge>
                 )}
                 {id === 'machine' && machineStep !== 'idle' && machineStep !== 'done' && machineStep !== 'error' && (
-                  <Loader2 className="w-3 h-3 animate-spin text-yellow-400" />
+                  <Loader2 className="w-3 h-3 animate-spin text-warning" />
                 )}
                 {id === 'history' && favoritesCount > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 bg-purple-600 rounded text-xs flex items-center gap-1">
-                    <Star className="w-3 h-3" />
+                  <Badge variant="brand">
+                    <Star className="w-3 h-3 mr-0.5" />
                     {favoritesCount}
-                  </span>
+                  </Badge>
                 )}
-                {activeTab === id && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-400" />}
+                {activeTab === id && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-400" />}
               </button>
             ))}
           </div>

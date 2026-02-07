@@ -1,11 +1,43 @@
+# Dependencies / build
 node_modules/
 dist/
 out/
+*.tsbuildinfo
+
+# Environment
 .env
+
+# OS / editor noise
 .DS_Store
+
+# Runtime artifacts
 *.log
+logs/
+backups/
 outputs/
 uploads/
-avatars/
 data/
-packages/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
+# Local tooling state
+.playwright-mcp/
+
+# One-off local assets
+machine-tab-full.png
+
+# Generated telemetry/ops artifacts (produced by gate:release and nightly)
+telemetry-report.txt
+telemetry-report.json
+nightly-alert.json
+nightly-alert-webhook.txt
+docs/ops/telemetry-dashboard.md
+docs/ops/telemetry-highlights.md
+docs/ops/telemetry-baseline.json
+docs/ops/telemetry-baseline.md
+docs/ops/release-preflight.json
+docs/ops/release-preflight.md
+docs/ops/proposed-thresholds.env
+docs/ops/proposed-thresholds.md
+docs/ops/preflight-history.md

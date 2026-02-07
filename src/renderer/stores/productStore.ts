@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { apiUrl, authFetch } from '../lib/api'
+import { apiUrl, authFetch, unwrapApiData } from '../lib/api'
 
 interface Product {
   id: number
@@ -68,7 +68,8 @@ export const useProductStore = create<ProductState>()((set) => ({
     try {
       const res = await authFetch(apiUrl('/api/products'))
       if (!res.ok) return
-      const { products } = await res.json()
+      const raw = await res.json()
+      const { products } = unwrapApiData<{ products: Product[] }>(raw)
       const saved = localStorage.getItem('pixflow_product')
       const active = products.find((p: Product) => p.slug === saved) ?? products[0] ?? null
       set({ products, activeProduct: active, loading: false })

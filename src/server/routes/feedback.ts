@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { getDb } from '../db/index.js'
 import { getFeedback, createFeedback, deleteFeedback } from '../services/feedback.js'
 import type { AuthRequest } from '../middleware/auth.js'
+import { sendError, sendSuccess } from '../utils/http.js'
 
 const MAX_CONTENT_LENGTH = 2000
 const VALID_CATEGORIES = ['bug', 'feature', 'improvement', 'other']
@@ -20,40 +21,40 @@ export function createFeedbackRouter(): Router {
       productId = row?.id
     }
 
-    res.json({ feedback: getFeedback(userId, productId) })
+    sendSuccess(res, { feedback: getFeedback(userId, productId) })
   })
 
   router.post('/', (req: AuthRequest, res) => {
     const { content, category, productId } = req.body
 
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
-      res.status(400).json({ error: 'Content is required' })
+      sendError(res, 400, 'Content is required', 'INVALID_FEEDBACK_CONTENT')
       return
     }
     if (content.length > MAX_CONTENT_LENGTH) {
-      res.status(400).json({ error: `Content too long (max ${MAX_CONTENT_LENGTH} chars)` })
+      sendError(res, 400, `Content too long (max ${MAX_CONTENT_LENGTH} chars)`, 'FEEDBACK_TOO_LONG')
       return
     }
     if (!category || !VALID_CATEGORIES.includes(category)) {
-      res.status(400).json({ error: `Category must be one of: ${VALID_CATEGORIES.join(', ')}` })
+      sendError(res, 400, `Category must be one of: ${VALID_CATEGORIES.join(', ')}`, 'INVALID_FEEDBACK_CATEGORY')
       return
     }
 
     if (productId !== undefined && (typeof productId !== 'number' || !Number.isFinite(productId))) {
-      res.status(400).json({ error: 'Invalid product ID' })
+      sendError(res, 400, 'Invalid product ID', 'INVALID_PRODUCT_ID')
       return
     }
 
     const entry = createFeedback(req.user!.id, content.trim(), category, productId)
-    res.status(201).json({ feedback: entry })
+    sendSuccess(res, { feedback: entry }, 201)
   })
 
   router.delete('/:id', (req: AuthRequest, res) => {
     if (!deleteFeedback(Number(req.params.id), req.user!.id)) {
-      res.status(404).json({ error: 'Feedback not found' })
+      sendError(res, 404, 'Feedback not found', 'FEEDBACK_NOT_FOUND')
       return
     }
-    res.json({ success: true })
+    sendSuccess(res, {})
   })
 
   return router

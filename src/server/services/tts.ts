@@ -2,6 +2,7 @@ import { fal } from '@fal-ai/client'
 import fs from 'fs/promises'
 import path from 'path'
 import { ensureFalConfig } from './falConfig.js'
+import { isMockProvidersEnabled, recordMockProviderSuccess, runWithRetries } from './providerRuntime.js'
 
 const TTS_MODEL = 'fal-ai/elevenlabs/tts/eleven-v3'
 
@@ -33,26 +34,44 @@ export interface TTSResult {
  * Returns the path to the generated audio file.
  */
 export async function textToSpeech(options: TTSOptions): Promise<TTSResult> {
+  if (isMockProvidersEnabled()) {
+    await recordMockProviderSuccess({
+      pipeline: 'avatars.tts.provider',
+      provider: 'fal',
+      metadata: { voiceId: options.voiceId, textLength: options.text.length },
+    })
+    await fs.mkdir(path.dirname(options.outputPath), { recursive: true })
+    await fs.writeFile(options.outputPath, Buffer.from('mock-audio', 'utf8'))
+    return { audioPath: options.outputPath }
+  }
+
   ensureFalConfig()
 
   console.log(`[TTS] Converting text to speech with voice: ${options.voiceId}`)
 
-  const result = await fal.subscribe(TTS_MODEL, {
-    input: {
-      text: options.text,
-      voice: options.voiceId,
-      stability: options.stability ?? 0.5,
-      similarity_boost: options.similarityBoost ?? 0.75,
-      speed: options.speed ?? 1,
-      apply_text_normalization: 'auto',
-    },
-    logs: true,
-    onQueueUpdate: (update) => {
-      if (update.status === 'IN_PROGRESS' && update.logs) {
-        update.logs.forEach((log) => console.log(`[fal.ai TTS] ${log.message}`))
-      }
-    },
-  })
+  const result = await runWithRetries(
+    () => fal.subscribe(TTS_MODEL, {
+      input: {
+        text: options.text,
+        voice: options.voiceId,
+        stability: options.stability ?? 0.5,
+        similarity_boost: options.similarityBoost ?? 0.75,
+        speed: options.speed ?? 1,
+        apply_text_normalization: 'auto',
+      },
+      logs: true,
+      onQueueUpdate: (update) => {
+        if (update.status === 'IN_PROGRESS' && update.logs) {
+          update.logs.forEach((log) => console.log(`[fal.ai TTS] ${log.message}`))
+        }
+      },
+    }),
+    {
+      pipeline: 'avatars.tts.provider',
+      provider: 'fal',
+      metadata: { textLength: options.text.length, voiceId: options.voiceId },
+    }
+  )
 
   const audioUrl = result.data?.audio?.url
   if (!audioUrl) {

@@ -1,16 +1,4 @@
-import fs from 'fs/promises'
-import path from 'path'
-import { v4 as uuidv4 } from 'uuid'
-
-let DATA_DIR = ''
-let HISTORY_FILE = ''
-let FAVORITES_FILE = ''
-
-export function initHistory(dataDir: string): void {
-  DATA_DIR = dataDir
-  HISTORY_FILE = path.join(DATA_DIR, 'history.json')
-  FAVORITES_FILE = path.join(DATA_DIR, 'favorites.json')
-}
+import { getDb } from '../db/index.js'
 
 export interface HistoryEntry {
   id: string
@@ -29,95 +17,184 @@ export interface FavoritePrompt {
   createdAt: string
 }
 
-async function ensureDataDir() {
-  await fs.mkdir(DATA_DIR, { recursive: true })
+interface HistoryRow {
+  id: number
+  concept: string
+  prompts: string
+  prompt_count: number
+  created_at: string
+  source: string
 }
 
-async function readJsonFile<T>(filePath: string, defaultValue: T): Promise<T> {
+interface FavoriteRow {
+  id: number
+  prompt: string
+  name: string | null
+  concept: string | null
+  created_at: string
+}
+
+function parsePromptArray(raw: string): Record<string, unknown>[] {
   try {
-    const content = await fs.readFile(filePath, 'utf-8')
-    return JSON.parse(content) as T
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : []
   } catch {
-    return defaultValue
+    return []
   }
 }
 
-async function writeJsonFile<T>(filePath: string, data: T): Promise<void> {
-  await ensureDataDir()
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2))
-}
-
-export async function getHistory(limit = 50): Promise<HistoryEntry[]> {
-  const history = await readJsonFile<HistoryEntry[]>(HISTORY_FILE, [])
-  return history.slice(0, limit)
-}
-
-export async function addToHistory(entry: Omit<HistoryEntry, 'id' | 'createdAt'>): Promise<HistoryEntry> {
-  const history = await readJsonFile<HistoryEntry[]>(HISTORY_FILE, [])
-
-  const newEntry: HistoryEntry = {
-    ...entry,
-    id: uuidv4(),
-    createdAt: new Date().toISOString(),
+function parsePrompt(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+      ? (parsed as Record<string, unknown>)
+      : {}
+  } catch {
+    return {}
   }
-
-  history.unshift(newEntry)
-  const trimmed = history.slice(0, 100)
-  await writeJsonFile(HISTORY_FILE, trimmed)
-
-  return newEntry
 }
 
-export async function deleteHistoryEntry(id: string): Promise<boolean> {
-  const history = await readJsonFile<HistoryEntry[]>(HISTORY_FILE, [])
-  const filtered = history.filter(h => h.id !== id)
-  if (filtered.length === history.length) return false
-  await writeJsonFile(HISTORY_FILE, filtered)
-  return true
+function mapHistoryRow(row: HistoryRow): HistoryEntry {
+  return {
+    id: String(row.id),
+    concept: row.concept,
+    prompts: parsePromptArray(row.prompts),
+    promptCount: row.prompt_count,
+    createdAt: row.created_at,
+    source: row.source === 'analyzed' ? 'analyzed' : 'generated',
+  }
 }
 
-export async function clearHistory(): Promise<void> {
-  await writeJsonFile(HISTORY_FILE, [])
+function mapFavoriteRow(row: FavoriteRow): FavoritePrompt {
+  return {
+    id: String(row.id),
+    prompt: parsePrompt(row.prompt),
+    name: row.name || 'Untitled',
+    concept: row.concept ?? undefined,
+    createdAt: row.created_at,
+  }
 }
 
-export async function getFavorites(): Promise<FavoritePrompt[]> {
-  return readJsonFile<FavoritePrompt[]>(FAVORITES_FILE, [])
+function normalizeHistorySource(input: unknown): 'generated' | 'analyzed' {
+  return input === 'analyzed' ? 'analyzed' : 'generated'
+}
+
+export async function getHistory(userId: number, limit = 50): Promise<HistoryEntry[]> {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT id, concept, prompts, prompt_count, created_at, source
+    FROM history
+    WHERE user_id = ?
+    ORDER BY datetime(created_at) DESC
+    LIMIT ?
+  `).all(userId, Math.max(1, Math.min(limit, 200))) as HistoryRow[]
+  return rows.map(mapHistoryRow)
+}
+
+export async function addToHistory(
+  userId: number,
+  entry: Omit<HistoryEntry, 'id' | 'createdAt'>
+): Promise<HistoryEntry> {
+  const db = getDb()
+  const source = normalizeHistorySource(entry.source)
+
+  const tx = db.transaction(() => {
+    const inserted = db.prepare(`
+      INSERT INTO history (user_id, concept, prompts, prompt_count, source)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      userId,
+      entry.concept,
+      JSON.stringify(entry.prompts),
+      entry.promptCount,
+      source
+    )
+
+    const row = db.prepare(`
+      SELECT id, concept, prompts, prompt_count, created_at, source
+      FROM history
+      WHERE id = ?
+    `).get(Number(inserted.lastInsertRowid)) as HistoryRow
+
+    const count = (db.prepare('SELECT COUNT(*) as c FROM history WHERE user_id = ?').get(userId) as { c: number }).c
+    if (count > 100) {
+      db.prepare(`
+        DELETE FROM history
+        WHERE id IN (
+          SELECT id FROM history
+          WHERE user_id = ?
+          ORDER BY datetime(created_at) ASC
+          LIMIT ?
+        )
+      `).run(userId, count - 100)
+    }
+
+    return row
+  })
+
+  return mapHistoryRow(tx())
+}
+
+export async function deleteHistoryEntry(userId: number, id: string): Promise<boolean> {
+  const parsed = Number(id)
+  if (!Number.isInteger(parsed) || parsed <= 0) return false
+
+  const db = getDb()
+  const result = db.prepare('DELETE FROM history WHERE id = ? AND user_id = ?').run(parsed, userId)
+  return result.changes > 0
+}
+
+export async function clearHistory(userId: number): Promise<void> {
+  const db = getDb()
+  db.prepare('DELETE FROM history WHERE user_id = ?').run(userId)
+}
+
+export async function getFavorites(userId: number): Promise<FavoritePrompt[]> {
+  const db = getDb()
+  const rows = db.prepare(`
+    SELECT id, prompt, name, concept, created_at
+    FROM favorites
+    WHERE user_id = ?
+    ORDER BY datetime(created_at) DESC
+  `).all(userId) as FavoriteRow[]
+  return rows.map(mapFavoriteRow)
 }
 
 export async function addToFavorites(
+  userId: number,
   prompt: Record<string, unknown>,
   name: string,
   concept?: string
 ): Promise<FavoritePrompt> {
-  const favorites = await readJsonFile<FavoritePrompt[]>(FAVORITES_FILE, [])
+  const db = getDb()
+  const inserted = db.prepare(`
+    INSERT INTO favorites (user_id, prompt, name, concept)
+    VALUES (?, ?, ?, ?)
+  `).run(userId, JSON.stringify(prompt), name, concept ?? null)
 
-  const newFavorite: FavoritePrompt = {
-    id: uuidv4(),
-    prompt,
-    name,
-    concept,
-    createdAt: new Date().toISOString(),
-  }
+  const row = db.prepare(`
+    SELECT id, prompt, name, concept, created_at
+    FROM favorites
+    WHERE id = ?
+  `).get(Number(inserted.lastInsertRowid)) as FavoriteRow
 
-  favorites.unshift(newFavorite)
-  await writeJsonFile(FAVORITES_FILE, favorites)
-
-  return newFavorite
+  return mapFavoriteRow(row)
 }
 
-export async function removeFromFavorites(id: string): Promise<boolean> {
-  const favorites = await readJsonFile<FavoritePrompt[]>(FAVORITES_FILE, [])
-  const filtered = favorites.filter(f => f.id !== id)
-  if (filtered.length === favorites.length) return false
-  await writeJsonFile(FAVORITES_FILE, filtered)
-  return true
+export async function removeFromFavorites(userId: number, id: string): Promise<boolean> {
+  const parsed = Number(id)
+  if (!Number.isInteger(parsed) || parsed <= 0) return false
+
+  const db = getDb()
+  const result = db.prepare('DELETE FROM favorites WHERE id = ? AND user_id = ?').run(parsed, userId)
+  return result.changes > 0
 }
 
-export async function updateFavoriteName(id: string, name: string): Promise<boolean> {
-  const favorites = await readJsonFile<FavoritePrompt[]>(FAVORITES_FILE, [])
-  const favorite = favorites.find(f => f.id === id)
-  if (!favorite) return false
-  favorite.name = name
-  await writeJsonFile(FAVORITES_FILE, favorites)
-  return true
+export async function updateFavoriteName(userId: number, id: string, name: string): Promise<boolean> {
+  const parsed = Number(id)
+  if (!Number.isInteger(parsed) || parsed <= 0) return false
+
+  const db = getDb()
+  const result = db.prepare('UPDATE favorites SET name = ? WHERE id = ? AND user_id = ?').run(name, parsed, userId)
+  return result.changes > 0
 }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { apiUrl, authFetch } from '../lib/api'
+import { apiUrl, authFetch, getApiError, unwrapApiData } from '../lib/api'
 import type { GeneratedPrompt } from '../types'
 
 export interface Preset {
@@ -35,7 +35,8 @@ export const usePresetStore = create<PresetState>()((set, get) => ({
       const qs = productSlug ? `?product=${encodeURIComponent(productSlug)}` : ''
       const res = await authFetch(apiUrl(`/api/presets${qs}`))
       if (!res.ok) throw new Error(`Failed to load presets (${res.status})`)
-      const { presets } = await res.json()
+      const raw = await res.json()
+      const { presets } = unwrapApiData<{ presets: Preset[] }>(raw)
       set({ presets })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Failed to load presets' })
@@ -53,10 +54,11 @@ export const usePresetStore = create<PresetState>()((set, get) => ({
         body: JSON.stringify({ name, description, prompt, productId }),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `Failed to create preset (${res.status})`)
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, `Failed to create preset (${res.status})`))
       }
-      const { preset } = await res.json()
+      const raw = await res.json()
+      const { preset } = unwrapApiData<{ preset: Preset }>(raw)
       set((s) => ({ presets: [preset, ...s.presets] }))
       return preset
     } catch (err) {
@@ -74,10 +76,11 @@ export const usePresetStore = create<PresetState>()((set, get) => ({
         body: JSON.stringify(updates),
       })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `Failed to update preset (${res.status})`)
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, `Failed to update preset (${res.status})`))
       }
-      const { preset } = await res.json()
+      const raw = await res.json()
+      const { preset } = unwrapApiData<{ preset: Preset }>(raw)
       set((s) => ({ presets: s.presets.map((p) => (p.id === id ? preset : p)) }))
       return true
     } catch (err) {
@@ -91,8 +94,8 @@ export const usePresetStore = create<PresetState>()((set, get) => ({
     try {
       const res = await authFetch(apiUrl(`/api/presets/${id}`), { method: 'DELETE' })
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || `Failed to delete preset (${res.status})`)
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, `Failed to delete preset (${res.status})`))
       }
       set((s) => ({ presets: s.presets.filter((p) => p.id !== id) }))
       return true

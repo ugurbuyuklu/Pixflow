@@ -1,7 +1,8 @@
 import { create } from 'zustand'
-import { apiUrl, authFetch } from '../lib/api'
+import { apiUrl, authFetch, getApiError, unwrapApiData } from '../lib/api'
 import type { GeneratedPrompt, ResearchData, VarietyScore, ErrorInfo } from '../types'
 import { parseError } from '../types'
+import { PROMPT_GENERATE_DEFAULT, PROMPT_GENERATE_MAX, PROMPT_GENERATE_MIN } from '../../constants/limits'
 
 interface PromptState {
   concept: string
@@ -47,7 +48,7 @@ let abortController: AbortController | null = null
 
 export const usePromptStore = create<PromptState>()((set, get) => ({
   concept: '',
-  count: 8,
+  count: PROMPT_GENERATE_DEFAULT,
   loading: false,
   prompts: [],
   selectedIndex: null,
@@ -67,7 +68,9 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
   analyzeCopied: false,
 
   setConcept: (concept) => set({ concept }),
-  setCount: (count) => set({ count }),
+  setCount: (count) => set({
+    count: Math.max(PROMPT_GENERATE_MIN, Math.min(PROMPT_GENERATE_MAX, count)),
+  }),
   setPromptMode: (promptMode) => set({ promptMode }),
   setSelectedIndex: (index) => {
     const { prompts } = get()
@@ -108,11 +111,16 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
       })
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || `HTTP ${response.status}`)
+        const raw = await response.json().catch(() => ({}))
+        throw new Error(getApiError(raw, `HTTP ${response.status}`))
       }
 
-      const data = await response.json()
+      const raw = await response.json()
+      const data = unwrapApiData<{
+        prompts: GeneratedPrompt[]
+        research: ResearchData | null
+        varietyScore: VarietyScore | null
+      }>(raw)
       set({
         prompts: data.prompts,
         research: data.research,
@@ -162,8 +170,12 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text }),
         })
-        if (!res.ok) throw new Error('Failed to convert text to JSON')
-        const data = await res.json()
+        if (!res.ok) {
+          const raw = await res.json().catch(() => ({}))
+          throw new Error(getApiError(raw, 'Failed to convert text to JSON'))
+        }
+        const raw = await res.json()
+        const data = unwrapApiData<{ prompt: GeneratedPrompt }>(raw)
         parsed = data.prompt
       }
 
@@ -204,11 +216,12 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
       })
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Image analysis failed')
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Image analysis failed'))
       }
 
-      const data = await res.json()
+      const raw = await res.json()
+      const data = unwrapApiData<{ prompt: GeneratedPrompt }>(raw)
       set({ analyzedPrompt: data.prompt })
     } catch (err) {
       set({ analyzeError: parseError(err) })

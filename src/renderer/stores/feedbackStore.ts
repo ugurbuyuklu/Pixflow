@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { apiUrl, authFetch } from '../lib/api'
+import { apiUrl, authFetch, getApiError, unwrapApiData } from '../lib/api'
 import type { ErrorInfo } from '../types'
 import { parseError } from '../types'
 
@@ -41,7 +41,8 @@ export const useFeedbackStore = create<FeedbackState>()((set) => ({
         : apiUrl('/api/feedback')
       const res = await authFetch(url)
       if (res.ok) {
-        const data = await res.json()
+        const raw = await res.json()
+        const data = unwrapApiData<{ feedback: FeedbackEntry[] }>(raw)
         set({ entries: data.feedback })
       }
     } catch (err) {
@@ -61,8 +62,8 @@ export const useFeedbackStore = create<FeedbackState>()((set) => ({
       })
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to submit feedback')
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Failed to submit feedback'))
       }
 
       return true

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { User, LogOut, KeyRound } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
+import { Button } from '../ui/Button'
 
 export function UserMenu() {
   const { user, logout, changePassword } = useAuthStore()
@@ -40,17 +41,17 @@ export function UserMenu() {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 px-3 py-1.5 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-800"
+        className="flex items-center gap-2 px-3 py-1.5 text-surface-400 hover:text-surface-900 transition-colors rounded-lg hover:bg-surface-100"
       >
         <User className="w-4 h-4" />
         <span className="text-sm">{user?.name || 'User'}</span>
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-50 py-1">
-          <div className="px-3 py-2 border-b border-gray-800">
+        <div className="absolute right-0 top-full mt-1 w-64 bg-surface-50 border border-surface-100 rounded-xl shadow-xl z-50 py-1">
+          <div className="px-3 py-2 border-b border-surface-100">
             <p className="text-sm font-medium">{user?.name}</p>
-            <p className="text-xs text-gray-500">{user?.email}</p>
+            <p className="text-xs text-surface-400">{user?.email}</p>
           </div>
 
           {changingPassword ? (
@@ -60,45 +61,48 @@ export function UserMenu() {
                 placeholder="Current password"
                 value={currentPw}
                 onChange={(e) => setCurrentPw(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                className="w-full bg-surface-100 border border-surface-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
               />
               <input
                 type="password"
                 placeholder="New password"
                 value={newPw}
                 onChange={(e) => setNewPw(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                className="w-full bg-surface-100 border border-surface-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
               />
-              {pwError && <p className="text-xs text-red-400">{pwError}</p>}
-              {pwSuccess && <p className="text-xs text-green-400">Password changed!</p>}
+              {pwError && <p className="text-xs text-danger">{pwError}</p>}
+              {pwSuccess && <p className="text-xs text-success">Password changed!</p>}
               <div className="flex gap-2">
-                <button
+                <Button
                   onClick={handleChangePassword}
                   disabled={!currentPw || !newPw}
-                  className="flex-1 px-2 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded text-sm"
+                  size="sm"
+                  className="flex-1"
                 >
                   Save
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => { setChangingPassword(false); setPwError(null); setCurrentPw(''); setNewPw('') }}
-                  className="flex-1 px-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-sm"
+                  className="flex-1"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
             <>
               <button
                 onClick={() => setChangingPassword(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-surface-600 hover:bg-surface-100 transition-colors"
               >
                 <KeyRound className="w-4 h-4" />
                 Change Password
               </button>
               <button
                 onClick={() => { setOpen(false); logout() }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-gray-800 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-surface-100 transition-colors"
               >
                 <LogOut className="w-4 h-4" />
                 Sign Out

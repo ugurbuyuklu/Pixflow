@@ -4,7 +4,7 @@ import {
   Sparkles, Check, CheckCircle, XCircle, Upload, Image, Play, Loader2,
   FolderOpen, AlertCircle, X, WifiOff, Clock, Users, ImagePlus, FileJson, List,
 } from 'lucide-react'
-import { apiUrl, assetUrl, authFetch } from '../../lib/api'
+import { apiUrl, assetUrl, authFetch, getApiError, unwrapApiData } from '../../lib/api'
 import {
   useGenerationStore,
   MAX_REFERENCE_IMAGES, ASPECT_RATIOS, RESOLUTIONS, OUTPUT_FORMATS,
@@ -96,11 +96,13 @@ async function convertTextToPrompt(
       body: JSON.stringify({ text }),
     })
     if (!res.ok) {
-      const data = await res.json()
-      setError(data.error || 'Failed to convert text')
+      const raw = await res.json().catch(() => ({}))
+      setError(getApiError(raw, 'Failed to convert text'))
       return null
     }
-    return (await res.json()).prompt as GeneratedPrompt
+    const raw = await res.json()
+    const data = unwrapApiData<{ prompt: GeneratedPrompt }>(raw)
+    return data.prompt
   } catch {
     setError('Failed to convert text to prompt')
     return null
@@ -190,16 +192,16 @@ export function AssetMonsterPage() {
   return (
     <div className="grid grid-cols-3 gap-6">
       {/* Left: Prompt Selection */}
-      <div className="col-span-1 bg-gray-900 rounded-lg p-4">
+      <div className="col-span-1 bg-surface-50 rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Prompts</h2>
-          <div className="flex bg-gray-800 rounded-lg p-1">
+          <div className="flex bg-surface-100 rounded-lg p-1">
             <button
               onClick={() => setPromptSource('generated')}
               className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
                 promptSource === 'generated'
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-400 hover:text-white'
+                  ? 'bg-brand-600 text-surface-900'
+                  : 'text-surface-400 hover:text-surface-900'
               }`}
             >
               <List className="w-3 h-3" />
@@ -209,8 +211,8 @@ export function AssetMonsterPage() {
               onClick={() => setPromptSource('custom')}
               className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
                 promptSource === 'custom'
-                  ? 'bg-purple-600 text-white'
-                  : 'text-gray-400 hover:text-white'
+                  ? 'bg-brand-600 text-surface-900'
+                  : 'text-surface-400 hover:text-surface-900'
               }`}
             >
               <FileJson className="w-3 h-3" />
@@ -222,12 +224,12 @@ export function AssetMonsterPage() {
         {promptSource === 'generated' ? (
           <>
             {prompts.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-surface-400">
                 <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
                 <p>No prompts yet</p>
                 <button
                   onClick={() => navigate('prompts')}
-                  className="mt-2 text-purple-400 hover:text-purple-300 text-sm"
+                  className="mt-2 text-brand-400 hover:text-brand-300 text-sm"
                 >
                   Generate prompts first →
                 </button>
@@ -238,18 +240,18 @@ export function AssetMonsterPage() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => selectAllPrompts(prompts.length)}
-                      className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded"
+                      className="text-xs px-2 py-1 bg-surface-100 hover:bg-surface-200 rounded"
                     >
                       Select All
                     </button>
                     <button
                       onClick={deselectAllPrompts}
-                      className="text-xs px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded"
+                      className="text-xs px-2 py-1 bg-surface-100 hover:bg-surface-200 rounded"
                     >
                       Deselect All
                     </button>
                   </div>
-                  <span className="text-sm text-gray-400">
+                  <span className="text-sm text-surface-400">
                     {selectedPrompts.size}/{prompts.length}
                   </span>
                 </div>
@@ -260,19 +262,19 @@ export function AssetMonsterPage() {
                       onClick={() => togglePromptSelection(index)}
                       className={`w-full text-left p-3 rounded-lg transition-colors flex items-start gap-3 ${
                         selectedPrompts.has(index)
-                          ? 'bg-purple-600/30 border border-purple-500'
-                          : 'bg-gray-800 hover:bg-gray-700 border border-transparent'
+                          ? 'bg-brand-600/30 border border-brand-500'
+                          : 'bg-surface-100 hover:bg-surface-200 border border-transparent'
                       }`}
                     >
                       <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
                         selectedPrompts.has(index)
-                          ? 'bg-purple-500 border-purple-500'
-                          : 'border-gray-600'
+                          ? 'bg-brand-500 border-brand-500'
+                          : 'border-surface-200'
                       }`}>
                         {selectedPrompts.has(index) && <Check className="w-3 h-3" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <span className="font-mono text-xs text-gray-400">#{index + 1}</span>
+                        <span className="font-mono text-xs text-surface-400">#{index + 1}</span>
                         <p className="text-sm break-words">{prompt.style}</p>
                       </div>
                     </button>
@@ -284,9 +286,9 @@ export function AssetMonsterPage() {
         ) : (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm text-gray-400 mb-2">
+              <label className="block text-sm text-surface-400 mb-2">
                 Custom Prompt
-                <span className="text-gray-500 ml-2 font-normal">(JSON or plain text)</span>
+                <span className="text-surface-400 ml-2 font-normal">(JSON or plain text)</span>
               </label>
               <textarea
                 value={customPromptJson}
@@ -299,21 +301,21 @@ export function AssetMonsterPage() {
 Examples:
 • Black & white editorial photoshoot with dramatic lighting
 • {"style": "Romantic portrait...", "lighting": {...}}`}
-                className={`w-full h-64 bg-gray-800 rounded-lg p-3 text-sm resize-none border ${
+                className={`w-full h-64 bg-surface-100 rounded-lg p-3 text-sm resize-none border ${
                   customPromptError
                     ? 'border-red-500 focus:border-red-500'
-                    : 'border-transparent focus:border-purple-500'
+                    : 'border-transparent focus:border-brand-500'
                 } focus:outline-none`}
               />
               {customPromptError && (
-                <p className="text-red-400 text-xs mt-1 flex items-center gap-1">
+                <p className="text-danger text-xs mt-1 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
                   {customPromptError}
                 </p>
               )}
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-2">
+              <label className="block text-sm text-surface-400 mb-2">
                 Number of Images: {customPromptCount}
               </label>
               <input
@@ -322,9 +324,9 @@ Examples:
                 max="4"
                 value={customPromptCount}
                 onChange={(e) => setCustomPromptCount(Number(e.target.value))}
-                className="w-full accent-purple-500"
+                className="w-full accent-brand-500"
               />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <div className="flex justify-between text-xs text-surface-400 mt-1">
                 <span>1</span>
                 <span>2</span>
                 <span>3</span>
@@ -338,18 +340,18 @@ Examples:
       {/* Right: Upload & Generate */}
       <div className="col-span-2 space-y-6">
         {/* Reference Image Section */}
-        <div className="bg-gray-900 rounded-lg p-4">
+        <div className="bg-surface-50 rounded-lg p-4">
           <input {...getInputProps()} />
 
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Reference Image</h2>
-            <div className="flex bg-gray-800 rounded-lg p-1">
+            <div className="flex bg-surface-100 rounded-lg p-1">
               <button
                 onClick={() => setImageSource('upload')}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
                   imageSource === 'upload'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'bg-brand-600 text-surface-900'
+                    : 'text-surface-400 hover:text-surface-900'
                 }`}
               >
                 <ImagePlus className="w-4 h-4" />
@@ -359,8 +361,8 @@ Examples:
                 onClick={() => setImageSource('gallery')}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
                   imageSource === 'gallery'
-                    ? 'bg-purple-600 text-white'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'bg-brand-600 text-surface-900'
+                    : 'text-surface-400 hover:text-surface-900'
                 }`}
               >
                 <Users className="w-4 h-4" />
@@ -370,18 +372,18 @@ Examples:
           </div>
 
           {referencePreviews.length > 0 && (
-            <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+            <div className="mb-4 p-3 bg-surface-100 rounded-lg">
               <div className="flex items-center justify-between mb-2">
-                <p className="font-medium text-green-400 flex items-center gap-2">
+                <p className="font-medium text-success flex items-center gap-2">
                   <CheckCircle className="w-4 h-4" />
                   {referencePreviews.length} Image{referencePreviews.length > 1 ? 's' : ''} Selected
                   {referencePreviews.length > 1 && (
-                    <span className="text-xs text-gray-400 font-normal">(for couple/family)</span>
+                    <span className="text-xs text-surface-400 font-normal">(for couple/family)</span>
                   )}
                 </p>
                 <button
                   onClick={clearReferenceImages}
-                  className="text-gray-400 hover:text-red-400 text-sm"
+                  className="text-surface-400 hover:text-danger text-sm"
                 >
                   Clear All
                 </button>
@@ -405,7 +407,7 @@ Examples:
                 {referencePreviews.length < MAX_REFERENCE_IMAGES && (
                   <button
                     onClick={openFilePicker}
-                    className="w-16 h-16 border-2 border-dashed border-gray-600 rounded-lg flex items-center justify-center text-gray-400 hover:border-purple-500 hover:text-purple-400 transition-colors"
+                    className="w-16 h-16 border-2 border-dashed border-surface-200 rounded-lg flex items-center justify-center text-surface-400 hover:border-brand-500 hover:text-brand-400 transition-colors"
                   >
                     <ImagePlus className="w-6 h-6" />
                   </button>
@@ -419,16 +421,16 @@ Examples:
               {...getRootProps()}
               className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
                 isDragActive
-                  ? 'border-purple-500 bg-purple-500/10'
-                  : 'border-gray-700 hover:border-gray-600'
+                  ? 'border-brand-500 bg-brand-500/10'
+                  : 'border-surface-200 hover:border-surface-200'
               }`}
             >
               <input {...getInputProps()} />
-              <Upload className="w-10 h-10 mx-auto mb-3 text-gray-500" />
-              <p className="text-gray-400">
+              <Upload className="w-10 h-10 mx-auto mb-3 text-surface-400" />
+              <p className="text-surface-400">
                 {isDragActive ? 'Drop image here' : 'Drag & drop or click to upload'}
               </p>
-              <p className="text-sm text-gray-500 mt-1">JPEG, PNG, WebP up to 10MB</p>
+              <p className="text-sm text-surface-400 mt-1">JPEG, PNG, WebP up to 10MB</p>
             </div>
           )}
 
@@ -436,13 +438,13 @@ Examples:
             <div>
               {avatarsLoading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+                  <Loader2 className="w-6 h-6 animate-spin text-surface-400" />
                 </div>
               ) : avatars.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-700 rounded-lg">
+                <div className="text-center py-8 text-surface-400 border-2 border-dashed border-surface-200 rounded-lg">
                   <Users className="w-10 h-10 mx-auto mb-3 opacity-50" />
                   <p>No avatars in gallery</p>
-                  <p className="text-sm mt-1">Add images to <code className="bg-gray-800 px-1 rounded">avatars/</code> folder</p>
+                  <p className="text-sm mt-1">Add images to <code className="bg-surface-100 px-1 rounded">avatars/</code> folder</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-8 gap-2 max-h-[400px] overflow-auto">
@@ -454,8 +456,8 @@ Examples:
                         onClick={() => selectAvatar(avatar)}
                         className={`aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 relative ${
                           isSelected
-                            ? 'border-purple-500 ring-2 ring-purple-500/50'
-                            : 'border-transparent hover:border-gray-600'
+                            ? 'border-brand-500 ring-2 ring-brand-500/50'
+                            : 'border-transparent hover:border-surface-200'
                         }`}
                       >
                         <img
@@ -464,7 +466,7 @@ Examples:
                           className="w-full h-full object-cover"
                         />
                         {isSelected && (
-                          <div className="absolute top-1 right-1 bg-purple-500 rounded-full p-0.5">
+                          <div className="absolute top-1 right-1 bg-brand-500 rounded-full p-0.5">
                             <Check className="w-3 h-3" />
                           </div>
                         )}
@@ -478,15 +480,15 @@ Examples:
         </div>
 
         {/* Generation Settings */}
-        <div className="bg-gray-900 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-gray-400 mb-3">Generation Settings</h3>
+        <div className="bg-surface-50 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-surface-400 mb-3">Generation Settings</h3>
           <div className="grid grid-cols-4 gap-4">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Aspect Ratio</label>
+              <label className="block text-xs text-surface-400 mb-1">Aspect Ratio</label>
               <select
                 value={aspectRatio}
                 onChange={(e) => setAspectRatio(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                className="w-full bg-surface-100 border border-surface-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-brand-500"
               >
                 {ASPECT_RATIOS.map((ratio) => (
                   <option key={ratio} value={ratio}>{ratio}</option>
@@ -495,11 +497,11 @@ Examples:
             </div>
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Images per Prompt</label>
+              <label className="block text-xs text-surface-400 mb-1">Images per Prompt</label>
               <select
                 value={numImagesPerPrompt}
                 onChange={(e) => setNumImagesPerPrompt(Number(e.target.value))}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                className="w-full bg-surface-100 border border-surface-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-brand-500"
               >
                 {[1, 2, 3, 4].map((n) => (
                   <option key={n} value={n}>{n}</option>
@@ -508,11 +510,11 @@ Examples:
             </div>
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Resolution</label>
+              <label className="block text-xs text-surface-400 mb-1">Resolution</label>
               <select
                 value={resolution}
                 onChange={(e) => setResolution(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                className="w-full bg-surface-100 border border-surface-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-brand-500"
               >
                 {RESOLUTIONS.map((res) => (
                   <option key={res} value={res}>{res}</option>
@@ -521,11 +523,11 @@ Examples:
             </div>
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Format</label>
+              <label className="block text-xs text-surface-400 mb-1">Format</label>
               <select
                 value={outputFormat}
                 onChange={(e) => setOutputFormat(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                className="w-full bg-surface-100 border border-surface-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-brand-500"
               >
                 {OUTPUT_FORMATS.map((fmt) => (
                   <option key={fmt} value={fmt}>{fmt.toUpperCase()}</option>
@@ -543,7 +545,7 @@ Examples:
             referenceImages.length === 0 ||
             (promptSource === 'generated' ? selectedPrompts.size === 0 : !customPromptJson.trim())
           }
-          className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg px-6 py-4 font-medium transition-all flex items-center justify-center gap-2"
+          className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 disabled:bg-surface-200 disabled:from-surface-200 disabled:to-surface-200 disabled:cursor-not-allowed rounded-lg px-6 py-4 font-medium transition-all flex items-center justify-center gap-2"
         >
           {batchLoading ? (
             <>
@@ -565,11 +567,11 @@ Examples:
               : 'bg-red-900/50 border border-red-700'
           }`}>
             {batchError.type === 'warning' ? (
-              <Clock className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+              <Clock className="w-5 h-5 text-warning shrink-0 mt-0.5" />
             ) : !navigator.onLine ? (
-              <WifiOff className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              <WifiOff className="w-5 h-5 text-danger shrink-0 mt-0.5" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
             )}
             <div className="flex-1">
               <p className={batchError.type === 'warning' ? 'text-yellow-200' : 'text-red-200'}>
@@ -588,7 +590,7 @@ Examples:
             </div>
             <button
               onClick={() => setBatchError(null)}
-              className="text-gray-400 hover:text-white"
+              className="text-surface-400 hover:text-surface-900"
             >
               <X className="w-4 h-4" />
             </button>
@@ -597,11 +599,11 @@ Examples:
 
         {uploadError && (
           <div className="bg-red-900/50 border border-red-700 rounded-lg p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
             <p className="flex-1 text-red-200">{uploadError}</p>
             <button
               onClick={() => setUploadError(null)}
-              className="text-gray-400 hover:text-white"
+              className="text-surface-400 hover:text-surface-900"
             >
               <X className="w-4 h-4" />
             </button>
@@ -609,7 +611,7 @@ Examples:
         )}
 
         {batchProgress && (
-          <div className="bg-gray-900 rounded-lg p-4">
+          <div className="bg-surface-50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">Generation Progress</h2>
               <div className="flex items-center gap-2">
@@ -622,7 +624,7 @@ Examples:
                 }`}>
                   {batchProgress.status.toUpperCase()}
                 </span>
-                <span className="text-sm text-gray-400">
+                <span className="text-sm text-surface-400">
                   {batchProgress.progress}%
                 </span>
               </div>
@@ -640,24 +642,24 @@ Examples:
                       ? 'border-yellow-500 bg-yellow-500/10'
                       : img.status === 'failed'
                       ? 'border-red-500 bg-red-500/10'
-                      : 'border-gray-700 bg-gray-800'
+                      : 'border-surface-200 bg-surface-100'
                   }`}
                 >
                   {img.status === 'completed' && img.url ? (
                     <img src={assetUrl(img.url!)} alt={`Generated ${img.index + 1}`} className="w-full h-full object-cover rounded-lg" />
                   ) : img.status === 'generating' ? (
-                    <Loader2 className="w-6 h-6 animate-spin text-yellow-400" />
+                    <Loader2 className="w-6 h-6 animate-spin text-warning" />
                   ) : img.status === 'failed' ? (
-                    <XCircle className="w-6 h-6 text-red-400" />
+                    <XCircle className="w-6 h-6 text-danger" />
                   ) : (
-                    <Image className="w-6 h-6 text-gray-500" />
+                    <Image className="w-6 h-6 text-surface-400" />
                   )}
                 </button>
               ))}
             </div>
 
             {batchProgress.status === 'completed' && (
-              <div className="mt-4 pt-4 border-t border-gray-800 flex justify-end">
+              <div className="mt-4 pt-4 border-t border-surface-100 flex justify-end">
                 <button
                   onClick={async () => {
                     try {
@@ -667,14 +669,14 @@ Examples:
                         body: JSON.stringify({ folderPath: batchProgress.outputDir }),
                       })
                       if (!response.ok) {
-                        const data = await response.json()
-                        setBatchError({ message: data.error || 'Failed to open folder', type: 'error' })
+                        const raw = await response.json().catch(() => ({}))
+                        setBatchError({ message: getApiError(raw, 'Failed to open folder'), type: 'error' })
                       }
                     } catch {
                       setBatchError({ message: 'Failed to open folder', type: 'error' })
                     }
                   }}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-surface-100 hover:bg-surface-200 rounded-lg text-sm"
                 >
                   <FolderOpen className="w-4 h-4" />
                   Open Folder

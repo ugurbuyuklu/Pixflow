@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { apiUrl, assetUrl, authFetch } from '../lib/api'
+import { apiUrl, assetUrl, authFetch, getApiError, unwrapApiData } from '../lib/api'
 import type { GeneratedPrompt, BatchProgress, Avatar, Voice, ErrorInfo, MachineStep } from '../types'
 import { parseError } from '../types'
 
@@ -53,7 +53,8 @@ async function pollBatch(jobId: string, signal: AbortSignal, onProgress: (p: Bat
       const res = await authFetch(apiUrl(`/api/generate/progress/${jobId}`), { signal })
       if (!res.ok) throw new Error(`${res.status}`)
       failedPolls = 0
-      const data: BatchProgress = await res.json()
+      const raw = await res.json()
+      const data = unwrapApiData<BatchProgress>(raw)
       onProgress(data)
       if (data.status === 'completed' || data.status === 'failed') return data
     } catch (err) {
@@ -159,8 +160,12 @@ export const useMachineStore = create<MachineState>()((set, get) => ({
           body: JSON.stringify({ concept, count: promptCount }),
           signal,
         })
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Prompt generation failed')
-        const data = await res.json()
+        if (!res.ok) {
+          const raw = await res.json().catch(() => ({}))
+          throw new Error(getApiError(raw, 'Prompt generation failed'))
+        }
+        const raw = await res.json()
+        const data = unwrapApiData<{ prompts: GeneratedPrompt[] }>(raw)
         localPrompts = data.prompts
         set({ prompts: localPrompts })
       }
@@ -185,8 +190,12 @@ export const useMachineStore = create<MachineState>()((set, get) => ({
         formData.append('outputFormat', 'jpeg')
 
         const res = await authFetch(apiUrl('/api/generate/batch'), { method: 'POST', body: formData, signal })
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Batch generation failed')
-        const data = await res.json()
+        if (!res.ok) {
+          const raw = await res.json().catch(() => ({}))
+          throw new Error(getApiError(raw, 'Batch generation failed'))
+        }
+        const raw = await res.json()
+        const data = unwrapApiData<{ jobId: string; status: string; totalImages: number; outputDir: string }>(raw)
         set({
           batchProgress: {
             jobId: data.jobId, status: data.status, progress: 0,
@@ -207,8 +216,12 @@ export const useMachineStore = create<MachineState>()((set, get) => ({
           body: JSON.stringify({ concept, duration: scriptDuration, tone: scriptTone }),
           signal,
         })
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Script generation failed')
-        const data = await res.json()
+        if (!res.ok) {
+          const raw = await res.json().catch(() => ({}))
+          throw new Error(getApiError(raw, 'Script generation failed'))
+        }
+        const raw = await res.json()
+        const data = unwrapApiData<{ script: string }>(raw)
         localScript = data.script
         set({ script: localScript })
       }
@@ -223,8 +236,12 @@ export const useMachineStore = create<MachineState>()((set, get) => ({
           body: JSON.stringify({ text: localScript, voiceId }),
           signal,
         })
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'TTS failed')
-        const data = await res.json()
+        if (!res.ok) {
+          const raw = await res.json().catch(() => ({}))
+          throw new Error(getApiError(raw, 'TTS failed'))
+        }
+        const raw = await res.json()
+        const data = unwrapApiData<{ audioUrl: string }>(raw)
         localAudioUrl = data.audioUrl
         set({ audioUrl: localAudioUrl })
       }
@@ -243,11 +260,12 @@ export const useMachineStore = create<MachineState>()((set, get) => ({
               signal,
             })
             if (!res.ok) {
-              const errData = await res.json().catch(() => ({}))
-              throw new Error(errData.details || errData.error || 'Lipsync video failed')
+              const errRaw = await res.json().catch(() => ({}))
+              throw new Error(getApiError(errRaw, 'Lipsync video failed'))
             }
-            const data = await res.json()
-            if (data.success && data.localPath) set({ videoUrl: data.localPath })
+            const raw = await res.json()
+            const data = unwrapApiData<{ localPath?: string }>(raw)
+            if (data.localPath) set({ videoUrl: data.localPath })
             lastErr = null
             break
           } catch (err) {
