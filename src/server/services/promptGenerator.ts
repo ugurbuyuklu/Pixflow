@@ -1,29 +1,29 @@
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import type { PromptOutput, ResearchBrief, SubTheme, VarietyScore } from '../utils/prompts.js'
 import { calculateVarietyScore, validatePrompt } from '../utils/prompts.js'
 import type { AnalyzedPrompt } from './vision.js'
 
-let anthropicClient: Anthropic | null = null
+let openaiClient: OpenAI | null = null
 let clientInitializing = false
 
-async function getAnthropic(): Promise<Anthropic> {
-  if (anthropicClient) return anthropicClient
+async function getOpenAI(): Promise<OpenAI> {
+  if (openaiClient) return openaiClient
   if (clientInitializing) {
     await new Promise((resolve) => setTimeout(resolve, 100))
-    return getAnthropic()
+    return getOpenAI()
   }
   clientInitializing = true
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY environment variable is required')
+    throw new Error('OPENAI_API_KEY environment variable is required')
   }
-  anthropicClient = new Anthropic({
+  openaiClient = new OpenAI({
     apiKey,
     timeout: 60000,
     maxRetries: 2,
   })
   clientInitializing = false
-  return anthropicClient
+  return openaiClient
 }
 
 function safeJsonParse<T>(content: string, fallback: T): T {
@@ -306,7 +306,7 @@ export async function generatePrompts(
   onBatchDone?: (completedCount: number, total: number) => void,
   imageInsights?: AnalyzedPrompt,
 ): Promise<{ prompts: PromptOutput[]; varietyScore: VarietyScore }> {
-  const client = await getAnthropic()
+  const client = await getOpenAI()
   const prompts: PromptOutput[] = []
   const subThemesToUse = distributeSubThemes(researchBrief.sub_themes, count)
 
@@ -334,7 +334,7 @@ function distributeSubThemes(subThemes: SubTheme[], count: number): SubTheme[] {
 }
 
 async function generatePromptBatch(
-  client: Anthropic,
+  client: OpenAI,
   concept: string,
   themes: SubTheme[],
   research: ResearchBrief,
@@ -461,23 +461,26 @@ Create variations blending this reference style with the concept. Do NOT copy th
         : ''
     }`
 
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 8000,
-      temperature: 0.85,
-      system: systemPrompt,
+    const response = await client.chat.completions.create({
+      model: 'gpt-5.2',
       messages: [
+        {
+          role: 'system',
+          content: systemPrompt,
+        },
         {
           role: 'user',
           content: userPrompt,
         },
       ],
+      temperature: 0.85,
+      max_tokens: 8000,
+      reasoning_effort: 'none',
+      response_format: { type: 'json_object' },
     })
 
-    const firstBlock = response.content[0]
-    if (!firstBlock || firstBlock.type !== 'text') return fallbackPrompts
-
-    const content = firstBlock.text
+    const content = response.choices[0]?.message?.content
+    if (!content) return fallbackPrompts
     const parsed = safeJsonParse<{ prompts?: PromptOutput[] }>(content, { prompts: fallbackPrompts })
     return parsed.prompts ?? fallbackPrompts
   } catch (error) {
@@ -506,7 +509,7 @@ export function validateAllPrompts(prompts: PromptOutput[]): {
 }
 
 export async function textToPrompt(textDescription: string): Promise<PromptOutput> {
-  const client = await getAnthropic()
+  const client = await getOpenAI()
 
   console.log(`[TextToPrompt] Converting: "${textDescription.substring(0, 50)}..."`)
 
@@ -542,12 +545,13 @@ ${CREATIVE_DIRECTOR_KNOWLEDGE}
 Output JSON with this structure:
 ${PROMPT_SCHEMA_EXAMPLE}`
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-5-20250929',
-    max_tokens: 4000,
-    temperature: 0.75,
-    system: systemPrompt,
+  const response = await client.chat.completions.create({
+    model: 'gpt-5.2',
     messages: [
+      {
+        role: 'system',
+        content: systemPrompt,
+      },
       {
         role: 'user',
         content: `Convert this description into a TECHNICAL JSON prompt:
@@ -566,14 +570,16 @@ REQUIREMENTS:
 Return only the JSON object.`,
       },
     ],
+    temperature: 0.75,
+    max_tokens: 4000,
+    reasoning_effort: 'none',
+    response_format: { type: 'json_object' },
   })
 
-  const firstBlock = response.content[0]
-  if (!firstBlock || firstBlock.type !== 'text') {
-    throw new Error('No response from Claude')
+  const content = response.choices[0]?.message?.content
+  if (!content) {
+    throw new Error('No response from GPT-5.2')
   }
-
-  const content = firstBlock.text
 
   const parsed = safeJsonParse<PromptOutput>(content, {
     style: textDescription,

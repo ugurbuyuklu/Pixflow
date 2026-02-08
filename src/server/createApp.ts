@@ -210,7 +210,7 @@ export function createApp(config: ServerConfig): express.Express {
         }
 
         // Calculate comprehensive quality metrics
-        const qualityMetrics = calculatePromptQualityMetrics(prompts as PromptOutput[], 'claude-sonnet-4-5-20250929')
+        const qualityMetrics = calculatePromptQualityMetrics(prompts as PromptOutput[], 'gpt-5.2')
 
         console.log(
           `[Complete] Generated ${prompts.length} prompts, variety: ${varietyScore.passed ? 'PASS' : 'FAIL'}, quality: ${qualityMetrics.overall_score}/100`,
@@ -228,7 +228,7 @@ export function createApp(config: ServerConfig): express.Express {
           prompts,
           promptCount: prompts.length,
           source: 'generated',
-          modelUsed: 'claude-sonnet-4-5-20250929',
+          modelUsed: 'gpt-5.2',
           varietyScore,
           qualityMetrics,
         })
