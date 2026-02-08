@@ -5,10 +5,11 @@ import type { ErrorInfo, GeneratedPrompt, ResearchData, VarietyScore } from '../
 import { parseError } from '../types'
 
 interface GenerationProgress {
-  step: 'research' | 'prompts' | 'done'
+  step: 'quick_prompt' | 'research' | 'research_complete' | 'enriching' | 'done'
   completed: number
   total: number
   startedAt: number
+  message?: string
 }
 
 export interface AnalyzeEntry {
@@ -43,9 +44,6 @@ interface PromptState {
   analyzeEntries: AnalyzeEntry[]
   analyzeError: ErrorInfo | null
 
-  referenceImage: File | null
-  referencePreview: string | null
-
   updateConcept: (index: number, value: string) => void
   addConcept: () => void
   duplicateConcept: (index: number) => void
@@ -55,7 +53,6 @@ interface PromptState {
   setPromptMode: (mode: 'concept' | 'image') => void
   setSelectedIndex: (index: number | null) => void
   setEditingPromptText: (text: string) => void
-  setReferenceImage: (file: File | null) => void
 
   generate: () => Promise<void>
   cancelGenerate: () => void
@@ -75,6 +72,7 @@ interface PromptState {
 }
 
 let abortController: AbortController | null = null
+let eventSource: EventSource | null = null
 
 function generateId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
@@ -98,9 +96,6 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
   analyzeEntries: [],
   analyzeError: null,
 
-  referenceImage: null,
-  referencePreview: null,
-
   updateConcept: (index, value) =>
     set((state) => {
       if (index < 0 || index >= state.concepts.length) return state
@@ -112,7 +107,9 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
   duplicateConcept: (index) =>
     set((state) => {
       const source = state.concepts[index]
-      return { concepts: [...state.concepts, { id: generateId(), value: source?.value ?? '' }] }
+      return {
+        concepts: [...state.concepts, { id: generateId(), value: source?.value ?? '' }],
+      }
     }),
   removeConcept: (index) =>
     set((state) => {
@@ -141,164 +138,171 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
   },
   setEditingPromptText: (editingPromptText) => set({ editingPromptText }),
 
-  setReferenceImage: (file) => {
-    const prev = get().referencePreview
-    if (prev) URL.revokeObjectURL(prev)
-    set({
-      referenceImage: file,
-      referencePreview: file ? URL.createObjectURL(file) : null,
-    })
-  },
-
   generate: async () => {
-    const { concepts, count, referenceImage } = get()
-    const activeConcepts = concepts.filter((c) => c.value.trim()).map((c) => c.value)
+    const { concepts, count } = get()
+    const concept = concepts.find((c) => c.value.trim())?.value.trim()
 
-    if (activeConcepts.length === 0 && referenceImage) {
-      get().addAnalyzeFiles([referenceImage])
-      get().setReferenceImage(null)
-      set({ promptMode: 'image' })
-      get().analyzeAllEntries()
-      return
-    }
-    if (activeConcepts.length === 0) {
-      set({ error: { message: 'Please enter at least one concept.', type: 'warning' } })
+    if (!concept) {
+      set({ error: { message: 'Please enter a concept.', type: 'warning' } })
       return
     }
 
+    // Cancel previous generation
+    eventSource?.close()
+    eventSource = null
     abortController?.abort()
-    abortController = new AbortController()
+    abortController = null
+
     const startedAt = Date.now()
-    const totalPrompts = activeConcepts.length * count
 
     set({
       loading: true,
       error: null,
-      prompts: [],
+      prompts: Array(count).fill(null), // Pre-allocate array for progressive population
       selectedIndex: null,
       research: null,
       varietyScore: null,
-      generationProgress: { step: 'research', completed: 0, total: totalPrompts, startedAt },
+      generationProgress: { step: 'quick_prompt', completed: 0, total: count, startedAt },
     })
 
-    const allPrompts: GeneratedPrompt[] = []
-    let lastResearch: ResearchData | null = null
-    let lastVarietyScore: VarietyScore | null = null
-    let lastResponse: Response | undefined
-
     try {
-      for (const concept of activeConcepts) {
-        if (abortController.signal.aborted) return
+      // Build URL with query params for GET (EventSource requires GET)
+      const url = apiUrl(
+        `/api/prompts/generate?concept=${encodeURIComponent(concept)}&count=${count}&stream=true`,
+      )
 
-        const fetchOptions: RequestInit = {
-          method: 'POST',
-          signal: abortController.signal,
-        }
+      eventSource = new EventSource(url)
 
-        if (referenceImage) {
-          const formData = new FormData()
-          formData.append('concept', concept)
-          formData.append('count', String(count))
-          formData.append('stream', 'true')
-          formData.append('referenceImage', referenceImage)
-          fetchOptions.body = formData
-        } else {
-          fetchOptions.headers = { 'Content-Type': 'application/json' }
-          fetchOptions.body = JSON.stringify({ concept, count, stream: true })
-        }
+      // Handle prompt events (progressive population)
+      eventSource.addEventListener('prompt', (e: MessageEvent) => {
+        const { prompt, index, quick, enriched } = JSON.parse(e.data)
 
-        lastResponse = await authFetch(apiUrl('/api/prompts/generate'), fetchOptions)
-
-        if (!lastResponse.ok) {
-          const raw = await lastResponse.json().catch(() => ({}))
-          throw new Error(getApiError(raw, `HTTP ${lastResponse.status}`))
-        }
-
-        const reader = lastResponse.body?.getReader()
-        if (!reader) throw new Error('No response body')
-
-        const decoder = new TextDecoder()
-        let buffer = ''
-        let finalData: {
-          prompts: GeneratedPrompt[]
-          research: ResearchData | null
-          varietyScore: VarietyScore | null
-        } | null = null
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() || ''
-
-          let currentEvent = ''
-          for (const line of lines) {
-            if (line.startsWith('event: ')) {
-              currentEvent = line.slice(7)
-            } else if (line.startsWith('data: ') && currentEvent) {
-              let payload: Record<string, unknown>
-              try {
-                payload = JSON.parse(line.slice(6))
-              } catch {
-                currentEvent = ''
-                continue
-              }
-              if (currentEvent === 'research') {
-                set({
-                  research: payload,
-                  generationProgress: { step: 'prompts', completed: allPrompts.length, total: totalPrompts, startedAt },
-                })
-              } else if (currentEvent === 'progress') {
-                set({
-                  generationProgress: {
-                    step: 'prompts',
-                    completed: allPrompts.length + payload.completed,
-                    total: totalPrompts,
-                    startedAt,
-                  },
-                })
-              } else if (currentEvent === 'done') {
-                finalData = payload
-              } else if (currentEvent === 'error') {
-                throw new Error(payload.message)
-              }
-              currentEvent = ''
-            }
+        set((state) => {
+          const prompts = [...state.prompts]
+          prompts[index] = {
+            ...prompt,
+            _quick: quick, // Internal flag for UI
+            _enriched: enriched,
           }
+
+          const completed = prompts.filter((p) => p !== null).length
+
+          return {
+            prompts,
+            selectedIndex: state.selectedIndex === null && completed > 0 ? 0 : state.selectedIndex,
+            editingPromptText:
+              state.selectedIndex === null && completed > 0
+                ? JSON.stringify(prompts[0], null, 2)
+                : state.editingPromptText,
+            generationProgress: {
+              step: enriched ? 'enriching' : state.generationProgress?.step || 'quick_prompt',
+              completed,
+              total: count,
+              startedAt: state.generationProgress?.startedAt || Date.now(),
+            },
+          }
+        })
+      })
+
+      // Handle research completion
+      eventSource.addEventListener('research', (e: MessageEvent) => {
+        const research = JSON.parse(e.data)
+        set({
+          research,
+          generationProgress: {
+            step: 'research_complete',
+            completed: get().prompts.filter((p) => p !== null).length,
+            total: count,
+            startedAt: get().generationProgress?.startedAt || Date.now(),
+          },
+        })
+      })
+
+      // Handle status updates
+      eventSource.addEventListener('status', (e: MessageEvent) => {
+        const { step, message } = JSON.parse(e.data)
+        set((state) => ({
+          generationProgress: {
+            ...state.generationProgress!,
+            step,
+            message,
+          },
+        }))
+      })
+
+      // Handle progress updates
+      eventSource.addEventListener('progress', (e: MessageEvent) => {
+        const { step, completed, total, message } = JSON.parse(e.data)
+        set((state) => ({
+          generationProgress: {
+            step,
+            completed,
+            total,
+            startedAt: state.generationProgress?.startedAt || Date.now(),
+            message,
+          },
+        }))
+      })
+
+      // Handle completion
+      eventSource.addEventListener('done', (e: MessageEvent) => {
+        const { varietyScore } = JSON.parse(e.data)
+
+        set({
+          varietyScore,
+          loading: false,
+          generationProgress: {
+            step: 'done',
+            completed: count,
+            total: count,
+            startedAt: get().generationProgress?.startedAt || Date.now(),
+          },
+        })
+
+        eventSource?.close()
+        eventSource = null
+      })
+
+      // Handle errors
+      eventSource.addEventListener('error', () => {
+        console.error('[Prompt Store] SSE error or connection closed')
+
+        const currentPrompts = get().prompts.filter((p) => p !== null)
+
+        if (currentPrompts.length > 0) {
+          // Partial success - keep what we have
+          set({
+            loading: false,
+            error: {
+              message: 'Connection lost. Keeping generated prompts.',
+              type: 'warning',
+            },
+          })
+        } else {
+          // Total failure
+          set({
+            loading: false,
+            error: {
+              message: 'Generation failed. Please try again.',
+              type: 'error',
+            },
+          })
         }
 
-        if (finalData) {
-          allPrompts.push(...finalData.prompts)
-          lastResearch = finalData.research
-          lastVarietyScore = finalData.varietyScore
-          set({ prompts: [...allPrompts] })
-        }
-      }
-
-      set({
-        prompts: allPrompts,
-        research: lastResearch,
-        varietyScore: lastVarietyScore,
-        selectedIndex: allPrompts.length > 0 ? 0 : null,
-        editingPromptText: allPrompts.length > 0 ? JSON.stringify(allPrompts[0], null, 2) : '',
-        generationProgress: { step: 'done', completed: totalPrompts, total: totalPrompts, startedAt },
+        eventSource?.close()
+        eventSource = null
       })
     } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') return
-      const errorInfo = parseError(err, lastResponse)
-      if (lastResponse?.status === 429) {
-        errorInfo.action = { label: 'Retry', onClick: () => get().generate() }
-      }
-      set({ error: errorInfo })
-    } finally {
-      set({ loading: false })
-      abortController = null
+      const errorInfo = parseError(err)
+      set({ error: errorInfo, loading: false })
+      eventSource?.close()
+      eventSource = null
     }
   },
 
   cancelGenerate: () => {
+    eventSource?.close()
+    eventSource = null
     abortController?.abort()
     abortController = null
     set({ loading: false, generationProgress: null })
@@ -507,10 +511,9 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
     for (const e of get().analyzeEntries) {
       if (e.preview.startsWith('blob:')) URL.revokeObjectURL(e.preview)
     }
-    const prev = get().referencePreview
-    if (prev) URL.revokeObjectURL(prev)
     set({
       concepts: [{ id: generateId(), value: '' }],
+      count: 1,
       prompts: [],
       selectedIndex: null,
       editingPromptText: '',
@@ -519,8 +522,6 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
       varietyScore: null,
       analyzeEntries: [],
       analyzeError: null,
-      referenceImage: null,
-      referencePreview: null,
     })
   },
 }))

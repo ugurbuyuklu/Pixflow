@@ -63,6 +63,9 @@ export interface GeneratedPrompt {
     atmosphere?: string
     grain?: string
   }
+  // Internal streaming flags (not persisted)
+  _quick?: boolean
+  _enriched?: boolean
 }
 
 export interface ResearchData {

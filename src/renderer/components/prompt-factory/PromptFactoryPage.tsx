@@ -21,6 +21,7 @@ import {
   Upload,
   WifiOff,
   X,
+  Zap,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
@@ -89,13 +90,9 @@ export default function PromptFactoryPage() {
     updateAnalyzeEntryPrompt,
     setPrompts,
     generationProgress,
-    referenceImage,
-    referencePreview,
-    setReferenceImage,
   } = promptStore
 
   const activeConcepts = concepts.filter((c) => c.value.trim())
-  const totalPrompts = activeConcepts.length * count
 
   const [elapsed, setElapsed] = useState(0)
   const [expandedEntry, setExpandedEntry] = useState<number | null>(null)
@@ -103,7 +100,6 @@ export default function PromptFactoryPage() {
   const [editingText, setEditingText] = useState('')
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
-  const refImageInput = useRef<HTMLInputElement>(null)
 
   const progressStartedAt = generationProgress?.startedAt ?? 0
   const progressDone = !generationProgress || generationProgress.step === 'done'
@@ -438,104 +434,29 @@ export default function PromptFactoryPage() {
 
       {/* Input Area */}
       <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-6 space-y-3">
-        <input
-          ref={refImageInput}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) setReferenceImage(file)
-            e.target.value = ''
-          }}
+        {/* Concept rows */}
+        <Input
+          label="Concept"
+          value={concepts[0]?.value || ''}
+          onChange={(e) => updateConcept(0, e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && !loading && activeConcepts.length > 0 && generate()}
+          placeholder="e.g., Christmas, Halloween, Summer Beach..."
         />
 
-        {/* Concept rows */}
-        {concepts.map((c, i) => (
-          <div key={c.id} className="flex items-end gap-3">
-            <div className="flex-1">
-              <Input
-                label={i === 0 ? 'Concept' : `Concept ${i + 1}`}
-                value={c.value}
-                onChange={(e) => updateConcept(i, e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !loading && activeConcepts.length > 0 && generate()}
-                placeholder="e.g., Christmas, Halloween, Summer Beach..."
-              />
-            </div>
-            {concepts.length > 1 && (
-              <button
-                type="button"
-                onClick={() => removeConcept(i)}
-                className="p-2 text-surface-400 hover:text-danger transition-colors rounded-lg hover:bg-surface-100 shrink-0"
-                title="Remove concept"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        ))}
-
-        {/* Add + Duplicate buttons */}
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => addConcept()}
-            className="flex-1 h-11 border-2 border-dashed border-surface-200 rounded-lg flex items-center justify-center gap-2 text-surface-400 hover:border-brand-500 hover:text-brand-400 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            <span className="text-sm font-medium">Add Concept</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => duplicateConcept(concepts.length - 1)}
-            className="flex-1 h-11 border-2 border-dashed border-surface-200 rounded-lg flex items-center justify-center gap-2 text-surface-400 hover:border-brand-500 hover:text-brand-400 transition-colors"
-          >
-            <Copy className="w-5 h-5" />
-            <span className="text-sm font-medium">Duplicate</span>
-          </button>
-        </div>
+        <Slider
+          label="Number of Prompts"
+          value={count}
+          onChange={(e) => setCount(Number(e.target.value))}
+          min={1}
+          max={10}
+          displayValue={count}
+        />
 
         {/* Controls row */}
-        <div className="flex items-end gap-4 pt-2 border-t border-surface-200/50">
-          {referencePreview ? (
-            <div className="relative group">
-              <img
-                src={referencePreview}
-                alt="Reference"
-                className="w-10 h-10 rounded-lg object-cover border border-surface-200"
-              />
-              <button
-                type="button"
-                onClick={() => setReferenceImage(null)}
-                className="absolute -top-1.5 -right-1.5 bg-danger rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => refImageInput.current?.click()}
-              title="Add reference image for style guidance"
-              className="w-10 h-10 border-2 border-dashed border-surface-200 rounded-lg flex items-center justify-center text-surface-400 hover:border-brand-500 hover:text-brand-400 transition-colors shrink-0"
-            >
-              <ImagePlus className="w-5 h-5" />
-            </button>
-          )}
-          <div className="w-48">
-            <Slider
-              label="Prompts"
-              displayValue={totalPrompts}
-              min={PROMPT_GENERATE_MIN}
-              max={PROMPT_GENERATE_MAX}
-              value={count}
-              onChange={(e) => setCount(Number(e.currentTarget.value))}
-            />
-          </div>
-          <div className="flex-1" />
+        <div className="flex items-end justify-end gap-4 pt-2 border-t border-surface-200/50">
           <div>
             {loading ? (
-              <Button variant="danger" size="lg" icon={<X className="w-5 h-5" />} onClick={cancelGenerate}>
+              <Button variant="secondary" size="lg" icon={<X className="w-5 h-5" />} onClick={cancelGenerate}>
                 Cancel
               </Button>
             ) : (
@@ -544,9 +465,9 @@ export default function PromptFactoryPage() {
                 size="lg"
                 icon={<Sparkles className="w-5 h-5" />}
                 onClick={generate}
-                disabled={activeConcepts.length === 0 && !referenceImage}
+                disabled={activeConcepts.length === 0}
               >
-                Generate{totalPrompts > 0 ? ` ${totalPrompts}` : ''}
+                Generate {count}
               </Button>
             )}
           </div>
@@ -557,9 +478,13 @@ export default function PromptFactoryPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-brand-300 text-sm">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {generationProgress.step === 'research'
-                  ? 'Researching trends & competitors...'
-                  : `Generating prompts (${generationProgress.completed}/${generationProgress.total})...`}
+                {generationProgress.step === 'quick_prompt' && 'Generating preview...'}
+                {generationProgress.step === 'research' && `Researching "${activeConcepts[0]?.value || 'concept'}"...`}
+                {generationProgress.step === 'research_complete' && 'Research complete, generating prompts...'}
+                {generationProgress.step === 'enriching' &&
+                  `Enriching prompt ${generationProgress.completed}/${generationProgress.total}...`}
+                {generationProgress.step === 'done' && 'Complete!'}
+                {generationProgress.message && ` — ${generationProgress.message}`}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-surface-400">
                 <Timer className="w-3.5 h-3.5" />
@@ -577,7 +502,7 @@ export default function PromptFactoryPage() {
                     className={`h-full rounded-full transition-all duration-500 ${
                       i < generationProgress.completed
                         ? 'bg-success w-full'
-                        : i < generationProgress.completed + (generationProgress.step === 'research' ? 0 : 2)
+                        : i < generationProgress.completed + (generationProgress.step === 'quick_prompt' ? 1 : 2)
                           ? 'bg-brand-500 w-full animate-pulse'
                           : 'w-0'
                     }`}
@@ -653,10 +578,18 @@ export default function PromptFactoryPage() {
               </div>
               {varietyScore && (
                 <div className="mt-4 p-3 bg-surface-50/50 rounded-lg">
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-2">
                     <span className="text-xs text-surface-400">Variety Score</span>
-                    <span className={`text-xs font-medium ${varietyScore.passed ? 'text-success' : 'text-danger'}`}>
-                      {varietyScore.passed ? 'Passed' : 'Low Variety'}
+                    <span
+                      className={`text-sm font-bold ${
+                        (varietyScore.score ?? 0) >= 80
+                          ? 'text-success'
+                          : (varietyScore.score ?? 0) >= 60
+                            ? 'text-warning'
+                            : 'text-danger'
+                      }`}
+                    >
+                      {varietyScore.score ?? 0}/100
                     </span>
                   </div>
                   <div className="text-xs text-surface-400 space-y-0.5">
@@ -673,45 +606,92 @@ export default function PromptFactoryPage() {
       )}
 
       {/* Prompts Grid */}
-      {prompts.length > 0 && (
+      {(prompts.length > 0 || loading) && (
         <div className="grid grid-cols-3 gap-6 h-[calc(100vh-420px)] min-h-[320px]">
           {/* Prompt List */}
           <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-4 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-surface-900">Prompts ({prompts.length})</h3>
+              <h3 className="text-sm font-semibold text-surface-900">Prompts ({count})</h3>
             </div>
             <div className="flex-1 overflow-y-auto space-y-2 mb-4 min-h-0">
-              {prompts.map((prompt, i) => (
-                <button
-                  type="button"
-                  // biome-ignore lint/suspicious/noArrayIndexKey: static list
-                  key={i}
-                  className={`w-full text-left p-3 rounded-lg cursor-pointer transition-colors flex items-center justify-between ${
-                    selectedIndex === i
-                      ? 'bg-brand-600/30 border border-brand-500/50'
-                      : 'bg-surface-200/30 hover:bg-surface-200/50'
-                  }`}
-                  onClick={() => setSelectedIndex(i)}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-surface-900 truncate">
-                      #{i + 1} — {prompt.style?.split(' ').slice(0, 5).join(' ') || 'Untitled'}
+              {Array.from({ length: loading ? count : prompts.length }).map((_, i) => {
+                const prompt = prompts[i]
+
+                if (!prompt) {
+                  // Show skeleton for pending prompts
+                  return (
+                    <div
+                      // biome-ignore lint/suspicious/noArrayIndexKey: static ordered slots
+                      key={i}
+                      className="w-full p-3 rounded-lg bg-surface-200/30 animate-pulse"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="h-4 bg-surface-300/50 rounded w-1/3" />
+                      </div>
+                      <div className="h-3 bg-surface-300/50 rounded w-2/3" />
                     </div>
-                    <div className="text-xs text-surface-400 mt-0.5">{extractMood(prompt)}</div>
-                  </div>
-                  <Button
-                    variant="ghost-warning"
-                    size="xs"
-                    aria-label="Add to favorites"
-                    icon={<Star className="w-4 h-4" />}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      addToFavorites(prompt, generateFavoriteName(prompt, i))
-                    }}
-                    className="flex-shrink-0"
-                  />
-                </button>
-              ))}
+                  )
+                }
+
+                return (
+                  <button
+                    type="button"
+                    // biome-ignore lint/suspicious/noArrayIndexKey: static list
+                    key={i}
+                    className={`w-full text-left p-3 rounded-lg cursor-pointer transition-colors flex items-center justify-between relative ${
+                      selectedIndex === i
+                        ? 'bg-brand-600/30 border border-brand-500/50'
+                        : 'bg-surface-200/30 hover:bg-surface-200/50'
+                    }`}
+                    onClick={() => setSelectedIndex(i)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-medium text-surface-900 truncate flex-1">
+                          #{i + 1} — {prompt.style?.split(' ').slice(0, 5).join(' ') || 'Untitled'}
+                        </div>
+                        {prompt._quick && !prompt._enriched && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-warning/20 text-warning flex items-center gap-1">
+                            <Zap className="w-2.5 h-2.5" />
+                            Quick
+                          </span>
+                        )}
+                        {prompt._enriched && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-success/20 text-success flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            Enhanced
+                          </span>
+                        )}
+                        {prompt.quality_score !== undefined && (
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              prompt.quality_score >= 80
+                                ? 'bg-success/20 text-success'
+                                : prompt.quality_score >= 60
+                                  ? 'bg-warning/20 text-warning'
+                                  : 'bg-danger/20 text-danger'
+                            }`}
+                          >
+                            {prompt.quality_score}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-surface-400 mt-0.5">{extractMood(prompt)}</div>
+                    </div>
+                    <Button
+                      variant="ghost-warning"
+                      size="xs"
+                      aria-label="Add to favorites"
+                      icon={<Star className="w-4 h-4" />}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        addToFavorites(prompt, generateFavoriteName(prompt, i))
+                      }}
+                      className="flex-shrink-0"
+                    />
+                  </button>
+                )
+              })}
             </div>
             <Button
               variant="success"
@@ -719,6 +699,7 @@ export default function PromptFactoryPage() {
               icon={<ArrowRight className="w-4 h-4" />}
               onClick={handleSendToMonster}
               className="w-full"
+              disabled={prompts.filter((p) => p !== null).length === 0}
             >
               Send to Monster
             </Button>

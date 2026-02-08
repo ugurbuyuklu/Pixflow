@@ -6,6 +6,7 @@ import type {
   TechnicalRecommendations,
   TrendFindings,
 } from '../utils/prompts.js'
+import { getDb } from '../db/index.js'
 
 let openaiClient: OpenAI | null = null
 let clientInitializing = false
@@ -64,7 +65,111 @@ const DEFAULT_TECHNICAL: TechnicalRecommendations = {
   notes: 'Choose based on concept mood',
 }
 
+/**
+ * Default research brief for quick prompt generation (Phase 3: Streaming UX)
+ * Used to generate first prompt immediately without waiting for research
+ */
+export const DEFAULT_RESEARCH_BRIEF: ResearchBrief = {
+  concept: '',
+  research_date: new Date().toISOString().split('T')[0],
+  sources_analyzed: 0,
+  trend_findings: DEFAULT_TRENDS,
+  competitor_insights: DEFAULT_COMPETITORS,
+  technical_recommendations: DEFAULT_TECHNICAL,
+  sub_themes: [
+    {
+      name: 'Classic Portrait',
+      aesthetic: 'Editorial',
+      mood: 'Professional and polished',
+      key_elements: ['Clean background', 'Soft lighting', 'Natural pose'],
+    },
+    {
+      name: 'Lifestyle Moment',
+      aesthetic: 'Lifestyle',
+      mood: 'Authentic and relatable',
+      key_elements: ['Natural environment', 'Candid expression', 'Warm tones'],
+    },
+  ],
+}
+
+/**
+ * Perform research with cache-first strategy (Phase 1)
+ * - Checks cache for each keyword
+ * - Only researches missing keywords
+ * - Merges cached + fresh results
+ */
 export async function performResearch(concept: string): Promise<ResearchBrief> {
+  const keywords = extractCacheableKeywords(concept)
+
+  if (keywords.length === 0) {
+    console.log('[Research] No valid keywords, using fallback')
+    return performFreshResearch(concept)
+  }
+
+  console.log(`[Research] Keywords extracted: ${keywords.join(', ')}`)
+
+  // Phase 1: Check cache
+  const { cached, missing } = await lookupCachedResearch(keywords)
+
+  console.log(`[Research] Cache status: ${cached.size}/${keywords.length} hits, ${missing.length} missing`)
+
+  // Phase 2: Research missing keywords only
+  const freshData = new Map<string, CachedResearchData>()
+
+  if (missing.length > 0) {
+    console.log(`[Research] Researching missing keywords: ${missing.join(', ')}`)
+
+    for (const keyword of missing) {
+      const data = await researchSingleKeyword(keyword)
+      freshData.set(keyword, data)
+      await cacheResearchResults(keyword, data, data.source_urls)
+    }
+  }
+
+  // Phase 3: Merge all sources
+  const allSources = new Map([...cached, ...freshData])
+  const merged = mergeResearchData(allSources, concept)
+
+  // Phase 4: Generate sub-themes from merged data
+  const client = await getOpenAI()
+  const subThemes = await generateSubThemes(
+    client,
+    concept,
+    merged.trend_findings,
+    merged.competitor_insights,
+  )
+
+  return {
+    ...merged,
+    sub_themes: subThemes,
+  }
+}
+
+/**
+ * Research a single keyword (used for cache misses)
+ * Uses GPT-4o for research synthesis
+ */
+async function researchSingleKeyword(keyword: string): Promise<CachedResearchData & { source_urls?: string[] }> {
+  const client = await getOpenAI()
+
+  const [trendFindings, competitorInsights, technicalRecommendations] = await Promise.all([
+    researchTrends(client, keyword),
+    researchCompetitors(client, keyword),
+    researchTechnical(client, keyword),
+  ])
+
+  return {
+    trend_findings: trendFindings,
+    competitor_insights: competitorInsights,
+    technical_recommendations: technicalRecommendations,
+    source_urls: [],
+  }
+}
+
+/**
+ * Perform fresh research without cache (fallback)
+ */
+async function performFreshResearch(concept: string): Promise<ResearchBrief> {
   const client = await getOpenAI()
 
   const [trendFindings, competitorInsights, technicalRecommendations] = await Promise.all([
@@ -375,3 +480,205 @@ export function analyzeResearchResults(brief: ResearchBrief): {
     warnings,
   }
 }
+
+// ========================================
+// CACHE LAYER (Phase 1)
+// ========================================
+
+interface CachedResearchData {
+  trend_findings: TrendFindings
+  competitor_insights: CompetitorInsights
+  technical_recommendations: TechnicalRecommendations
+}
+
+interface CacheResult {
+  cached: Map<string, CachedResearchData>
+  missing: string[]
+}
+
+/**
+ * Extract cacheable keywords from concept string
+ * Example: "halloween photography, witch costume, werewolf" → ["halloween photography", "witch costume", "werewolf"]
+ */
+export function extractCacheableKeywords(concept: string): string[] {
+  return concept
+    .toLowerCase()
+    .split(/[,;،]+/) // Split by comma, semicolon, Arabic comma
+    .map((kw) => kw.trim())
+    .filter((kw) => kw.length >= 3) // Min 3 chars
+    .slice(0, 5) // Max 5 keywords
+}
+
+/**
+ * Lookup cached research data for given keywords
+ * Returns both cached results and missing keywords that need fresh research
+ */
+export async function lookupCachedResearch(keywords: string[]): Promise<CacheResult> {
+  const cached = new Map<string, CachedResearchData>()
+  const missing: string[] = []
+  const now = Date.now()
+  const db = getDb()
+
+  for (const keyword of keywords) {
+    try {
+      const row = db
+        .prepare(
+          `
+        SELECT * FROM research_cache
+        WHERE concept_keyword = ? AND expires_at > ?
+      `,
+        )
+        .get(keyword, now) as
+        | {
+            id: number
+            trend_findings: string
+            competitor_insights: string
+            technical_recommendations: string
+          }
+        | undefined
+
+      if (row) {
+        cached.set(keyword, {
+          trend_findings: JSON.parse(row.trend_findings),
+          competitor_insights: JSON.parse(row.competitor_insights),
+          technical_recommendations: JSON.parse(row.technical_recommendations),
+        })
+
+        // Update access stats
+        db.prepare(
+          `
+          UPDATE research_cache
+          SET access_count = access_count + 1, last_accessed_at = ?
+          WHERE id = ?
+        `,
+        ).run(now, row.id)
+
+        const age = Math.round((now - (row as any).created_at) / 1000)
+        console.log(`[Research Cache] Hit for "${keyword}" (age: ${age}s)`)
+      } else {
+        missing.push(keyword)
+        console.log(`[Research Cache] Miss for "${keyword}"`)
+      }
+    } catch (error) {
+      console.error(`[Research Cache] Error looking up "${keyword}":`, error)
+      missing.push(keyword)
+    }
+  }
+
+  return { cached, missing }
+}
+
+/**
+ * Cache research results for a single keyword
+ */
+export async function cacheResearchResults(
+  keyword: string,
+  data: CachedResearchData,
+  sourceUrls?: string[]
+): Promise<void> {
+  const db = getDb()
+  const now = Date.now()
+  const expiresAt = now + 48 * 60 * 60 * 1000 // 48 hours TTL
+
+  try {
+    db.prepare(
+      `
+      INSERT OR REPLACE INTO research_cache (
+        concept_keyword,
+        trend_findings,
+        competitor_insights,
+        technical_recommendations,
+        sources_analyzed,
+        source_urls,
+        last_web_search,
+        created_at,
+        expires_at,
+        access_count,
+        last_accessed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `,
+    ).run(
+      keyword,
+      JSON.stringify(data.trend_findings),
+      JSON.stringify(data.competitor_insights),
+      JSON.stringify(data.technical_recommendations),
+      sourceUrls?.length || 12, // sources_analyzed
+      JSON.stringify(sourceUrls || []),
+      now, // last_web_search
+      now,
+      expiresAt,
+      now,
+    )
+
+    console.log(`[Research Cache] Cached results for "${keyword}" with ${sourceUrls?.length || 0} sources (expires in 48h)`)
+  } catch (error) {
+    console.error(`[Research Cache] Error caching "${keyword}":`, error)
+  }
+}
+
+/**
+ * Merge multiple research data sources (cached + fresh) into single ResearchBrief
+ */
+export function mergeResearchData(
+  sources: Map<string, CachedResearchData>,
+  concept: string,
+): Omit<ResearchBrief, 'sub_themes'> {
+  const allAesthetics = new Set<string>()
+  const allColorPalettes = new Set<string>()
+  const allOutfitTrends = new Set<string>()
+  const allSetDesigns = new Set<string>()
+  const allCompetitors = new Set<string>()
+  const allPatterns = new Set<string>()
+  const allOpportunities = new Set<string>()
+  const allLensOptions = new Set<string>()
+  const allLightingStyles = new Set<string>()
+  const allColorGrades = new Set<string>()
+  let technicalNotes = ''
+
+  for (const data of sources.values()) {
+    data.trend_findings.trending_aesthetics.forEach((a) => allAesthetics.add(a))
+    data.trend_findings.color_palettes.forEach((c) => allColorPalettes.add(c))
+    data.trend_findings.outfit_trends.forEach((o) => allOutfitTrends.add(o))
+    data.trend_findings.set_design_trends.forEach((s) => allSetDesigns.add(s))
+
+    data.competitor_insights.active_competitors.forEach((c) => allCompetitors.add(c))
+    data.competitor_insights.common_patterns.forEach((p) => allPatterns.add(p))
+    data.competitor_insights.differentiation_opportunities.forEach((o) => allOpportunities.add(o))
+
+    data.technical_recommendations.lens_options.forEach((l) => allLensOptions.add(l))
+    data.technical_recommendations.lighting_styles.forEach((l) => allLightingStyles.add(l))
+    data.technical_recommendations.color_grades.forEach((c) => allColorGrades.add(c))
+    if (data.technical_recommendations.notes) {
+      technicalNotes += (technicalNotes ? ' ' : '') + data.technical_recommendations.notes
+    }
+  }
+
+  return {
+    concept,
+    research_date: new Date().toISOString().split('T')[0],
+    sources_analyzed: sources.size * 12,
+    trend_findings: {
+      trending_aesthetics: Array.from(allAesthetics).slice(0, 6),
+      color_palettes: Array.from(allColorPalettes).slice(0, 5),
+      outfit_trends: Array.from(allOutfitTrends).slice(0, 6),
+      set_design_trends: Array.from(allSetDesigns).slice(0, 6),
+    },
+    competitor_insights: {
+      active_competitors: Array.from(allCompetitors).slice(0, 4),
+      common_patterns: Array.from(allPatterns).slice(0, 6),
+      differentiation_opportunities: Array.from(allOpportunities).slice(0, 5),
+    },
+    technical_recommendations: {
+      lens_options: Array.from(allLensOptions).slice(0, 4),
+      lighting_styles: Array.from(allLightingStyles).slice(0, 5),
+      color_grades: Array.from(allColorGrades).slice(0, 4),
+      notes: technicalNotes || 'Choose based on concept mood and requirements',
+    },
+  }
+}
+
+// ========================================
+// CLAUDE RESEARCH AGENT (Phase 2)
+// ========================================
+// Web intelligence functions moved to claudeAgent.ts
+// Claude agent has access to WebSearch MCP tool that server code doesn't

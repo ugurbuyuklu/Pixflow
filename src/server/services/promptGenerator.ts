@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
 import type { PromptOutput, ResearchBrief, SubTheme, VarietyScore } from '../utils/prompts.js'
-import { calculateVarietyScore, validatePrompt } from '../utils/prompts.js'
+import { calculateVarietyScore, isVagueOutfit, validateOutfitSpecificity, validatePrompt } from '../utils/prompts.js'
 import type { AnalyzedPrompt } from './vision.js'
 
 let openaiClient: OpenAI | null = null
@@ -270,9 +270,9 @@ function createFallbackPrompt(theme: SubTheme, concept: string): PromptOutput {
       atmosphere: `${theme.aesthetic} with tactile, aspirational quality`,
     },
     outfit: {
-      main: 'Elevated, concept-appropriate attire',
-      accessories: 'Layered gold jewelry, intentional details',
-      styling: `${theme.aesthetic} with fashion-forward edge`,
+      main: `FALLBACK SCAFFOLD - ${theme.aesthetic} garment REQUIRES SPECIFICS: [MUST specify: fabric type (silk/linen/leather/cotton), precise color name (not "neutral"), cut/style (bias-cut/oversized/fitted), fit description (loose/tailored), length (midi/ankle/knee)]`,
+      accessories: `Specific jewelry matching ${theme.aesthetic} [MUST detail: metal type (gold/silver/bronze), specific pieces (cuff/hoop/chain), placement]`,
+      styling: `${theme.aesthetic} styling with tactile details [MUST include: texture description, drape quality, finish type (matte/glossy/structured)]`,
     },
     camera: {
       lens: '85mm f/1.4 for creamy bokeh',
@@ -299,6 +299,42 @@ function createFallbackPrompt(theme: SubTheme, concept: string): PromptOutput {
   }
 }
 
+/**
+ * Generate a single prompt immediately (Phase 3: Streaming UX)
+ * Used for quick first prompt without waiting for full research
+ */
+export async function generateSinglePrompt(
+  concept: string,
+  researchBrief: ResearchBrief,
+  imageInsights?: AnalyzedPrompt,
+): Promise<PromptOutput> {
+  const client = await getOpenAI()
+
+  // Use first sub-theme for quick generation
+  const subTheme = researchBrief.sub_themes[0]
+
+  // Generate batch of 1
+  const batch = await generatePromptBatch(
+    client,
+    concept,
+    [subTheme],
+    researchBrief,
+    0,  // startIndex
+    imageInsights,
+  )
+
+  if (batch.length === 0) {
+    // Fallback if generation fails
+    return createFallbackPrompt(subTheme, concept)
+  }
+
+  return {
+    ...batch[0],
+    sub_theme: subTheme.name,
+    aesthetic: subTheme.aesthetic,
+  }
+}
+
 export async function generatePrompts(
   concept: string,
   count: number,
@@ -311,13 +347,35 @@ export async function generatePrompts(
   const subThemesToUse = distributeSubThemes(researchBrief.sub_themes, count)
 
   const batchSize = 2 // Reduced for detailed prompts
+  const BATCH_TIMEOUT = 90000 // 90 second timeout per batch
+
   for (let i = 0; i < count; i += batchSize) {
+    const batchCount = Math.min(batchSize, count - i)
+    console.log(`[generatePrompts] Starting batch ${i / batchSize + 1}/${Math.ceil(count / batchSize)} (${batchCount} prompts)`)
     const batchThemes = subThemesToUse.slice(i, Math.min(i + batchSize, count))
-    const batchPrompts = await generatePromptBatch(client, concept, batchThemes, researchBrief, i, imageInsights)
-    prompts.push(...batchPrompts)
-    onBatchDone?.(prompts.length, count)
+
+    // Add manual timeout wrapper
+    const batchPromise = generatePromptBatch(client, concept, batchThemes, researchBrief, i, imageInsights)
+    const timeoutPromise = new Promise<PromptOutput[]>((_, reject) =>
+      setTimeout(() => reject(new Error('Batch generation timeout after 90s')), BATCH_TIMEOUT)
+    )
+
+    try {
+      const batchPrompts = await Promise.race([batchPromise, timeoutPromise])
+      console.log(`[generatePrompts] Batch ${i / batchSize + 1} complete, received ${batchPrompts.length} prompts`)
+      prompts.push(...batchPrompts)
+      onBatchDone?.(prompts.length, count)
+    } catch (error) {
+      console.error(`[generatePrompts] Batch ${i / batchSize + 1} failed:`, error)
+      // Use fallback prompts for this batch
+      const fallbackBatch = batchThemes.map((theme) => createFallbackPrompt(theme, concept))
+      console.log(`[generatePrompts] Using ${fallbackBatch.length} fallback prompts for failed batch`)
+      prompts.push(...fallbackBatch)
+      onBatchDone?.(prompts.length, count)
+    }
   }
 
+  console.log(`[generatePrompts] All batches complete, total: ${prompts.length} prompts`)
   const varietyScore = calculateVarietyScore(prompts)
 
   return { prompts: prompts.slice(0, count), varietyScore }
@@ -398,7 +456,44 @@ ${CREATIVE_DIRECTOR_KNOWLEDGE}
 21. Prompt = Technical direction document for photographer/stylist/set designer
 22. Use "CRITICAL:" prefix for the ONE hero element
 23. If you want something, SAY IT EXPLICITLY - undefined = left to chance
-24. Goal: 8/10 outputs match the brief, not 1 lucky shot out of 10`
+24. Goal: 8/10 outputs match the brief, not 1 lucky shot out of 10
+
+## EXAMPLES: REJECT vs ACCEPT
+
+### Outfit Field - YOU WILL BE PENALIZED FOR VAGUENESS
+
+❌ REJECT (0/100 score):
+- "Elevated, concept-appropriate attire"
+- "Stylish outfit with intentional details"
+- "Casual wear suited to the concept"
+- "Nice dress" or "Beautiful gown"
+
+✅ ACCEPT (100/100 score):
+- "Bias-cut silk charmeuse slip dress in warm ivory, spaghetti straps, V-neckline, midi length, fabric draping loosely"
+- "Oversized linen blazer in terracotta with large bone buttons, rolled sleeves, relaxed fit, cropped at hip"
+- "Black leather biker jacket with asymmetric zip, quilted shoulders, fitted through waist, hitting at hip bone"
+
+### Lighting Field - NEVER GENERIC
+
+❌ REJECT:
+- "Natural lighting"
+- "Studio lighting setup"
+- "Soft light creating mood"
+
+✅ ACCEPT:
+- "Single key light from camera-left at 45° angle, 5600K daylight balanced, creating Rembrandt triangle shadow on right cheek, minimal fill from white bounce card camera-right at 4:1 ratio, shadows falling naturally on right side proving leftward light source"
+
+### Pose Field - EVERY LIMB EXPLICITLY DEFINED
+
+❌ REJECT:
+- "Standing naturally"
+- "Relaxed pose"
+- "Arms at sides"
+
+✅ ACCEPT:
+- "Standing with weight on left foot, right leg bent slightly at knee with heel lifted. Left arm raised to run fingers through hair at crown, elbow bent 90°. Right hand resting on left hip, fingers splayed. Torso twisted 15° toward camera, shoulders level."
+
+## ENFORCEMENT: IF YOUR OUTPUT CONTAINS VAGUE LANGUAGE, IT WILL BE REJECTED`
 
     const userPrompt = `Generate ${themes.length} scroll-stopping prompts for "${concept}".
 
@@ -461,8 +556,9 @@ Create variations blending this reference style with the concept. Do NOT copy th
         : ''
     }`
 
+    console.log(`[generatePromptBatch] Calling OpenAI for ${themes.length} prompts...`)
     const response = await client.chat.completions.create({
-      model: 'gpt-5.2',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'system',
@@ -473,20 +569,73 @@ Create variations blending this reference style with the concept. Do NOT copy th
           content: userPrompt,
         },
       ],
-      temperature: 0.85,
-      max_tokens: 8000,
-      reasoning_effort: 'none',
+      temperature: 0.6,
+      max_tokens: 7000,
       response_format: { type: 'json_object' },
     })
+    console.log(`[generatePromptBatch] OpenAI response received`)
 
     const content = response.choices[0]?.message?.content
     if (!content) return fallbackPrompts
+
     const parsed = safeJsonParse<{ prompts?: PromptOutput[] }>(content, { prompts: fallbackPrompts })
-    return parsed.prompts ?? fallbackPrompts
+    const generatedPrompts = parsed.prompts ?? fallbackPrompts
+
+    // Quality gate: Check for vague language
+    const qualityIssues: string[] = []
+    for (const prompt of generatedPrompts) {
+      const outfitCheck = validateOutfitSpecificity(prompt.outfit?.main || '')
+      if (!outfitCheck.valid) {
+        qualityIssues.push(`Prompt "${prompt.style?.substring(0, 30)}...": ${outfitCheck.reason}`)
+      }
+    }
+
+    // Log quality check results
+    if (generatedPrompts.length > 0) {
+      const firstOutfit = generatedPrompts[0]?.outfit?.main || ''
+      console.log('[Prompts] First outfit generated:', firstOutfit.substring(0, 60))
+      console.log('[Prompts] Contains vague language:', isVagueOutfit(firstOutfit))
+    }
+
+    if (qualityIssues.length > 0) {
+      console.warn('[Prompts] Generated prompts have quality issues:', qualityIssues)
+      // Log but don't fail - let scoring system track this
+    }
+
+    return generatedPrompts
   } catch (error) {
     console.error('[Prompts] Batch generation failed:', error)
     return fallbackPrompts
   }
+}
+
+export async function generatePromptsForMultipleConcepts(
+  concepts: string[],
+  countPerConcept: number,
+  research: ResearchBrief,
+  imageInsights?: AnalyzedPrompt,
+): Promise<PromptOutput[]> {
+  console.log(`[Prompts] Starting parallel generation for ${concepts.length} concepts, ${countPerConcept} each`)
+
+  // Generate prompts for all concepts in parallel
+  const generationPromises = concepts.map(async (concept) => {
+    try {
+      const prompts = await generatePromptBatch(concept, countPerConcept, research, imageInsights)
+      console.log(`[Prompts] Generated ${prompts.length} prompts for concept: "${concept}"`)
+      return prompts
+    } catch (error) {
+      console.error(`[Prompts] Failed to generate prompts for concept "${concept}":`, error)
+      // Return empty array on failure so other concepts can still succeed
+      return []
+    }
+  })
+
+  const results = await Promise.all(generationPromises)
+  const allPrompts = results.flat()
+
+  console.log(`[Prompts] Parallel generation complete: ${allPrompts.length} total prompts`)
+
+  return allPrompts
 }
 
 export function validateVariety(prompts: PromptOutput[]): VarietyScore {
@@ -570,9 +719,8 @@ REQUIREMENTS:
 Return only the JSON object.`,
       },
     ],
-    temperature: 0.75,
-    max_tokens: 4000,
-    reasoning_effort: 'none',
+    temperature: 0.65,
+    max_tokens: 3500,
     response_format: { type: 'json_object' },
   })
 
