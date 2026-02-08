@@ -220,7 +220,7 @@ export default function AssetMonsterPage() {
   } = useGenerationStore()
 
   const { prompts, concepts } = usePromptStore()
-  const concept = concepts.find((c) => c.trim()) || ''
+  const concept = concepts.find((c) => c.value.trim())?.value || ''
   const { navigate } = useNavigationStore()
 
   const {

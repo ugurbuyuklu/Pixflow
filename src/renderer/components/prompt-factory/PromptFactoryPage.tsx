@@ -41,7 +41,7 @@ function extractMood(prompt: GeneratedPrompt): string {
 
 function generateFavoriteName(prompt: GeneratedPrompt, index: number): string {
   const concepts = usePromptStore.getState().concepts
-  const concept = concepts.find((c) => c.trim()) || ''
+  const concept = concepts.find((c) => c.value.trim())?.value || ''
   const styleWords = prompt.style?.split(' ').slice(0, 4).join(' ')
   if (concept) return `${concept} #${index + 1}`
   if (styleWords) return styleWords.length > 35 ? `${styleWords.slice(0, 35)}...` : styleWords
@@ -94,7 +94,7 @@ export default function PromptFactoryPage() {
     setReferenceImage,
   } = promptStore
 
-  const activeConcepts = concepts.filter((c) => c.trim())
+  const activeConcepts = concepts.filter((c) => c.value.trim())
   const totalPrompts = activeConcepts.length * count
 
   const [elapsed, setElapsed] = useState(0)
@@ -114,6 +114,19 @@ export default function PromptFactoryPage() {
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [progressDone, progressStartedAt])
+
+  // Cleanup blob URLs on unmount to prevent memory leaks
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional cleanup on unmount only, reads current store state in cleanup
+  useEffect(() => {
+    return () => {
+      const currentRefPreview = promptStore.referencePreview
+      const currentAnalyzeEntries = promptStore.analyzeEntries
+      if (currentRefPreview) URL.revokeObjectURL(currentRefPreview)
+      for (const entry of currentAnalyzeEntries) {
+        if (entry.preview.startsWith('blob:')) URL.revokeObjectURL(entry.preview)
+      }
+    }
+  }, [])
 
   const handleSendToMonster = () => {
     generationStore.selectAllPrompts(prompts.length)
@@ -439,12 +452,11 @@ export default function PromptFactoryPage() {
 
         {/* Concept rows */}
         {concepts.map((c, i) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: concept rows are append/remove only
-          <div key={i} className="flex items-end gap-3">
+          <div key={c.id} className="flex items-end gap-3">
             <div className="flex-1">
               <Input
                 label={i === 0 ? 'Concept' : `Concept ${i + 1}`}
-                value={c}
+                value={c.value}
                 onChange={(e) => updateConcept(i, e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !loading && activeConcepts.length > 0 && generate()}
                 placeholder="e.g., Christmas, Halloween, Summer Beach..."

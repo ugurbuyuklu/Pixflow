@@ -20,8 +20,13 @@ export interface AnalyzeEntry {
   copied: boolean
 }
 
+export interface ConceptEntry {
+  id: string
+  value: string
+}
+
 interface PromptState {
-  concepts: string[]
+  concepts: ConceptEntry[]
   count: number
   loading: boolean
   prompts: GeneratedPrompt[]
@@ -45,7 +50,7 @@ interface PromptState {
   addConcept: () => void
   duplicateConcept: (index: number) => void
   removeConcept: (index: number) => void
-  setConcepts: (concepts: string[]) => void
+  setConcepts: (concepts: string[] | ConceptEntry[]) => void
   setCount: (count: number) => void
   setPromptMode: (mode: 'concept' | 'image') => void
   setSelectedIndex: (index: number | null) => void
@@ -71,8 +76,12 @@ interface PromptState {
 
 let abortController: AbortController | null = null
 
+function generateId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+}
+
 export const usePromptStore = create<PromptState>()((set, get) => ({
-  concepts: [''],
+  concepts: [{ id: generateId(), value: '' }],
   count: 1,
   loading: false,
   prompts: [],
@@ -96,21 +105,27 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
     set((state) => {
       if (index < 0 || index >= state.concepts.length) return state
       const updated = [...state.concepts]
-      updated[index] = value
+      updated[index] = { ...updated[index], value }
       return { concepts: updated }
     }),
-  addConcept: () => set((state) => ({ concepts: [...state.concepts, ''] })),
+  addConcept: () => set((state) => ({ concepts: [...state.concepts, { id: generateId(), value: '' }] })),
   duplicateConcept: (index) =>
     set((state) => {
-      const source = state.concepts[index] ?? ''
-      return { concepts: [...state.concepts, source] }
+      const source = state.concepts[index]
+      return { concepts: [...state.concepts, { id: generateId(), value: source?.value ?? '' }] }
     }),
   removeConcept: (index) =>
     set((state) => {
       if (state.concepts.length <= 1) return state
       return { concepts: state.concepts.filter((_, i) => i !== index) }
     }),
-  setConcepts: (concepts) => set({ concepts: concepts.length > 0 ? concepts : [''] }),
+  setConcepts: (concepts) =>
+    set({
+      concepts:
+        concepts.length > 0
+          ? concepts.map((c) => (typeof c === 'string' ? { id: generateId(), value: c } : c))
+          : [{ id: generateId(), value: '' }],
+    }),
   setCount: (count) =>
     set({
       count: Math.max(PROMPT_GENERATE_MIN, Math.min(PROMPT_GENERATE_MAX, count)),
@@ -137,7 +152,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
 
   generate: async () => {
     const { concepts, count, referenceImage } = get()
-    const activeConcepts = concepts.filter((c) => c.trim())
+    const activeConcepts = concepts.filter((c) => c.value.trim()).map((c) => c.value)
 
     if (activeConcepts.length === 0 && referenceImage) {
       get().addAnalyzeFiles([referenceImage])
@@ -403,7 +418,54 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
     const pending = analyzeEntries
       .map((e, i) => ({ entry: e, index: i }))
       .filter(({ entry }) => !entry.prompt && !entry.loading)
-    await Promise.all(pending.map(({ index }) => get().analyzeEntry(index)))
+
+    if (pending.length === 0) return
+
+    // Mark all pending entries as loading first to prevent double-analysis
+    set((state) => {
+      const updated = [...state.analyzeEntries]
+      for (const { index } of pending) {
+        updated[index] = { ...updated[index], loading: true, error: null }
+      }
+      return { analyzeEntries: updated }
+    })
+
+    // Then analyze all in parallel
+    await Promise.allSettled(
+      pending.map(async ({ index }) => {
+        const entry = get().analyzeEntries[index]
+        if (!entry) return
+
+        try {
+          const formData = new FormData()
+          formData.append('image', entry.file)
+
+          const res = await authFetch(apiUrl('/api/generate/analyze-image'), {
+            method: 'POST',
+            body: formData,
+          })
+
+          if (!res.ok) {
+            const raw = await res.json().catch(() => ({}))
+            throw new Error(getApiError(raw, 'Image analysis failed'))
+          }
+
+          const raw = await res.json()
+          const data = unwrapApiData<{ prompt: GeneratedPrompt }>(raw)
+          set((state) => {
+            const updated = [...state.analyzeEntries]
+            updated[index] = { ...updated[index], loading: false, prompt: data.prompt }
+            return { analyzeEntries: updated }
+          })
+        } catch (err) {
+          set((state) => {
+            const updated = [...state.analyzeEntries]
+            updated[index] = { ...updated[index], loading: false, error: parseError(err) }
+            return { analyzeEntries: updated }
+          })
+        }
+      }),
+    )
   },
 
   copyAnalyzedEntry: async (index) => {
@@ -448,7 +510,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
     const prev = get().referencePreview
     if (prev) URL.revokeObjectURL(prev)
     set({
-      concepts: [''],
+      concepts: [{ id: generateId(), value: '' }],
       prompts: [],
       selectedIndex: null,
       editingPromptText: '',
