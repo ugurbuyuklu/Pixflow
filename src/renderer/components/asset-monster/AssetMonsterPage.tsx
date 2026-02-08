@@ -21,7 +21,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { apiUrl, assetUrl, authFetch, getApiError, unwrapApiData } from '../../lib/api'
 import {
@@ -238,6 +238,24 @@ export default function AssetMonsterPage() {
     },
   })
 
+  const batchStartTime = useRef<number | null>(null)
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (batchLoading && !batchStartTime.current) {
+      batchStartTime.current = Date.now()
+    }
+    if (!batchLoading) {
+      batchStartTime.current = null
+      setElapsed(0)
+      return
+    }
+    const tick = () => setElapsed(Math.floor((Date.now() - (batchStartTime.current ?? Date.now())) / 1000))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [batchLoading])
+
   useEffect(() => {
     loadAvatars()
   }, [loadAvatars])
@@ -296,6 +314,10 @@ export default function AssetMonsterPage() {
   }
 
   const totalImages = promptSource === 'custom' ? customPromptCount : selectedPrompts.size
+  const completedCount = batchProgress?.completedImages ?? 0
+  const totalCount = batchProgress?.totalImages ?? totalImages
+  const avgPerImage = completedCount > 0 ? elapsed / completedCount : 0
+  const remainingSeconds = completedCount > 0 ? Math.ceil(avgPerImage * (totalCount - completedCount)) : 0
 
   return (
     <div className="grid grid-cols-3 gap-6">
@@ -534,7 +556,7 @@ Examples:
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-8 gap-2 max-h-[400px] overflow-auto">
+                <div className="flex gap-2 overflow-x-auto pb-2">
                   {avatars.map((avatar) => {
                     const isSelected = referenceImages.some((f) => f.name === avatar.filename)
                     return (
@@ -542,7 +564,7 @@ Examples:
                         type="button"
                         key={avatar.filename}
                         onClick={() => selectAvatar(avatar)}
-                        className={`aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 relative ${
+                        className={`w-20 shrink-0 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 relative ${
                           isSelected
                             ? 'border-brand-500 ring-2 ring-brand-500/50'
                             : 'border-transparent hover:border-surface-200'
@@ -608,9 +630,22 @@ Examples:
           }
           className="w-full"
         >
-          {batchLoading
-            ? `Generating ${batchProgress?.completedImages || 0}/${batchProgress?.totalImages || totalImages}...`
-            : `Generate ${totalImages} Image${totalImages !== 1 ? 's' : ''}`}
+          {batchLoading ? (
+            <span className="flex items-center gap-2">
+              Generating {completedCount}/{totalCount}...
+              {completedCount > 0 && (
+                <span className="text-white/60">
+                  ~
+                  {remainingSeconds >= 60
+                    ? `${Math.floor(remainingSeconds / 60)}m ${remainingSeconds % 60}s`
+                    : `${remainingSeconds}s`}{' '}
+                  remaining
+                </span>
+              )}
+            </span>
+          ) : (
+            `Generate ${totalImages} Image${totalImages !== 1 ? 's' : ''}`
+          )}
         </Button>
 
         {batchError && (
@@ -723,6 +758,8 @@ Examples:
                     <Loader2 className="w-6 h-6 animate-spin text-warning" />
                   ) : img.status === 'failed' ? (
                     <XCircle className="w-6 h-6 text-danger" />
+                  ) : batchLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-surface-300" />
                   ) : (
                     <Image className="w-6 h-6 text-surface-400" />
                   )}

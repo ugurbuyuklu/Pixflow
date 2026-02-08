@@ -492,13 +492,13 @@ export default function PromptFactoryPage() {
 
       {/* Prompts Grid */}
       {prompts.length > 0 && (
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-3 gap-6 h-[calc(100vh-420px)] min-h-[320px]">
           {/* Prompt List */}
-          <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-4 flex flex-col">
+          <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-4 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-surface-900">Prompts ({prompts.length})</h3>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-2 mb-4">
+            <div className="flex-1 overflow-y-auto space-y-2 mb-4 min-h-0">
               {prompts.map((prompt, i) => (
                 <button
                   type="button"
@@ -543,7 +543,7 @@ export default function PromptFactoryPage() {
           </div>
 
           {/* Preview + Edit */}
-          <div className="col-span-2 bg-surface-100/50 rounded-xl border border-surface-200/50 p-4 flex flex-col">
+          <div className="col-span-2 bg-surface-100/50 rounded-xl border border-surface-200/50 p-4 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-surface-900">Prompt #{(selectedIndex ?? 0) + 1}</h3>
               <div className="flex items-center gap-2">
@@ -580,7 +580,7 @@ export default function PromptFactoryPage() {
                 editingPromptText ?? (selectedIndex != null ? JSON.stringify(prompts[selectedIndex], null, 2) : '')
               }
               onChange={(e) => setEditingPromptText(e.target.value)}
-              className="flex-1 w-full bg-surface-50/50 border border-surface-200 rounded-lg p-4 text-xs text-surface-500 font-mono resize-none focus:outline-none focus:border-brand-500 transition-colors whitespace-pre-wrap"
+              className="flex-1 min-h-0 w-full bg-surface-50/50 border border-surface-200 rounded-lg p-4 text-xs text-surface-500 font-mono resize-none focus:outline-none focus:border-brand-500 transition-colors whitespace-pre-wrap"
               spellCheck={false}
             />
           </div>
