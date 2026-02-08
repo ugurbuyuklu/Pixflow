@@ -18,7 +18,7 @@ export default function LibraryPage() {
     addToFavorites,
     removeFromFavorites,
   } = useHistoryStore()
-  const { setPrompts, setConcept } = usePromptStore()
+  const { setPrompts, setConcepts } = usePromptStore()
   const { navigate } = useNavigationStore()
 
   useEffect(() => {
@@ -105,7 +105,7 @@ export default function LibraryPage() {
                       onClick={(e) => {
                         e.stopPropagation()
                         setPrompts(entry.prompts as GeneratedPrompt[])
-                        setConcept(entry.concept)
+                        setConcepts([entry.concept])
                         navigate('prompts')
                       }}
                       className="px-2 text-brand-300 bg-brand-600/30 hover:bg-brand-600/50"

@@ -163,16 +163,20 @@ export function parseError(err: unknown, response?: Response): ErrorInfo {
           message: 'Too many requests. Please wait a moment before trying again.',
           type: 'warning',
         }
-      case 400:
-        return {
-          message: 'Invalid input. Please check your concept and try again.',
-          type: 'error',
-        }
-      case 500:
-        return {
-          message: 'Server error. The AI service might be temporarily unavailable.',
-          type: 'error',
-        }
+      case 400: {
+        const detail =
+          err instanceof Error && err.message && !err.message.startsWith('HTTP ')
+            ? err.message
+            : 'Invalid input. Please check your concept and try again.'
+        return { message: detail, type: 'error' }
+      }
+      case 500: {
+        const detail =
+          err instanceof Error && err.message && !err.message.startsWith('HTTP ')
+            ? err.message
+            : 'Server error. The AI service might be temporarily unavailable.'
+        return { message: detail, type: 'error' }
+      }
       case 503:
         return {
           message: 'Service unavailable. Please try again later.',

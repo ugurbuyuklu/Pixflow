@@ -7,7 +7,7 @@ This document is a machine-readable handoff for another AI agent to understand:
 3. what is still pending.
 
 Date: 2026-02-07
-Last updated: 2026-02-08 (Session 7: Gemini 3 Flash vision, Monster UI overhaul — batch history, zip downloads, reference scroll)
+Last updated: 2026-02-08 (Session 8: Monster UX polish, reference image in prompt generation, avatar scroll, prompt edit button)
 Project root: `/Users/pixery/Projects/pixflow`
 
 ---
@@ -873,6 +873,53 @@ System model:
 - Changed reference image thumbnails from `flex-wrap` (multi-row) to `overflow-x-auto` (single-row horizontal scroll).
 - Thumbnails reduced from `w-16 h-16` to `w-14 h-14` with `shrink-0` to prevent flex shrinking.
 - Saves vertical space in the right panel.
+- File: `src/renderer/components/asset-monster/AssetMonsterPage.tsx`
+
+44. Monster UI — generation ETA + spinner placeholders + prompt box height (Session 8):
+- Added remaining time estimate during batch generation: tracks elapsed time via `useRef`/`useEffect`, computes average time per completed image, displays `~Xm Xs remaining`.
+- Added spinning `Loader2` icon inside queued placeholder cards during active generation (replaces static image icon).
+- Fixed prompt box height to `h-[calc(100vh-420px)] min-h-[320px]` for consistent sizing relative to viewport.
+- Fixed TDZ (Temporal Dead Zone) crash: `totalCount` referenced `totalImages` before its `const` declaration — moved derived calculations after definition.
+- File: `src/renderer/components/asset-monster/AssetMonsterPage.tsx`
+
+45. Monster UI — avatar gallery horizontal scroll (Session 8):
+- Changed avatar gallery from `grid grid-cols-8` to `flex gap-2 overflow-x-auto pb-2` with `w-20 shrink-0` on each avatar button.
+- Consistent single-row scroll pattern across all avatar galleries.
+- File: `src/renderer/components/asset-monster/AssetMonsterPage.tsx`
+
+46. Avatar Studio — gallery horizontal scroll (Session 8):
+- Changed avatar gallery from `grid grid-cols-5 gap-2 max-h-[300px] overflow-auto` to `flex gap-2 overflow-x-auto pb-2` with `w-20 shrink-0`.
+- File: `src/renderer/components/avatar-studio/AvatarStudioPage.tsx`
+
+47. The Machine — avatar gallery horizontal scroll (Session 8):
+- Changed avatar gallery from `grid grid-cols-5 gap-2 max-h-[200px] overflow-auto` to `flex gap-2 overflow-x-auto pb-2` with `w-20 shrink-0`.
+- File: `src/renderer/components/machine/MachinePage.tsx`
+
+48. Reference image in prompt generation pipeline (Session 8):
+- Added optional reference image upload to "Create Prompts" tab (formerly "Concept to Prompts").
+- Frontend: `referenceImage`/`referencePreview` state in promptStore, `setReferenceImage` action, `generate()` switches to FormData when image present.
+- UI: small image upload button (ImagePlus icon) next to concept input, thumbnail preview with X to remove.
+- Fallback: if image-only (no concept text), auto-switches to Image-to-Prompt mode and analyzes.
+- Server: multer middleware on `/api/prompts/generate`, analyzes image via Gemini 3 Flash (`analyzeImage`), passes `imageInsights` to `generatePrompts()`.
+- Prompt generator: appends REFERENCE IMAGE ANALYSIS section to GPT-4o user message with style, lighting, set design, camera, effects, outfit from analysis.
+- Files:
+  - `src/renderer/stores/promptStore.ts`
+  - `src/renderer/components/prompt-factory/PromptFactoryPage.tsx`
+  - `src/server/createApp.ts`
+  - `src/server/services/promptGenerator.ts`
+
+49. Rename "Concept to Prompts" → "Create Prompts" (Session 8):
+- Updated sub-tab label and mode description in PromptFactoryPage.
+- File: `src/renderer/components/prompt-factory/PromptFactoryPage.tsx`
+
+50. Monster UI — prompt edit button (Session 8):
+- Added Pencil icon button on each generated prompt card.
+- Clicking switches to Custom prompt tab and pastes the prompt JSON (stringified with formatting).
+- Uses `stopPropagation()` to prevent card's toggle selection from firing.
+- File: `src/renderer/components/asset-monster/AssetMonsterPage.tsx`
+
+51. Monster UI — "Double click to preview" tooltip (Session 8):
+- Added `title="Double click to preview"` to all completed image thumbnails in current batch and previous generation batches.
 - File: `src/renderer/components/asset-monster/AssetMonsterPage.tsx`
 
 ---

@@ -9,6 +9,9 @@ import {
   Layers,
   Lightbulb,
   Loader2,
+  Pencil,
+  Plus,
+  Save,
   ScanSearch,
   Sparkles,
   Star,
@@ -22,6 +25,7 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { PROMPT_GENERATE_MAX, PROMPT_GENERATE_MIN } from '../../../constants/limits'
+import { apiUrl, authFetch, getApiError, unwrapApiData } from '../../lib/api'
 import { useGenerationStore } from '../../stores/generationStore'
 import { useHistoryStore } from '../../stores/historyStore'
 import { useNavigationStore } from '../../stores/navigationStore'
@@ -36,7 +40,8 @@ function extractMood(prompt: GeneratedPrompt): string {
 }
 
 function generateFavoriteName(prompt: GeneratedPrompt, index: number): string {
-  const concept = usePromptStore.getState().concept
+  const concepts = usePromptStore.getState().concepts
+  const concept = concepts.find((c) => c.trim()) || ''
   const styleWords = prompt.style?.split(' ').slice(0, 4).join(' ')
   if (concept) return `${concept} #${index + 1}`
   if (styleWords) return styleWords.length > 35 ? `${styleWords.slice(0, 35)}...` : styleWords
@@ -50,7 +55,7 @@ export default function PromptFactoryPage() {
   const { navigate } = useNavigationStore()
 
   const {
-    concept,
+    concepts,
     count,
     loading,
     prompts,
@@ -63,7 +68,10 @@ export default function PromptFactoryPage() {
     varietyScore,
     promptMode,
     analyzeEntries,
-    setConcept,
+    updateConcept,
+    addConcept,
+    duplicateConcept,
+    removeConcept,
     setCount,
     setPromptMode,
     setSelectedIndex,
@@ -78,6 +86,7 @@ export default function PromptFactoryPage() {
     analyzeEntry,
     analyzeAllEntries,
     copyAnalyzedEntry,
+    updateAnalyzeEntryPrompt,
     setPrompts,
     generationProgress,
     referenceImage,
@@ -85,17 +94,26 @@ export default function PromptFactoryPage() {
     setReferenceImage,
   } = promptStore
 
+  const activeConcepts = concepts.filter((c) => c.trim())
+  const totalPrompts = activeConcepts.length * count
+
   const [elapsed, setElapsed] = useState(0)
   const [expandedEntry, setExpandedEntry] = useState<number | null>(null)
+  const [editingEntry, setEditingEntry] = useState<number | null>(null)
+  const [editingText, setEditingText] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
   const refImageInput = useRef<HTMLInputElement>(null)
 
+  const progressStartedAt = generationProgress?.startedAt ?? 0
+  const progressDone = !generationProgress || generationProgress.step === 'done'
   useEffect(() => {
-    if (!generationProgress || generationProgress.step === 'done') return
-    const tick = () => setElapsed(Math.floor((Date.now() - generationProgress.startedAt) / 1000))
+    if (progressDone || !progressStartedAt) return
+    const tick = () => setElapsed(Math.floor((Date.now() - progressStartedAt) / 1000))
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [generationProgress])
+  }, [progressDone, progressStartedAt])
 
   const handleSendToMonster = () => {
     generationStore.selectAllPrompts(prompts.length)
@@ -227,6 +245,23 @@ export default function PromptFactoryPage() {
                             <Button
                               variant="ghost-muted"
                               size="xs"
+                              icon={<Pencil className="w-3 h-3" />}
+                              onClick={() => {
+                                if (editingEntry === i) {
+                                  setEditingEntry(null)
+                                  setEditError(null)
+                                } else {
+                                  setEditingEntry(i)
+                                  setEditingText(JSON.stringify(entry.prompt, null, 2))
+                                  setEditError(null)
+                                }
+                              }}
+                            >
+                              {editingEntry === i ? 'Cancel' : 'Edit'}
+                            </Button>
+                            <Button
+                              variant="ghost-muted"
+                              size="xs"
                               onClick={() => setExpandedEntry(expandedEntry === i ? null : i)}
                             >
                               {expandedEntry === i ? 'Collapse' : 'View'}
@@ -251,13 +286,67 @@ export default function PromptFactoryPage() {
                       </div>
                     )}
 
-                    {entry.prompt && !entry.error && (
-                      <p className="text-xs text-surface-500 truncate">{entry.prompt.style || 'Analyzed'}</p>
+                    {entry.prompt && !entry.error && editingEntry !== i && (
+                      <p className="text-xs text-surface-500 break-words">{entry.prompt.style || 'Analyzed'}</p>
                     )}
 
                     {entry.loading && <p className="text-xs text-brand-400">Analyzing with Gemini 3 Flash...</p>}
 
-                    {expandedEntry === i && entry.prompt && (
+                    {editingEntry === i && entry.prompt && (
+                      <div className="space-y-2">
+                        <textarea
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          className="w-full h-48 bg-surface-100 border border-surface-200 rounded-lg p-3 text-xs text-surface-500 font-mono resize-y focus:outline-none focus:border-brand-500 transition-colors whitespace-pre-wrap"
+                          spellCheck={false}
+                        />
+                        {editError && (
+                          <p className="text-danger text-xs flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            {editError}
+                          </p>
+                        )}
+                        <Button
+                          variant="success"
+                          size="xs"
+                          icon={editSaving ? undefined : <Save className="w-3 h-3" />}
+                          loading={editSaving}
+                          disabled={editSaving}
+                          onClick={async () => {
+                            setEditSaving(true)
+                            setEditError(null)
+                            try {
+                              let parsed: GeneratedPrompt
+                              try {
+                                parsed = JSON.parse(editingText)
+                              } catch {
+                                const res = await authFetch(apiUrl('/api/prompts/text-to-json'), {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ text: editingText }),
+                                })
+                                if (!res.ok) {
+                                  const raw = await res.json().catch(() => ({}))
+                                  throw new Error(getApiError(raw, 'Failed to convert text'))
+                                }
+                                const raw = await res.json()
+                                parsed = unwrapApiData<{ prompt: GeneratedPrompt }>(raw).prompt
+                              }
+                              updateAnalyzeEntryPrompt(i, parsed)
+                              setEditingEntry(null)
+                            } catch (err) {
+                              setEditError(err instanceof Error ? err.message : 'Save failed')
+                            } finally {
+                              setEditSaving(false)
+                            }
+                          }}
+                        >
+                          Save Changes
+                        </Button>
+                      </div>
+                    )}
+
+                    {expandedEntry === i && editingEntry !== i && entry.prompt && (
                       <pre className="overflow-y-auto max-h-60 text-xs text-surface-500 bg-surface-100 rounded-lg p-3 whitespace-pre-wrap break-words">
                         {JSON.stringify(entry.prompt, null, 2)}
                       </pre>
@@ -335,7 +424,7 @@ export default function PromptFactoryPage() {
       </div>
 
       {/* Input Area */}
-      <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-6">
+      <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-6 space-y-3">
         <input
           ref={refImageInput}
           type="file"
@@ -347,16 +436,55 @@ export default function PromptFactoryPage() {
             e.target.value = ''
           }}
         />
-        <div className="flex items-end gap-4">
-          <div className="flex-1">
-            <Input
-              label="Concept"
-              value={concept}
-              onChange={(e) => setConcept(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !loading && concept.trim() && generate()}
-              placeholder="e.g., Christmas, Halloween, Summer Beach..."
-            />
+
+        {/* Concept rows */}
+        {concepts.map((c, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: concept rows are append/remove only
+          <div key={i} className="flex items-end gap-3">
+            <div className="flex-1">
+              <Input
+                label={i === 0 ? 'Concept' : `Concept ${i + 1}`}
+                value={c}
+                onChange={(e) => updateConcept(i, e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !loading && activeConcepts.length > 0 && generate()}
+                placeholder="e.g., Christmas, Halloween, Summer Beach..."
+              />
+            </div>
+            {concepts.length > 1 && (
+              <button
+                type="button"
+                onClick={() => removeConcept(i)}
+                className="p-2 text-surface-400 hover:text-danger transition-colors rounded-lg hover:bg-surface-100 shrink-0"
+                title="Remove concept"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
+        ))}
+
+        {/* Add + Duplicate buttons */}
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={() => addConcept()}
+            className="flex-1 h-11 border-2 border-dashed border-surface-200 rounded-lg flex items-center justify-center gap-2 text-surface-400 hover:border-brand-500 hover:text-brand-400 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="text-sm font-medium">Add Concept</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => duplicateConcept(concepts.length - 1)}
+            className="flex-1 h-11 border-2 border-dashed border-surface-200 rounded-lg flex items-center justify-center gap-2 text-surface-400 hover:border-brand-500 hover:text-brand-400 transition-colors"
+          >
+            <Copy className="w-5 h-5" />
+            <span className="text-sm font-medium">Duplicate</span>
+          </button>
+        </div>
+
+        {/* Controls row */}
+        <div className="flex items-end gap-4 pt-2 border-t border-surface-200/50">
           {referencePreview ? (
             <div className="relative group">
               <img
@@ -385,13 +513,14 @@ export default function PromptFactoryPage() {
           <div className="w-48">
             <Slider
               label="Prompts"
-              displayValue={count}
+              displayValue={totalPrompts}
               min={PROMPT_GENERATE_MIN}
               max={PROMPT_GENERATE_MAX}
               value={count}
               onChange={(e) => setCount(Number(e.currentTarget.value))}
             />
           </div>
+          <div className="flex-1" />
           <div>
             {loading ? (
               <Button variant="danger" size="lg" icon={<X className="w-5 h-5" />} onClick={cancelGenerate}>
@@ -403,9 +532,9 @@ export default function PromptFactoryPage() {
                 size="lg"
                 icon={<Sparkles className="w-5 h-5" />}
                 onClick={generate}
-                disabled={!concept.trim() && !referenceImage}
+                disabled={activeConcepts.length === 0 && !referenceImage}
               >
-                Generate
+                Generate{totalPrompts > 0 ? ` ${totalPrompts}` : ''}
               </Button>
             )}
           </div>

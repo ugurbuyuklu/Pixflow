@@ -99,3 +99,8 @@ body {
 .no-drag {
   -webkit-app-region: no-drag;
 }
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}

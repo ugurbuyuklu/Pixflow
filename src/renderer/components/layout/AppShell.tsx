@@ -80,8 +80,10 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-surface-0 text-surface-900">
-      <TopNav />
-      <ProductSelector />
+      <div className="sticky top-0 z-40 bg-surface-0">
+        <TopNav />
+        <ProductSelector />
+      </div>
       <div className="max-w-6xl mx-auto p-8">
         <PageTransition pageKey={activeTab}>
           <ErrorBoundary key={activeTab} fallbackTitle="This tab failed to load">

@@ -13,6 +13,7 @@ import {
   ImagePlus,
   List,
   Loader2,
+  Pencil,
   Play,
   Sparkles,
   Upload,
@@ -155,7 +156,8 @@ async function parseCustomPrompt(
         return null
       }
       setError(null)
-      return Array(customPromptCount).fill(adaptPromptFormat(parsed as Record<string, unknown>))
+      const adapted = adaptPromptFormat(parsed as Record<string, unknown>)
+      return Array.from({ length: customPromptCount }, () => structuredClone(adapted))
     } catch {
       setError('Invalid JSON format')
       return null
@@ -165,7 +167,7 @@ async function parseCustomPrompt(
   setError(null)
   const converted = await convertTextToPrompt(input, setError)
   if (!converted) return null
-  return Array(customPromptCount).fill(converted)
+  return Array.from({ length: customPromptCount }, () => structuredClone(converted))
 }
 
 export default function AssetMonsterPage() {
@@ -217,7 +219,8 @@ export default function AssetMonsterPage() {
     clearCompletedBatches,
   } = useGenerationStore()
 
-  const { prompts, concept } = usePromptStore()
+  const { prompts, concepts } = usePromptStore()
+  const concept = concepts.find((c) => c.trim()) || ''
   const { navigate } = useNavigationStore()
 
   const {
@@ -403,6 +406,18 @@ export default function AssetMonsterPage() {
                       <span className="font-mono text-xs text-surface-400">#{index + 1}</span>
                       <p className="text-sm break-words">{prompt.style}</p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setCustomPromptJson(JSON.stringify(prompt, null, 2))
+                        setPromptSource('custom')
+                      }}
+                      className="shrink-0 p-1 rounded text-surface-400 hover:text-brand-400 hover:bg-surface-200 transition-colors"
+                      title="Edit as custom prompt"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
                   </button>
                 ))}
               </div>
@@ -736,6 +751,17 @@ Examples:
                     }
                   }}
                   onDoubleClick={() => img.status === 'completed' && img.url && setPreviewImage(img.url)}
+                  title={
+                    img.status === 'completed'
+                      ? 'Double click to preview'
+                      : img.status === 'generating'
+                        ? 'Generating...'
+                        : img.status === 'failed'
+                          ? 'Generation failed'
+                          : batchLoading
+                            ? 'Queued'
+                            : undefined
+                  }
                   className={`relative aspect-[9/16] rounded-lg border-2 flex items-center justify-center ${
                     img.status === 'completed' && selectedResultImages.has(img.index)
                       ? 'border-brand-400 bg-brand-600/10 ring-2 ring-brand-400/30 cursor-pointer hover:scale-105 transition-all'
@@ -755,11 +781,27 @@ Examples:
                       className="w-full h-full object-cover rounded-lg"
                     />
                   ) : img.status === 'generating' ? (
-                    <Loader2 className="w-6 h-6 animate-spin text-warning" />
+                    <>
+                      <div className="absolute inset-0 overflow-hidden rounded-lg">
+                        <div
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-warning/10 to-transparent"
+                          style={{ animation: 'shimmer 1.5s infinite' }}
+                        />
+                      </div>
+                      <Loader2 className="w-6 h-6 animate-spin text-warning" />
+                    </>
                   ) : img.status === 'failed' ? (
                     <XCircle className="w-6 h-6 text-danger" />
                   ) : batchLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-surface-300" />
+                    <>
+                      <div className="absolute inset-0 overflow-hidden rounded-lg">
+                        <div
+                          className="absolute inset-0 bg-gradient-to-r from-transparent via-surface-300/10 to-transparent"
+                          style={{ animation: 'shimmer 2s infinite' }}
+                        />
+                      </div>
+                      <Loader2 className="w-5 h-5 animate-spin text-surface-300" />
+                    </>
                   ) : (
                     <Image className="w-6 h-6 text-surface-400" />
                   )}
@@ -910,6 +952,7 @@ Examples:
                         type="button"
                         key={img.index}
                         onClick={() => img.url && setPreviewImage(img.url)}
+                        title="Double click to preview"
                         className={`relative aspect-[9/16] rounded-lg border-2 ${entry.color} cursor-pointer hover:scale-105 transition-all overflow-hidden`}
                       >
                         <img

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { PROMPT_GENERATE_DEFAULT, PROMPT_GENERATE_MAX, PROMPT_GENERATE_MIN } from '../../constants/limits'
+import { PROMPT_GENERATE_MAX, PROMPT_GENERATE_MIN } from '../../constants/limits'
 import { apiUrl, authFetch, getApiError, unwrapApiData } from '../lib/api'
 import type { ErrorInfo, GeneratedPrompt, ResearchData, VarietyScore } from '../types'
 import { parseError } from '../types'
@@ -21,7 +21,7 @@ export interface AnalyzeEntry {
 }
 
 interface PromptState {
-  concept: string
+  concepts: string[]
   count: number
   loading: boolean
   prompts: GeneratedPrompt[]
@@ -41,7 +41,11 @@ interface PromptState {
   referenceImage: File | null
   referencePreview: string | null
 
-  setConcept: (concept: string) => void
+  updateConcept: (index: number, value: string) => void
+  addConcept: () => void
+  duplicateConcept: (index: number) => void
+  removeConcept: (index: number) => void
+  setConcepts: (concepts: string[]) => void
   setCount: (count: number) => void
   setPromptMode: (mode: 'concept' | 'image') => void
   setSelectedIndex: (index: number | null) => void
@@ -59,6 +63,7 @@ interface PromptState {
   analyzeEntry: (index: number) => Promise<void>
   analyzeAllEntries: () => Promise<void>
   copyAnalyzedEntry: (index: number) => Promise<void>
+  updateAnalyzeEntryPrompt: (index: number, prompt: GeneratedPrompt) => void
 
   setPrompts: (prompts: GeneratedPrompt[], selectedIndex?: number) => void
   reset: () => void
@@ -67,8 +72,8 @@ interface PromptState {
 let abortController: AbortController | null = null
 
 export const usePromptStore = create<PromptState>()((set, get) => ({
-  concept: '',
-  count: PROMPT_GENERATE_DEFAULT,
+  concepts: [''],
+  count: 1,
   loading: false,
   prompts: [],
   selectedIndex: null,
@@ -87,7 +92,25 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
   referenceImage: null,
   referencePreview: null,
 
-  setConcept: (concept) => set({ concept }),
+  updateConcept: (index, value) =>
+    set((state) => {
+      if (index < 0 || index >= state.concepts.length) return state
+      const updated = [...state.concepts]
+      updated[index] = value
+      return { concepts: updated }
+    }),
+  addConcept: () => set((state) => ({ concepts: [...state.concepts, ''] })),
+  duplicateConcept: (index) =>
+    set((state) => {
+      const source = state.concepts[index] ?? ''
+      return { concepts: [...state.concepts, source] }
+    }),
+  removeConcept: (index) =>
+    set((state) => {
+      if (state.concepts.length <= 1) return state
+      return { concepts: state.concepts.filter((_, i) => i !== index) }
+    }),
+  setConcepts: (concepts) => set({ concepts: concepts.length > 0 ? concepts : [''] }),
   setCount: (count) =>
     set({
       count: Math.max(PROMPT_GENERATE_MIN, Math.min(PROMPT_GENERATE_MAX, count)),
@@ -113,22 +136,25 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
   },
 
   generate: async () => {
-    const { concept, count, referenceImage } = get()
-    if (!concept.trim() && referenceImage) {
+    const { concepts, count, referenceImage } = get()
+    const activeConcepts = concepts.filter((c) => c.trim())
+
+    if (activeConcepts.length === 0 && referenceImage) {
       get().addAnalyzeFiles([referenceImage])
       get().setReferenceImage(null)
       set({ promptMode: 'image' })
       get().analyzeAllEntries()
       return
     }
-    if (!concept.trim()) {
-      set({ error: { message: 'Please enter a concept first.', type: 'warning' } })
+    if (activeConcepts.length === 0) {
+      set({ error: { message: 'Please enter at least one concept.', type: 'warning' } })
       return
     }
 
     abortController?.abort()
     abortController = new AbortController()
     const startedAt = Date.now()
+    const totalPrompts = activeConcepts.length * count
 
     set({
       loading: true,
@@ -137,90 +163,117 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
       selectedIndex: null,
       research: null,
       varietyScore: null,
-      generationProgress: { step: 'research', completed: 0, total: count, startedAt },
+      generationProgress: { step: 'research', completed: 0, total: totalPrompts, startedAt },
     })
 
-    let response: Response | undefined
+    const allPrompts: GeneratedPrompt[] = []
+    let lastResearch: ResearchData | null = null
+    let lastVarietyScore: VarietyScore | null = null
+    let lastResponse: Response | undefined
+
     try {
-      const fetchOptions: RequestInit = {
-        method: 'POST',
-        signal: abortController.signal,
-      }
+      for (const concept of activeConcepts) {
+        if (abortController.signal.aborted) return
 
-      if (referenceImage) {
-        const formData = new FormData()
-        formData.append('concept', concept)
-        formData.append('count', String(count))
-        formData.append('stream', 'true')
-        formData.append('referenceImage', referenceImage)
-        fetchOptions.body = formData
-      } else {
-        fetchOptions.headers = { 'Content-Type': 'application/json' }
-        fetchOptions.body = JSON.stringify({ concept, count, stream: true })
-      }
+        const fetchOptions: RequestInit = {
+          method: 'POST',
+          signal: abortController.signal,
+        }
 
-      response = await authFetch(apiUrl('/api/prompts/generate'), fetchOptions)
+        if (referenceImage) {
+          const formData = new FormData()
+          formData.append('concept', concept)
+          formData.append('count', String(count))
+          formData.append('stream', 'true')
+          formData.append('referenceImage', referenceImage)
+          fetchOptions.body = formData
+        } else {
+          fetchOptions.headers = { 'Content-Type': 'application/json' }
+          fetchOptions.body = JSON.stringify({ concept, count, stream: true })
+        }
 
-      if (!response.ok) {
-        const raw = await response.json().catch(() => ({}))
-        throw new Error(getApiError(raw, `HTTP ${response.status}`))
-      }
+        lastResponse = await authFetch(apiUrl('/api/prompts/generate'), fetchOptions)
 
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error('No response body')
+        if (!lastResponse.ok) {
+          const raw = await lastResponse.json().catch(() => ({}))
+          throw new Error(getApiError(raw, `HTTP ${lastResponse.status}`))
+        }
 
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let finalData: {
-        prompts: GeneratedPrompt[]
-        research: ResearchData | null
-        varietyScore: VarietyScore | null
-      } | null = null
+        const reader = lastResponse.body?.getReader()
+        if (!reader) throw new Error('No response body')
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let finalData: {
+          prompts: GeneratedPrompt[]
+          research: ResearchData | null
+          varietyScore: VarietyScore | null
+        } | null = null
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
 
-        let currentEvent = ''
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7)
-          } else if (line.startsWith('data: ') && currentEvent) {
-            const payload = JSON.parse(line.slice(6))
-            if (currentEvent === 'research') {
-              set({ research: payload, generationProgress: { step: 'prompts', completed: 0, total: count, startedAt } })
-            } else if (currentEvent === 'progress') {
-              set({
-                generationProgress: { step: 'prompts', completed: payload.completed, total: payload.total, startedAt },
-              })
-            } else if (currentEvent === 'done') {
-              finalData = payload
-            } else if (currentEvent === 'error') {
-              throw new Error(payload.message)
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          let currentEvent = ''
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              currentEvent = line.slice(7)
+            } else if (line.startsWith('data: ') && currentEvent) {
+              let payload: Record<string, unknown>
+              try {
+                payload = JSON.parse(line.slice(6))
+              } catch {
+                currentEvent = ''
+                continue
+              }
+              if (currentEvent === 'research') {
+                set({
+                  research: payload,
+                  generationProgress: { step: 'prompts', completed: allPrompts.length, total: totalPrompts, startedAt },
+                })
+              } else if (currentEvent === 'progress') {
+                set({
+                  generationProgress: {
+                    step: 'prompts',
+                    completed: allPrompts.length + payload.completed,
+                    total: totalPrompts,
+                    startedAt,
+                  },
+                })
+              } else if (currentEvent === 'done') {
+                finalData = payload
+              } else if (currentEvent === 'error') {
+                throw new Error(payload.message)
+              }
+              currentEvent = ''
             }
-            currentEvent = ''
           }
+        }
+
+        if (finalData) {
+          allPrompts.push(...finalData.prompts)
+          lastResearch = finalData.research
+          lastVarietyScore = finalData.varietyScore
+          set({ prompts: [...allPrompts] })
         }
       }
 
-      if (finalData) {
-        set({
-          prompts: finalData.prompts,
-          research: finalData.research,
-          varietyScore: finalData.varietyScore,
-          selectedIndex: finalData.prompts.length > 0 ? 0 : null,
-          editingPromptText: finalData.prompts.length > 0 ? JSON.stringify(finalData.prompts[0], null, 2) : '',
-          generationProgress: { step: 'done', completed: count, total: count, startedAt },
-        })
-      }
+      set({
+        prompts: allPrompts,
+        research: lastResearch,
+        varietyScore: lastVarietyScore,
+        selectedIndex: allPrompts.length > 0 ? 0 : null,
+        editingPromptText: allPrompts.length > 0 ? JSON.stringify(allPrompts[0], null, 2) : '',
+        generationProgress: { step: 'done', completed: totalPrompts, total: totalPrompts, startedAt },
+      })
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
-      const errorInfo = parseError(err, response)
-      if (response?.status === 429) {
+      const errorInfo = parseError(err, lastResponse)
+      if (lastResponse?.status === 429) {
         errorInfo.action = { label: 'Retry', onClick: () => get().generate() }
       }
       set({ error: errorInfo })
@@ -371,6 +424,14 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
     }, 2000)
   },
 
+  updateAnalyzeEntryPrompt: (index, prompt) => {
+    set((state) => {
+      const updated = [...state.analyzeEntries]
+      updated[index] = { ...updated[index], prompt }
+      return { analyzeEntries: updated }
+    })
+  },
+
   setPrompts: (prompts, selectedIndex = 0) => {
     set({
       prompts,
@@ -387,7 +448,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
     const prev = get().referencePreview
     if (prev) URL.revokeObjectURL(prev)
     set({
-      concept: '',
+      concepts: [''],
       prompts: [],
       selectedIndex: null,
       editingPromptText: '',
