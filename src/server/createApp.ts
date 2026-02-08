@@ -3,6 +3,7 @@ import path from 'node:path'
 import cors from 'cors'
 import express from 'express'
 import rateLimit from 'express-rate-limit'
+import multer from 'multer'
 import { PROMPT_GENERATE_DEFAULT, PROMPT_GENERATE_MAX, PROMPT_GENERATE_MIN } from '../constants/limits.js'
 import { validateServerEnv } from './config/validation.js'
 import { getDb, initDatabase } from './db/index.js'
@@ -22,6 +23,7 @@ import { addToHistory } from './services/history.js'
 import { generatePrompts, textToPrompt, validateAllPrompts } from './services/promptGenerator.js'
 import { analyzeResearchResults, performResearch } from './services/research.js'
 import { createPipelineSpan } from './services/telemetry.js'
+import { analyzeImage } from './services/vision.js'
 import { sendError, sendSuccess } from './utils/http.js'
 
 export interface ServerConfig {
@@ -66,6 +68,15 @@ export function createApp(config: ServerConfig): express.Express {
   app.use('/avatars', express.static(path.join(projectRoot, 'avatars')))
   app.use('/avatars_generated', express.static(path.join(projectRoot, 'avatars_generated')))
 
+  const promptUpload = multer({
+    dest: path.join(projectRoot, 'uploads'),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase()
+      cb(null, VALID_IMAGE_EXTENSIONS.includes(ext))
+    },
+  })
+
   app.get('/health', (_req, res) => {
     sendSuccess(res, { status: 'ok', timestamp: new Date().toISOString() })
   })
@@ -109,130 +120,146 @@ export function createApp(config: ServerConfig): express.Express {
     }
   })
 
-  app.post('/api/prompts/generate', requireAuth, apiLimiter, async (req: AuthRequest, res) => {
-    req.setTimeout(300_000)
-    res.setTimeout(300_000)
+  app.post(
+    '/api/prompts/generate',
+    requireAuth,
+    apiLimiter,
+    promptUpload.single('referenceImage'),
+    async (req: AuthRequest, res) => {
+      req.setTimeout(300_000)
+      res.setTimeout(300_000)
 
-    const concept = sanitizeConcept(req.body.concept)
-    const count = req.body.count ?? PROMPT_GENERATE_DEFAULT
-    const useStream = req.body.stream === true
+      const concept = sanitizeConcept(req.body.concept)
+      const rawCount = req.body.count ?? PROMPT_GENERATE_DEFAULT
+      const count = typeof rawCount === 'string' ? Number.parseInt(rawCount, 10) : rawCount
+      const useStream = req.body.stream === true || req.body.stream === 'true'
 
-    if (!concept) {
-      sendError(res, 400, 'Concept is required (1-100 characters)', 'INVALID_CONCEPT')
-      return
-    }
-
-    if (typeof count !== 'number' || !Number.isInteger(count)) {
-      sendError(res, 400, 'Count must be an integer', 'INVALID_COUNT')
-      return
-    }
-
-    const clampedCount = Math.max(PROMPT_GENERATE_MIN, Math.min(PROMPT_GENERATE_MAX, count))
-    const span = createPipelineSpan({
-      pipeline: 'prompts.generate',
-      userId: req.user?.id,
-      metadata: { count: clampedCount, conceptLength: concept.length },
-    })
-
-    const sendSSE = (event: string, data: unknown) => {
-      if (!useStream) return
-      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-    }
-
-    if (useStream) {
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-      })
-      sendSSE('status', { step: 'research', message: 'Researching...' })
-    }
-
-    try {
-      console.log(`[Research] Starting research for "${concept}"...`)
-      const researchBrief = await performResearch(concept)
-      const analysis = analyzeResearchResults(researchBrief)
-      console.log(`[Research] ${analysis.summary}`)
-
-      if (analysis.warnings.length > 0) {
-        console.log(`[Research] Warnings: ${analysis.warnings.join(', ')}`)
+      if (!concept) {
+        sendError(res, 400, 'Concept is required (1-100 characters)', 'INVALID_CONCEPT')
+        return
       }
 
-      const research = {
-        summary: analysis.summary,
-        insights: analysis.keyInsights,
-        warnings: analysis.warnings,
-        subThemes: researchBrief.sub_themes.map((s) => s.name),
+      if (typeof count !== 'number' || !Number.isInteger(count)) {
+        sendError(res, 400, 'Count must be an integer', 'INVALID_COUNT')
+        return
       }
 
-      sendSSE('research', research)
-
-      console.log(`[Prompts] Generating ${clampedCount} prompts...`)
-      const { prompts, varietyScore } = await generatePrompts(
-        concept,
-        clampedCount,
-        researchBrief,
-        (completed, total) => sendSSE('progress', { completed, total }),
-      )
-
-      const validation = validateAllPrompts(prompts)
-      if (!validation.allValid) {
-        const invalidCount = validation.results.filter((r) => !r.valid).length
-        console.log(`[Validation] ${invalidCount} prompts have issues`)
-      }
-
-      console.log(
-        `[Complete] Generated ${prompts.length} prompts, variety score: ${varietyScore.passed ? 'PASS' : 'FAIL'}`,
-      )
-
-      await addToHistory(req.user!.id, {
-        concept,
-        prompts,
-        promptCount: prompts.length,
-        source: 'generated',
+      const clampedCount = Math.max(PROMPT_GENERATE_MIN, Math.min(PROMPT_GENERATE_MAX, count))
+      const span = createPipelineSpan({
+        pipeline: 'prompts.generate',
+        userId: req.user?.id,
+        metadata: { count: clampedCount, conceptLength: concept.length },
       })
 
-      span.success({
-        generatedCount: prompts.length,
-        varietyPassed: varietyScore.passed,
-        warningCount: analysis.warnings.length,
-      })
-
-      const result = {
-        prompts,
-        concept,
-        count: prompts.length,
-        research,
-        varietyScore,
-        validation: {
-          allValid: validation.allValid,
-          issues: validation.results.filter((r) => !r.valid),
-        },
+      const sendSSE = (event: string, data: unknown) => {
+        if (!useStream) return
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
       }
 
       if (useStream) {
-        sendSSE('done', result)
-        res.end()
-      } else {
-        sendSuccess(res, result)
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+        })
+        sendSSE('status', { step: 'research', message: 'Researching...' })
       }
-    } catch (error) {
-      console.error('[Error]', error)
-      span.error(error)
-      if (useStream) {
-        sendSSE('error', { message: error instanceof Error ? error.message : 'Unknown error' })
-        res.end()
-      } else {
-        sendError(
-          res,
-          500,
-          'Failed to generate prompts',
-          'PROMPT_GENERATION_FAILED',
-          error instanceof Error ? error.message : 'Unknown error',
+
+      try {
+        let imageInsights: Awaited<ReturnType<typeof analyzeImage>> | undefined
+        if (req.file) {
+          console.log(`[Vision] Analyzing reference image: ${req.file.originalname}`)
+          sendSSE('status', { step: 'analyzing_image', message: 'Analyzing reference image...' })
+          imageInsights = await analyzeImage(req.file.path)
+          console.log(`[Vision] Image analysis complete: ${imageInsights.style?.slice(0, 80)}`)
+        }
+
+        console.log(`[Research] Starting research for "${concept}"...`)
+        const researchBrief = await performResearch(concept)
+        const analysis = analyzeResearchResults(researchBrief)
+        console.log(`[Research] ${analysis.summary}`)
+
+        if (analysis.warnings.length > 0) {
+          console.log(`[Research] Warnings: ${analysis.warnings.join(', ')}`)
+        }
+
+        const research = {
+          summary: analysis.summary,
+          insights: analysis.keyInsights,
+          warnings: analysis.warnings,
+          subThemes: researchBrief.sub_themes.map((s) => s.name),
+        }
+
+        sendSSE('research', research)
+
+        console.log(`[Prompts] Generating ${clampedCount} prompts...`)
+        const { prompts, varietyScore } = await generatePrompts(
+          concept,
+          clampedCount,
+          researchBrief,
+          (completed, total) => sendSSE('progress', { completed, total }),
+          imageInsights,
         )
+
+        const validation = validateAllPrompts(prompts)
+        if (!validation.allValid) {
+          const invalidCount = validation.results.filter((r) => !r.valid).length
+          console.log(`[Validation] ${invalidCount} prompts have issues`)
+        }
+
+        console.log(
+          `[Complete] Generated ${prompts.length} prompts, variety score: ${varietyScore.passed ? 'PASS' : 'FAIL'}`,
+        )
+
+        await addToHistory(req.user!.id, {
+          concept,
+          prompts,
+          promptCount: prompts.length,
+          source: 'generated',
+        })
+
+        span.success({
+          generatedCount: prompts.length,
+          varietyPassed: varietyScore.passed,
+          warningCount: analysis.warnings.length,
+        })
+
+        const result = {
+          prompts,
+          concept,
+          count: prompts.length,
+          research,
+          varietyScore,
+          validation: {
+            allValid: validation.allValid,
+            issues: validation.results.filter((r) => !r.valid),
+          },
+        }
+
+        if (useStream) {
+          sendSSE('done', result)
+          res.end()
+        } else {
+          sendSuccess(res, result)
+        }
+      } catch (error) {
+        console.error('[Error]', error)
+        span.error(error)
+        if (useStream) {
+          sendSSE('error', { message: error instanceof Error ? error.message : 'Unknown error' })
+          res.end()
+        } else {
+          sendError(
+            res,
+            500,
+            'Failed to generate prompts',
+            'PROMPT_GENERATION_FAILED',
+            error instanceof Error ? error.message : 'Unknown error',
+          )
+        }
       }
-    }
-  })
+    },
+  )
 
   app.get('/api/prompts/research/:concept', requireAuth, apiLimiter, async (req, res) => {
     const concept = sanitizeConcept(req.params.concept)

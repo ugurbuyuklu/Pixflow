@@ -5,6 +5,7 @@ import {
   CheckCircle,
   Clock,
   Copy,
+  ImagePlus,
   Layers,
   Lightbulb,
   Loader2,
@@ -18,7 +19,7 @@ import {
   WifiOff,
   X,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { PROMPT_GENERATE_MAX, PROMPT_GENERATE_MIN } from '../../../constants/limits'
 import { useGenerationStore } from '../../stores/generationStore'
@@ -79,10 +80,14 @@ export default function PromptFactoryPage() {
     copyAnalyzedEntry,
     setPrompts,
     generationProgress,
+    referenceImage,
+    referencePreview,
+    setReferenceImage,
   } = promptStore
 
   const [elapsed, setElapsed] = useState(0)
   const [expandedEntry, setExpandedEntry] = useState<number | null>(null)
+  const refImageInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!generationProgress || generationProgress.step === 'done') return
@@ -115,7 +120,7 @@ export default function PromptFactoryPage() {
       <div className="space-y-6">
         <div className="flex items-center gap-4 mb-6">
           <Button variant="ghost-muted" size="md" onClick={() => setPromptMode('concept')}>
-            Concept to Prompts
+            Create Prompts
           </Button>
           <Button variant="primary" size="md" onClick={() => setPromptMode('image')}>
             Image to Prompt
@@ -322,7 +327,7 @@ export default function PromptFactoryPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-4 mb-6">
         <Button variant="primary" size="md" onClick={() => setPromptMode('concept')}>
-          Concept to Prompts
+          Create Prompts
         </Button>
         <Button variant="ghost-muted" size="md" onClick={() => setPromptMode('image')}>
           Image to Prompt
@@ -331,6 +336,17 @@ export default function PromptFactoryPage() {
 
       {/* Input Area */}
       <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-6">
+        <input
+          ref={refImageInput}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) setReferenceImage(file)
+            e.target.value = ''
+          }}
+        />
         <div className="flex items-end gap-4">
           <div className="flex-1">
             <Input
@@ -341,6 +357,31 @@ export default function PromptFactoryPage() {
               placeholder="e.g., Christmas, Halloween, Summer Beach..."
             />
           </div>
+          {referencePreview ? (
+            <div className="relative group">
+              <img
+                src={referencePreview}
+                alt="Reference"
+                className="w-10 h-10 rounded-lg object-cover border border-surface-200"
+              />
+              <button
+                type="button"
+                onClick={() => setReferenceImage(null)}
+                className="absolute -top-1.5 -right-1.5 bg-danger rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => refImageInput.current?.click()}
+              title="Add reference image for style guidance"
+              className="w-10 h-10 border-2 border-dashed border-surface-200 rounded-lg flex items-center justify-center text-surface-400 hover:border-brand-500 hover:text-brand-400 transition-colors shrink-0"
+            >
+              <ImagePlus className="w-5 h-5" />
+            </button>
+          )}
           <div className="w-48">
             <Slider
               label="Prompts"
@@ -362,7 +403,7 @@ export default function PromptFactoryPage() {
                 size="lg"
                 icon={<Sparkles className="w-5 h-5" />}
                 onClick={generate}
-                disabled={!concept.trim()}
+                disabled={!concept.trim() && !referenceImage}
               >
                 Generate
               </Button>

@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import type { PromptOutput, ResearchBrief, SubTheme, VarietyScore } from '../utils/prompts.js'
 import { calculateVarietyScore, validatePrompt } from '../utils/prompts.js'
+import type { AnalyzedPrompt } from './vision.js'
 
 let openaiClient: OpenAI | null = null
 let clientInitializing = false
@@ -299,6 +300,7 @@ export async function generatePrompts(
   count: number,
   researchBrief: ResearchBrief,
   onBatchDone?: (completedCount: number, total: number) => void,
+  imageInsights?: AnalyzedPrompt,
 ): Promise<{ prompts: PromptOutput[]; varietyScore: VarietyScore }> {
   const client = await getOpenAI()
   const prompts: PromptOutput[] = []
@@ -307,7 +309,7 @@ export async function generatePrompts(
   const batchSize = 2 // Reduced for detailed prompts
   for (let i = 0; i < count; i += batchSize) {
     const batchThemes = subThemesToUse.slice(i, Math.min(i + batchSize, count))
-    const batchPrompts = await generatePromptBatch(client, concept, batchThemes, researchBrief, i)
+    const batchPrompts = await generatePromptBatch(client, concept, batchThemes, researchBrief, i, imageInsights)
     prompts.push(...batchPrompts)
     onBatchDone?.(prompts.length, count)
   }
@@ -333,6 +335,7 @@ async function generatePromptBatch(
   themes: SubTheme[],
   research: ResearchBrief,
   startIndex: number,
+  imageInsights?: AnalyzedPrompt,
 ): Promise<PromptOutput[]> {
   const fallbackPrompts = themes.map((theme) => createFallbackPrompt(theme, concept))
 
@@ -440,7 +443,22 @@ Return JSON:
   ]
 }
 
-Generate exactly ${themes.length} visually distinct, richly detailed prompts.`,
+Generate exactly ${themes.length} visually distinct, richly detailed prompts.${
+            imageInsights
+              ? `
+
+REFERENCE IMAGE ANALYSIS (use as style guide):
+- Style: ${imageInsights.style}
+- Lighting: ${JSON.stringify(imageInsights.lighting)}
+- Set Design: ${JSON.stringify(imageInsights.set_design)}
+- Camera: ${JSON.stringify(imageInsights.camera)}
+- Effects: ${JSON.stringify(imageInsights.effects)}
+- Outfit: ${JSON.stringify(imageInsights.outfit)}
+
+Use as stylistic inspiration — match the mood, lighting approach, and camera style.
+Create variations blending this reference style with the concept. Do NOT copy the reference verbatim.`
+              : ''
+          }`,
         },
       ],
       temperature: 0.85,

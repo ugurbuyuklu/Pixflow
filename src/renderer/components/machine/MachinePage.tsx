@@ -268,13 +268,13 @@ export default function MachinePage() {
                     No avatars. Go to the Avatars tab to generate or upload some.
                   </p>
                 ) : (
-                  <div className="grid grid-cols-5 gap-2 max-h-[200px] overflow-auto">
+                  <div className="flex gap-2 overflow-x-auto pb-2">
                     {avatars.map((avatar) => (
                       <button
                         type="button"
                         key={avatar.filename}
                         onClick={() => setSelectedAvatar(selectedAvatar?.filename === avatar.filename ? null : avatar)}
-                        className={`aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 relative ${
+                        className={`w-20 shrink-0 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 relative ${
                           selectedAvatar?.filename === avatar.filename
                             ? 'border-brand-500 ring-2 ring-brand-500/50'
                             : 'border-transparent hover:border-surface-200'

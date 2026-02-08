@@ -38,11 +38,15 @@ interface PromptState {
   analyzeEntries: AnalyzeEntry[]
   analyzeError: ErrorInfo | null
 
+  referenceImage: File | null
+  referencePreview: string | null
+
   setConcept: (concept: string) => void
   setCount: (count: number) => void
   setPromptMode: (mode: 'concept' | 'image') => void
   setSelectedIndex: (index: number | null) => void
   setEditingPromptText: (text: string) => void
+  setReferenceImage: (file: File | null) => void
 
   generate: () => Promise<void>
   cancelGenerate: () => void
@@ -80,6 +84,9 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
   analyzeEntries: [],
   analyzeError: null,
 
+  referenceImage: null,
+  referencePreview: null,
+
   setConcept: (concept) => set({ concept }),
   setCount: (count) =>
     set({
@@ -96,8 +103,24 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
   },
   setEditingPromptText: (editingPromptText) => set({ editingPromptText }),
 
+  setReferenceImage: (file) => {
+    const prev = get().referencePreview
+    if (prev) URL.revokeObjectURL(prev)
+    set({
+      referenceImage: file,
+      referencePreview: file ? URL.createObjectURL(file) : null,
+    })
+  },
+
   generate: async () => {
-    const { concept, count } = get()
+    const { concept, count, referenceImage } = get()
+    if (!concept.trim() && referenceImage) {
+      get().addAnalyzeFiles([referenceImage])
+      get().setReferenceImage(null)
+      set({ promptMode: 'image' })
+      get().analyzeAllEntries()
+      return
+    }
     if (!concept.trim()) {
       set({ error: { message: 'Please enter a concept first.', type: 'warning' } })
       return
@@ -119,12 +142,24 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
 
     let response: Response | undefined
     try {
-      response = await authFetch(apiUrl('/api/prompts/generate'), {
+      const fetchOptions: RequestInit = {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ concept, count, stream: true }),
         signal: abortController.signal,
-      })
+      }
+
+      if (referenceImage) {
+        const formData = new FormData()
+        formData.append('concept', concept)
+        formData.append('count', String(count))
+        formData.append('stream', 'true')
+        formData.append('referenceImage', referenceImage)
+        fetchOptions.body = formData
+      } else {
+        fetchOptions.headers = { 'Content-Type': 'application/json' }
+        fetchOptions.body = JSON.stringify({ concept, count, stream: true })
+      }
+
+      response = await authFetch(apiUrl('/api/prompts/generate'), fetchOptions)
 
       if (!response.ok) {
         const raw = await response.json().catch(() => ({}))
@@ -349,6 +384,8 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
     for (const e of get().analyzeEntries) {
       if (e.preview.startsWith('blob:')) URL.revokeObjectURL(e.preview)
     }
+    const prev = get().referencePreview
+    if (prev) URL.revokeObjectURL(prev)
     set({
       concept: '',
       prompts: [],
@@ -359,6 +396,8 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
       varietyScore: null,
       analyzeEntries: [],
       analyzeError: null,
+      referenceImage: null,
+      referencePreview: null,
     })
   },
 }))
