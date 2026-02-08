@@ -7,7 +7,7 @@ This document is a machine-readable handoff for another AI agent to understand:
 3. what is still pending.
 
 Date: 2026-02-07
-Last updated: 2026-02-08 (Session 8: Monster UX polish, reference image in prompt generation, avatar scroll, prompt edit button)
+Last updated: 2026-02-08 (Session 9: Multi-concept prompts, shimmer placeholders, face visibility rule, error messages, sticky nav)
 Project root: `/Users/pixery/Projects/pixflow`
 
 ---
@@ -921,6 +921,66 @@ System model:
 51. Monster UI — "Double click to preview" tooltip (Session 8):
 - Added `title="Double click to preview"` to all completed image thumbnails in current batch and previous generation batches.
 - File: `src/renderer/components/asset-monster/AssetMonsterPage.tsx`
+
+52. Sticky top bar (Session 9):
+- Made TopNav + ProductSelector sticky during scroll (`sticky top-0 z-40 bg-surface-0`).
+- File: `src/renderer/components/layout/AppShell.tsx`
+
+53. Image-to-Prompt inline editing (Session 9):
+- Prompt text in analyze cards now wraps (`break-words`) instead of truncating.
+- Added Edit (Pencil) button per card — opens inline textarea with the prompt JSON.
+- "Save Changes" button: tries `JSON.parse` first, falls back to `/api/prompts/text-to-json` API for plain text.
+- Inline error display on save failure.
+- Store: added `updateAnalyzeEntryPrompt(index, prompt)` action to promptStore.
+- Files:
+  - `src/renderer/stores/promptStore.ts`
+  - `src/renderer/components/prompt-factory/PromptFactoryPage.tsx`
+
+54. Multi-concept prompt input (Session 9):
+- Replaced single `concept: string` with `concepts: string[]` array in promptStore.
+- New actions: `updateConcept(i, val)`, `addConcept()`, `duplicateConcept(i)`, `removeConcept(i)`, `setConcepts(concepts)`.
+- Default prompt count changed from 8 to 1.
+- "+" (Add Concept) and Duplicate buttons below concept rows with dashed border aesthetic.
+- Remove (X) button per row when >1 concepts.
+- `generate()` loops over active concepts sequentially, calling `/api/prompts/generate` per concept, accumulating results.
+- Slider shows `totalPrompts = activeConcepts.length × count`.
+- Bounds check on `updateConcept`, non-empty validation on `setConcepts`.
+- SSE `JSON.parse` wrapped in try/catch to prevent malformed frames from killing multi-concept generation.
+- Files:
+  - `src/renderer/stores/promptStore.ts`
+  - `src/renderer/components/prompt-factory/PromptFactoryPage.tsx`
+  - `src/renderer/components/asset-monster/AssetMonsterPage.tsx` (concept destructure update)
+  - `src/renderer/components/library/LibraryPage.tsx` (setConcept → setConcepts migration)
+
+55. Better error messages (Session 9):
+- `parseError()` now surfaces actual server error details for 400/500 responses instead of generic messages.
+- Checks `err.message` first (if not just "HTTP 400/500"), falls back to generic text.
+- File: `src/renderer/types/index.ts`
+
+56. Shimmer placeholders + status tooltips (Session 9):
+- Added `@keyframes shimmer` CSS animation.
+- Generating image cards: warm shimmer gradient overlay + spinner.
+- Queued image cards: subtle shimmer gradient overlay + spinner.
+- All thumbnail states now have status-specific tooltips: "Double click to preview", "Generating...", "Generation failed", "Queued".
+- Fixed `Array.fill` shared references → `Array.from + structuredClone` for custom prompts.
+- Timer effect optimized: primitive deps only to avoid interval churn on every SSE event.
+- Files:
+  - `src/renderer/index.css`
+  - `src/renderer/components/asset-monster/AssetMonsterPage.tsx`
+  - `src/renderer/components/prompt-factory/PromptFactoryPage.tsx`
+
+57. Face visibility rule (Session 9):
+- MANDATORY rule: face must be at least 90% visible, unobstructed, and oriented toward camera in every generated prompt.
+- Added to 4 locations in server prompt instructions:
+  - `CREATIVE_DIRECTOR_KNOWLEDGE` AVOID list (promptGenerator.ts)
+  - `generatePromptBatch` developer message as rule 10.5 + BANNED section (promptGenerator.ts)
+  - `textToPrompt` system prompt REQUIRED section (promptGenerator.ts)
+  - `ANALYSIS_PROMPT` as new "Face Visibility - MANDATORY" section (vision.ts)
+- Added to CLAUDE.md as rule 3.4 with ❌/✅ examples.
+- Files:
+  - `src/server/services/promptGenerator.ts`
+  - `src/server/services/vision.ts`
+  - `CLAUDE.md` (borgflow root)
 
 ---
 
