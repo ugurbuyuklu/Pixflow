@@ -1,29 +1,25 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenAI } from '@google/genai'
 import type { PromptOutput, ResearchBrief, SubTheme, VarietyScore } from '../utils/prompts.js'
 import { calculateVarietyScore, validatePrompt } from '../utils/prompts.js'
 import type { AnalyzedPrompt } from './vision.js'
 
-let anthropicClient: Anthropic | null = null
+let geminiClient: GoogleGenAI | null = null
 let clientInitializing = false
 
-async function getAnthropic(): Promise<Anthropic> {
-  if (anthropicClient) return anthropicClient
+async function getGemini(): Promise<GoogleGenAI> {
+  if (geminiClient) return geminiClient
   if (clientInitializing) {
     await new Promise((resolve) => setTimeout(resolve, 100))
-    return getAnthropic()
+    return getGemini()
   }
   clientInitializing = true
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY
+  const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY or CLAUDE_API_KEY environment variable is required')
+    throw new Error('GEMINI_API_KEY environment variable is required')
   }
-  anthropicClient = new Anthropic({
-    apiKey,
-    timeout: 60000,
-    maxRetries: 2,
-  })
+  geminiClient = new GoogleGenAI({ apiKey })
   clientInitializing = false
-  return anthropicClient
+  return geminiClient
 }
 
 function safeJsonParse<T>(content: string, fallback: T): T {
@@ -306,7 +302,7 @@ export async function generatePrompts(
   onBatchDone?: (completedCount: number, total: number) => void,
   imageInsights?: AnalyzedPrompt,
 ): Promise<{ prompts: PromptOutput[]; varietyScore: VarietyScore }> {
-  const client = await getAnthropic()
+  const client = await getGemini()
   const prompts: PromptOutput[] = []
   const subThemesToUse = distributeSubThemes(researchBrief.sub_themes, count)
 
@@ -334,7 +330,7 @@ function distributeSubThemes(subThemes: SubTheme[], count: number): SubTheme[] {
 }
 
 async function generatePromptBatch(
-  client: Anthropic,
+  client: GoogleGenAI,
   concept: string,
   themes: SubTheme[],
   research: ResearchBrief,
@@ -461,23 +457,23 @@ Create variations blending this reference style with the concept. Do NOT copy th
         : ''
     }`
 
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 8000,
-      temperature: 0.85,
-      system: systemPrompt,
-      messages: [
+    const response = await client.models.generateContent({
+      model: 'gemini-2.0-flash-thinking-exp-01-21',
+      contents: [
         {
           role: 'user',
-          content: userPrompt,
+          parts: [{ text: userPrompt }],
         },
       ],
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: 0.85,
+        maxOutputTokens: 8000,
+        responseMimeType: 'application/json',
+      },
     })
 
-    const firstBlock = response.content[0]
-    if (!firstBlock || firstBlock.type !== 'text') return fallbackPrompts
-
-    const content = firstBlock.text
+    const content = response.text
     const parsed = safeJsonParse<{ prompts?: PromptOutput[] }>(content, { prompts: fallbackPrompts })
     return parsed.prompts ?? fallbackPrompts
   } catch (error) {
@@ -506,7 +502,7 @@ export function validateAllPrompts(prompts: PromptOutput[]): {
 }
 
 export async function textToPrompt(textDescription: string): Promise<PromptOutput> {
-  const anthropic = await getAnthropic()
+  const client = await getGemini()
 
   console.log(`[TextToPrompt] Converting: "${textDescription.substring(0, 50)}..."`)
 
@@ -542,15 +538,14 @@ ${CREATIVE_DIRECTOR_KNOWLEDGE}
 Output JSON with this structure:
 ${PROMPT_SCHEMA_EXAMPLE}`
 
-  const response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-5-20250929',
-    max_tokens: 4000,
-    temperature: 0.75,
-    system: systemPrompt,
-    messages: [
+  const response = await client.models.generateContent({
+    model: 'gemini-2.0-flash-thinking-exp-01-21',
+    contents: [
       {
         role: 'user',
-        content: `Convert this description into a TECHNICAL JSON prompt:
+        parts: [
+          {
+            text: `Convert this description into a TECHNICAL JSON prompt:
 
 "${textDescription}"
 
@@ -564,16 +559,23 @@ REQUIREMENTS:
 - This is a brief for photographer/stylist, not creative writing
 
 Return only the JSON object.`,
+          },
+        ],
       },
     ],
+    config: {
+      systemInstruction: systemPrompt,
+      temperature: 0.75,
+      maxOutputTokens: 4000,
+      responseMimeType: 'application/json',
+    },
   })
 
-  const firstBlock = response.content[0]
-  if (!firstBlock || firstBlock.type !== 'text') {
-    throw new Error('No response from Claude')
+  const content = response.text
+  if (!content) {
+    throw new Error('No response from Gemini')
   }
 
-  const content = firstBlock.text
   const parsed = safeJsonParse<PromptOutput>(content, {
     style: textDescription,
     pose: { framing: '', body_position: '', arms: '', posture: '', expression: { facial: '', eyes: '', mouth: '' } },
