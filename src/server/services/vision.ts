@@ -1,14 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import OpenAI from 'openai'
+import { GoogleGenAI } from '@google/genai'
 
-let openaiClient: OpenAI | null = null
+let geminiClient: GoogleGenAI | null = null
 
-function getOpenAI(): OpenAI {
-  if (!openaiClient) {
-    openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+function getGemini(): GoogleGenAI {
+  if (!geminiClient) {
+    geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
   }
-  return openaiClient
+  return geminiClient
 }
 
 export interface AnalyzedPrompt {
@@ -67,12 +67,11 @@ export interface AnalyzedPrompt {
   }
 }
 
-async function imageToBase64(imagePath: string): Promise<string> {
-  const buffer = await fs.readFile(imagePath)
-  const base64 = buffer.toString('base64')
+function getMimeType(imagePath: string): string {
   const ext = path.extname(imagePath).toLowerCase()
-  const mimeType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg'
-  return `data:${mimeType};base64,${base64}`
+  if (ext === '.png') return 'image/png'
+  if (ext === '.webp') return 'image/webp'
+  return 'image/jpeg'
 }
 
 const ANALYSIS_PROMPT = `You are an expert photography analyst. Analyze this image and generate a TECHNICAL DIRECTION document that could recreate a similar photo.
@@ -183,34 +182,32 @@ Return a JSON object with this EXACT structure:
 Return ONLY the JSON object, no other text.`
 
 export async function analyzeImage(imagePath: string): Promise<AnalyzedPrompt> {
-  const openai = getOpenAI()
-  const imageUrl = await imageToBase64(imagePath)
+  const gemini = getGemini()
+  const buffer = await fs.readFile(imagePath)
 
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    messages: [
+  const response = await gemini.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: [
       {
         role: 'user',
-        content: [
-          { type: 'text', text: ANALYSIS_PROMPT },
-          { type: 'image_url', image_url: { url: imageUrl, detail: 'high' } },
+        parts: [
+          { inlineData: { data: buffer.toString('base64'), mimeType: getMimeType(imagePath) } },
+          { text: 'Analyze this image.' },
         ],
       },
     ],
-    max_tokens: 2000,
-    temperature: 0.3,
+    config: {
+      systemInstruction: ANALYSIS_PROMPT,
+      responseMimeType: 'application/json',
+      maxOutputTokens: 4000,
+      temperature: 0.3,
+    },
   })
 
-  const content = response.choices[0]?.message?.content
+  const content = response.text
   if (!content) {
     throw new Error('No response from vision model')
   }
 
-  const jsonMatch = content.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) {
-    throw new Error('Failed to parse JSON from response')
-  }
-
-  const parsed = JSON.parse(jsonMatch[0]) as AnalyzedPrompt
-  return parsed
+  return JSON.parse(content) as AnalyzedPrompt
 }

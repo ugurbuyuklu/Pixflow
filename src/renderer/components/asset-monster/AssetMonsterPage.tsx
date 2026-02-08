@@ -2,8 +2,11 @@ import {
   AlertCircle,
   Check,
   CheckCircle,
+  CheckSquare,
   Clock,
+  Download,
   FileJson,
+  Film,
   FolderOpen,
   Image,
   ImagePlus,
@@ -27,6 +30,7 @@ import {
   RESOLUTIONS,
   useGenerationStore,
 } from '../../stores/generationStore'
+import { useImg2VideoStore } from '../../stores/img2videoStore'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { usePromptStore } from '../../stores/promptStore'
 import type { GeneratedPrompt } from '../../types'
@@ -204,6 +208,10 @@ export default function AssetMonsterPage() {
     selectAvatar,
     loadAvatars,
     startBatch,
+    selectedResultImages,
+    toggleResultImage,
+    selectAllResultImages,
+    deselectAllResultImages,
   } = useGenerationStore()
 
   const { prompts, concept } = usePromptStore()
@@ -646,15 +654,24 @@ Examples:
                 <button
                   type="button"
                   key={img.index}
-                  onClick={() => img.status === 'completed' && img.url && setPreviewImage(img.url)}
-                  className={`aspect-[9/16] rounded-lg border-2 flex items-center justify-center ${
-                    img.status === 'completed'
-                      ? 'border-success bg-success/10 cursor-pointer hover:border-success-hover hover:scale-105 transition-all'
-                      : img.status === 'generating'
-                        ? 'border-warning bg-warning/10'
-                        : img.status === 'failed'
-                          ? 'border-danger bg-danger/10'
-                          : 'border-surface-200 bg-surface-100'
+                  onClick={() => {
+                    if (batchProgress.status === 'completed' && img.status === 'completed') {
+                      toggleResultImage(img.index)
+                    } else if (img.status === 'completed' && img.url) {
+                      setPreviewImage(img.url)
+                    }
+                  }}
+                  onDoubleClick={() => img.status === 'completed' && img.url && setPreviewImage(img.url)}
+                  className={`relative aspect-[9/16] rounded-lg border-2 flex items-center justify-center ${
+                    img.status === 'completed' && selectedResultImages.has(img.index)
+                      ? 'border-brand-400 bg-brand-600/10 ring-2 ring-brand-400/30 cursor-pointer hover:scale-105 transition-all'
+                      : img.status === 'completed'
+                        ? 'border-success bg-success/10 cursor-pointer hover:border-success-hover hover:scale-105 transition-all'
+                        : img.status === 'generating'
+                          ? 'border-warning bg-warning/10'
+                          : img.status === 'failed'
+                            ? 'border-danger bg-danger/10'
+                            : 'border-surface-200 bg-surface-100'
                   }`}
                 >
                   {img.status === 'completed' && img.url ? (
@@ -670,34 +687,124 @@ Examples:
                   ) : (
                     <Image className="w-6 h-6 text-surface-400" />
                   )}
+                  {batchProgress.status === 'completed' && img.status === 'completed' && (
+                    <div
+                      className={`absolute top-1.5 left-1.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                        selectedResultImages.has(img.index)
+                          ? 'bg-brand-500 border-brand-500'
+                          : 'bg-black/40 border-white/50'
+                      }`}
+                    >
+                      {selectedResultImages.has(img.index) && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
 
             {batchProgress.status === 'completed' && (
-              <div className="mt-4 pt-4 border-t border-surface-100 flex justify-end">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<FolderOpen className="w-4 h-4" />}
-                  onClick={async () => {
-                    try {
-                      const response = await authFetch(apiUrl('/api/generate/open-folder'), {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ folderPath: batchProgress.outputDir }),
-                      })
-                      if (!response.ok) {
-                        const raw = await response.json().catch(() => ({}))
-                        setBatchError({ message: getApiError(raw, 'Failed to open folder'), type: 'error' })
+              <div className="mt-4 pt-4 border-t border-surface-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      icon={<CheckSquare className="w-3.5 h-3.5" />}
+                      onClick={() =>
+                        selectedResultImages.size ===
+                        batchProgress.images.filter((i) => i.status === 'completed').length
+                          ? deselectAllResultImages()
+                          : selectAllResultImages()
                       }
-                    } catch {
-                      setBatchError({ message: 'Failed to open folder', type: 'error' })
-                    }
-                  }}
-                >
-                  Open Folder
-                </Button>
+                    >
+                      {selectedResultImages.size === batchProgress.images.filter((i) => i.status === 'completed').length
+                        ? 'Deselect All'
+                        : 'Select All'}
+                    </Button>
+                    {selectedResultImages.size > 0 && (
+                      <span className="text-xs text-surface-400">{selectedResultImages.size} selected</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<Download className="w-4 h-4" />}
+                    onClick={async () => {
+                      const urls = batchProgress.images
+                        .filter((i) => i.status === 'completed' && i.url)
+                        .map((i) => i.url!)
+                      for (const url of urls) {
+                        const a = document.createElement('a')
+                        a.href = assetUrl(url)
+                        a.download = url.split('/').pop() || 'image.jpg'
+                        a.click()
+                      }
+                    }}
+                  >
+                    Download All
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<Download className="w-4 h-4" />}
+                    disabled={selectedResultImages.size === 0}
+                    onClick={async () => {
+                      const urls = batchProgress.images
+                        .filter((i) => i.status === 'completed' && i.url && selectedResultImages.has(i.index))
+                        .map((i) => i.url!)
+                      for (const url of urls) {
+                        const a = document.createElement('a')
+                        a.href = assetUrl(url)
+                        a.download = url.split('/').pop() || 'image.jpg'
+                        a.click()
+                      }
+                    }}
+                  >
+                    Download Selected ({selectedResultImages.size})
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<Film className="w-4 h-4" />}
+                    disabled={selectedResultImages.size === 0}
+                    onClick={() => {
+                      const completed =
+                        batchProgress?.images.filter(
+                          (img) => img.status === 'completed' && img.url && selectedResultImages.has(img.index),
+                        ) ?? []
+                      useImg2VideoStore.getState().setEntries(completed.map((img) => ({ url: img.url!, prompt: '' })))
+                      navigate('img2video')
+                    }}
+                  >
+                    Send to Img2Video ({selectedResultImages.size})
+                  </Button>
+                  <div className="ml-auto">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<FolderOpen className="w-4 h-4" />}
+                      onClick={async () => {
+                        try {
+                          const response = await authFetch(apiUrl('/api/generate/open-folder'), {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ folderPath: batchProgress.outputDir }),
+                          })
+                          if (!response.ok) {
+                            const raw = await response.json().catch(() => ({}))
+                            setBatchError({ message: getApiError(raw, 'Failed to open folder'), type: 'error' })
+                          }
+                        } catch {
+                          setBatchError({ message: 'Failed to open folder', type: 'error' })
+                        }
+                      }}
+                    >
+                      Open Folder
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

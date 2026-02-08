@@ -1,4 +1,4 @@
-import { BookOpen, Layers, Loader2, Moon, Star, Sun, Video, Wand2, Zap } from 'lucide-react'
+import { BookOpen, Film, Layers, Loader2, Moon, Star, Sun, Video, Wand2, Zap } from 'lucide-react'
 import { useHistoryStore } from '../../stores/historyStore'
 import { useMachineStore } from '../../stores/machineStore'
 import { type TabId, useNavigationStore } from '../../stores/navigationStore'
@@ -11,6 +11,7 @@ import { UserMenu } from './UserMenu'
 const TABS: { id: TabId; label: string; icon: typeof Wand2 }[] = [
   { id: 'prompts', label: 'Prompt Factory', icon: Wand2 },
   { id: 'generate', label: 'Asset Monster', icon: Layers },
+  { id: 'img2video', label: 'Img2Video', icon: Film },
   { id: 'avatars', label: 'Avatar Studio', icon: Video },
   { id: 'machine', label: 'The Machine', icon: Zap },
   { id: 'history', label: 'Library', icon: BookOpen },
@@ -25,13 +26,13 @@ export function TopNav() {
 
   return (
     <>
-      <div className="border-b border-surface-100 app-drag-region">
+      <div className="border-b border-surface-100 drag-region">
         <div className="max-w-6xl mx-auto px-8 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold flex items-center gap-3 app-no-drag">
+          <h1 className="text-2xl font-bold flex items-center gap-3 no-drag">
             <span className="text-brand-400">⚡</span>
             Pixflow
           </h1>
-          <div className="flex items-center gap-2 app-no-drag">
+          <div className="flex items-center gap-2 no-drag">
             <NotificationBell />
             <button
               type="button"

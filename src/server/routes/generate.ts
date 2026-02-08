@@ -153,7 +153,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
         aspectRatio,
         numImages,
         outputFormat,
-        concurrency: 4,
+        concurrency: 10,
       }).catch((err) => {
         console.error('[Batch] Generation failed:', err)
         void recordPipelineEvent({
@@ -212,7 +212,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
       images: job.images.map((img) => ({
         index: img.promptIndex,
         status: img.status,
-        url: img.url || undefined,
+        url: img.localPath ? `/outputs/${path.relative(outputsDir, img.localPath)}` : img.url || undefined,
         localPath: img.localPath || undefined,
         error: img.error || undefined,
       })),
@@ -227,7 +227,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
         return
       }
       sendSuccess(res, {
-        path: file.path,
+        path: `/uploads/${file.filename}`,
         filename: file.filename,
         size: file.size,
         mimetype: file.mimetype,

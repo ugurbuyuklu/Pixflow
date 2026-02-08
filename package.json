@@ -50,6 +50,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@elevenlabs/elevenlabs-js": "^2.34.0",
     "@fal-ai/client": "^1.8.5",
+    "@google/genai": "^1.40.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.6.2",
     "cors": "^2.8.5",

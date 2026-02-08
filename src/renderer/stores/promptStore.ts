@@ -4,6 +4,22 @@ import { apiUrl, authFetch, getApiError, unwrapApiData } from '../lib/api'
 import type { ErrorInfo, GeneratedPrompt, ResearchData, VarietyScore } from '../types'
 import { parseError } from '../types'
 
+interface GenerationProgress {
+  step: 'research' | 'prompts' | 'done'
+  completed: number
+  total: number
+  startedAt: number
+}
+
+export interface AnalyzeEntry {
+  file: File
+  preview: string
+  loading: boolean
+  prompt: GeneratedPrompt | null
+  error: ErrorInfo | null
+  copied: boolean
+}
+
 interface PromptState {
   concept: string
   count: number
@@ -16,14 +32,11 @@ interface PromptState {
   copied: boolean
   research: ResearchData | null
   varietyScore: VarietyScore | null
+  generationProgress: GenerationProgress | null
 
   promptMode: 'concept' | 'image'
-  analyzeImage: File | null
-  analyzePreview: string | null
-  analyzeLoading: boolean
-  analyzedPrompt: GeneratedPrompt | null
+  analyzeEntries: AnalyzeEntry[]
   analyzeError: ErrorInfo | null
-  analyzeCopied: boolean
 
   setConcept: (concept: string) => void
   setCount: (count: number) => void
@@ -36,9 +49,12 @@ interface PromptState {
   copyPrompt: () => Promise<void>
   saveEdit: (text: string) => Promise<void>
 
-  setAnalyzeImage: (file: File | null, preview: string | null) => void
-  analyzeCurrentImage: () => Promise<void>
-  copyAnalyzed: () => Promise<void>
+  addAnalyzeFiles: (files: File[]) => void
+  removeAnalyzeEntry: (index: number) => void
+  clearAnalyzeEntries: () => void
+  analyzeEntry: (index: number) => Promise<void>
+  analyzeAllEntries: () => Promise<void>
+  copyAnalyzedEntry: (index: number) => Promise<void>
 
   setPrompts: (prompts: GeneratedPrompt[], selectedIndex?: number) => void
   reset: () => void
@@ -58,14 +74,11 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
   copied: false,
   research: null,
   varietyScore: null,
+  generationProgress: null,
 
   promptMode: 'concept',
-  analyzeImage: null,
-  analyzePreview: null,
-  analyzeLoading: false,
-  analyzedPrompt: null,
+  analyzeEntries: [],
   analyzeError: null,
-  analyzeCopied: false,
 
   setConcept: (concept) => set({ concept }),
   setCount: (count) =>
@@ -92,6 +105,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
 
     abortController?.abort()
     abortController = new AbortController()
+    const startedAt = Date.now()
 
     set({
       loading: true,
@@ -100,6 +114,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
       selectedIndex: null,
       research: null,
       varietyScore: null,
+      generationProgress: { step: 'research', completed: 0, total: count, startedAt },
     })
 
     let response: Response | undefined
@@ -107,7 +122,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
       response = await authFetch(apiUrl('/api/prompts/generate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ concept, count }),
+        body: JSON.stringify({ concept, count, stream: true }),
         signal: abortController.signal,
       })
 
@@ -116,19 +131,57 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
         throw new Error(getApiError(raw, `HTTP ${response.status}`))
       }
 
-      const raw = await response.json()
-      const data = unwrapApiData<{
+      const reader = response.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let finalData: {
         prompts: GeneratedPrompt[]
         research: ResearchData | null
         varietyScore: VarietyScore | null
-      }>(raw)
-      set({
-        prompts: data.prompts,
-        research: data.research,
-        varietyScore: data.varietyScore,
-        selectedIndex: data.prompts.length > 0 ? 0 : null,
-        editingPromptText: data.prompts.length > 0 ? JSON.stringify(data.prompts[0], null, 2) : '',
-      })
+      } | null = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        let currentEvent = ''
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7)
+          } else if (line.startsWith('data: ') && currentEvent) {
+            const payload = JSON.parse(line.slice(6))
+            if (currentEvent === 'research') {
+              set({ research: payload, generationProgress: { step: 'prompts', completed: 0, total: count, startedAt } })
+            } else if (currentEvent === 'progress') {
+              set({
+                generationProgress: { step: 'prompts', completed: payload.completed, total: payload.total, startedAt },
+              })
+            } else if (currentEvent === 'done') {
+              finalData = payload
+            } else if (currentEvent === 'error') {
+              throw new Error(payload.message)
+            }
+            currentEvent = ''
+          }
+        }
+      }
+
+      if (finalData) {
+        set({
+          prompts: finalData.prompts,
+          research: finalData.research,
+          varietyScore: finalData.varietyScore,
+          selectedIndex: finalData.prompts.length > 0 ? 0 : null,
+          editingPromptText: finalData.prompts.length > 0 ? JSON.stringify(finalData.prompts[0], null, 2) : '',
+          generationProgress: { step: 'done', completed: count, total: count, startedAt },
+        })
+      }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
       const errorInfo = parseError(err, response)
@@ -145,7 +198,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
   cancelGenerate: () => {
     abortController?.abort()
     abortController = null
-    set({ loading: false })
+    set({ loading: false, generationProgress: null })
   },
 
   copyPrompt: async () => {
@@ -190,26 +243,46 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
     }
   },
 
-  setAnalyzeImage: (file, preview) => {
-    const old = get().analyzePreview
-    if (old?.startsWith('blob:')) URL.revokeObjectURL(old)
-    set({
-      analyzeImage: file,
-      analyzePreview: preview,
-      analyzedPrompt: null,
-      analyzeError: null,
+  addAnalyzeFiles: (files) => {
+    const newEntries: AnalyzeEntry[] = files.map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      loading: false,
+      prompt: null,
+      error: null,
+      copied: false,
+    }))
+    set((state) => ({ analyzeEntries: [...state.analyzeEntries, ...newEntries], analyzeError: null }))
+  },
+
+  removeAnalyzeEntry: (index) => {
+    set((state) => {
+      const entry = state.analyzeEntries[index]
+      if (entry?.preview.startsWith('blob:')) URL.revokeObjectURL(entry.preview)
+      return { analyzeEntries: state.analyzeEntries.filter((_, i) => i !== index) }
     })
   },
 
-  analyzeCurrentImage: async () => {
-    const { analyzeImage } = get()
-    if (!analyzeImage) return
+  clearAnalyzeEntries: () => {
+    for (const e of get().analyzeEntries) {
+      if (e.preview.startsWith('blob:')) URL.revokeObjectURL(e.preview)
+    }
+    set({ analyzeEntries: [], analyzeError: null })
+  },
 
-    set({ analyzeLoading: true, analyzeError: null, analyzedPrompt: null })
+  analyzeEntry: async (index) => {
+    const entry = get().analyzeEntries[index]
+    if (!entry || entry.loading) return
+
+    set((state) => {
+      const updated = [...state.analyzeEntries]
+      updated[index] = { ...updated[index], loading: true, error: null, prompt: null }
+      return { analyzeEntries: updated }
+    })
 
     try {
       const formData = new FormData()
-      formData.append('image', analyzeImage)
+      formData.append('image', entry.file)
 
       const res = await authFetch(apiUrl('/api/generate/analyze-image'), {
         method: 'POST',
@@ -223,20 +296,44 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
 
       const raw = await res.json()
       const data = unwrapApiData<{ prompt: GeneratedPrompt }>(raw)
-      set({ analyzedPrompt: data.prompt })
+      set((state) => {
+        const updated = [...state.analyzeEntries]
+        updated[index] = { ...updated[index], loading: false, prompt: data.prompt }
+        return { analyzeEntries: updated }
+      })
     } catch (err) {
-      set({ analyzeError: parseError(err) })
-    } finally {
-      set({ analyzeLoading: false })
+      set((state) => {
+        const updated = [...state.analyzeEntries]
+        updated[index] = { ...updated[index], loading: false, error: parseError(err) }
+        return { analyzeEntries: updated }
+      })
     }
   },
 
-  copyAnalyzed: async () => {
-    const { analyzedPrompt } = get()
-    if (!analyzedPrompt) return
-    await navigator.clipboard.writeText(JSON.stringify(analyzedPrompt, null, 2))
-    set({ analyzeCopied: true })
-    setTimeout(() => set({ analyzeCopied: false }), 2000)
+  analyzeAllEntries: async () => {
+    const { analyzeEntries } = get()
+    const pending = analyzeEntries
+      .map((e, i) => ({ entry: e, index: i }))
+      .filter(({ entry }) => !entry.prompt && !entry.loading)
+    await Promise.all(pending.map(({ index }) => get().analyzeEntry(index)))
+  },
+
+  copyAnalyzedEntry: async (index) => {
+    const entry = get().analyzeEntries[index]
+    if (!entry?.prompt) return
+    await navigator.clipboard.writeText(JSON.stringify(entry.prompt, null, 2))
+    set((state) => {
+      const updated = [...state.analyzeEntries]
+      updated[index] = { ...updated[index], copied: true }
+      return { analyzeEntries: updated }
+    })
+    setTimeout(() => {
+      set((state) => {
+        const updated = [...state.analyzeEntries]
+        if (updated[index]) updated[index] = { ...updated[index], copied: false }
+        return { analyzeEntries: updated }
+      })
+    }, 2000)
   },
 
   setPrompts: (prompts, selectedIndex = 0) => {
@@ -249,8 +346,9 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
   },
 
   reset: () => {
-    const old = get().analyzePreview
-    if (old?.startsWith('blob:')) URL.revokeObjectURL(old)
+    for (const e of get().analyzeEntries) {
+      if (e.preview.startsWith('blob:')) URL.revokeObjectURL(e.preview)
+    }
     set({
       concept: '',
       prompts: [],
@@ -259,9 +357,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
       error: null,
       research: null,
       varietyScore: null,
-      analyzeImage: null,
-      analyzePreview: null,
-      analyzedPrompt: null,
+      analyzeEntries: [],
       analyzeError: null,
     })
   },

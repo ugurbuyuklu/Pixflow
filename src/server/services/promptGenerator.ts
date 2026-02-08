@@ -298,6 +298,7 @@ export async function generatePrompts(
   concept: string,
   count: number,
   researchBrief: ResearchBrief,
+  onBatchDone?: (completedCount: number, total: number) => void,
 ): Promise<{ prompts: PromptOutput[]; varietyScore: VarietyScore }> {
   const client = await getOpenAI()
   const prompts: PromptOutput[] = []
@@ -308,6 +309,7 @@ export async function generatePrompts(
     const batchThemes = subThemesToUse.slice(i, Math.min(i + batchSize, count))
     const batchPrompts = await generatePromptBatch(client, concept, batchThemes, researchBrief, i)
     prompts.push(...batchPrompts)
+    onBatchDone?.(prompts.length, count)
   }
 
   const varietyScore = calculateVarietyScore(prompts)

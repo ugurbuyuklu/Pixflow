@@ -24,7 +24,7 @@ export function ImagePreviewOverlay() {
       const file = new File([blob], filename, { type: blob.type })
 
       setPreviewImage(null)
-      usePromptStore.getState().setAnalyzeImage(file, imageUrl)
+      usePromptStore.getState().addAnalyzeFiles([file])
       useNavigationStore.getState().navigate('prompts', { promptMode: 'image' })
     } catch {
       console.error('Failed to load image for analysis')

@@ -55,6 +55,7 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
   const { projectRoot } = config
   const outputsDir = path.join(projectRoot, 'outputs')
   const avatarsDir = path.join(projectRoot, 'avatars')
+  const generatedAvatarsDir = path.join(projectRoot, 'avatars_generated')
   const uploadsDir = path.join(projectRoot, 'uploads')
 
   const router = express.Router()
@@ -84,8 +85,8 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
 
   const avatarUploadStorage = multer.diskStorage({
     destination: async (_req, _file, cb) => {
-      await fs.mkdir(avatarsDir, { recursive: true })
-      cb(null, avatarsDir)
+      await fs.mkdir(generatedAvatarsDir, { recursive: true })
+      cb(null, generatedAvatarsDir)
     },
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase()
@@ -114,7 +115,7 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
     const uploaded = files.map((f) => ({
       name: f.filename,
       filename: f.filename,
-      url: `/avatars/${encodeURIComponent(f.filename)}`,
+      url: `/avatars_generated/${encodeURIComponent(f.filename)}`,
     }))
     console.log(`[Avatar] Uploaded ${files.length} file(s) to gallery`)
     sendSuccess(res, { avatars: uploaded })
@@ -140,17 +141,17 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
       const result = await generateAvatar(prompt, { aspectRatio })
 
       const fileName = `avatar_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.png`
-      const localPath = path.join(avatarsDir, fileName)
+      const localPath = path.join(generatedAvatarsDir, fileName)
       const response = await fetch(result.imageUrl)
       if (!response.ok) throw new Error(`Failed to download generated avatar: ${response.status}`)
       const buffer = Buffer.from(await response.arrayBuffer())
-      await fs.mkdir(avatarsDir, { recursive: true })
+      await fs.mkdir(generatedAvatarsDir, { recursive: true })
       await fs.writeFile(localPath, buffer)
       console.log(`[Avatar] Saved to ${localPath}`)
 
       sendSuccess(res, {
         imageUrl: result.imageUrl,
-        localPath: `/avatars/${fileName}`,
+        localPath: `/avatars_generated/${fileName}`,
         requestId: result.requestId,
       })
     } catch (error) {
@@ -187,17 +188,17 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
       const result = await generateAvatarFromReference(dataUrl, prompt, { aspectRatio })
 
       const fileName = `avatar_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.png`
-      const localPath = path.join(avatarsDir, fileName)
+      const localPath = path.join(generatedAvatarsDir, fileName)
       const response = await fetch(result.imageUrl)
       if (!response.ok) throw new Error(`Failed to download generated avatar: ${response.status}`)
       const buffer = Buffer.from(await response.arrayBuffer())
-      await fs.mkdir(avatarsDir, { recursive: true })
+      await fs.mkdir(generatedAvatarsDir, { recursive: true })
       await fs.writeFile(localPath, buffer)
       console.log(`[Avatar] Saved to ${localPath}`)
 
       sendSuccess(res, {
         imageUrl: result.imageUrl,
-        localPath: `/avatars/${fileName}`,
+        localPath: `/avatars_generated/${fileName}`,
         requestId: result.requestId,
       })
     } catch (error) {
@@ -357,10 +358,12 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
       let imagePath: string | null = null
       let audioPath: string | null = null
 
-      if (imageUrl.startsWith('/avatars/')) {
-        imagePath = sanitizePath(avatarsDir, path.basename(decodeURIComponent(imageUrl)))
+      if (imageUrl.startsWith('/avatars_generated/')) {
+        imagePath = sanitizePath(generatedAvatarsDir, decodeURIComponent(imageUrl.slice('/avatars_generated/'.length)))
+      } else if (imageUrl.startsWith('/avatars/')) {
+        imagePath = sanitizePath(avatarsDir, decodeURIComponent(imageUrl.slice('/avatars/'.length)))
       } else if (imageUrl.startsWith('/outputs/')) {
-        imagePath = sanitizePath(outputsDir, path.basename(decodeURIComponent(imageUrl)))
+        imagePath = sanitizePath(outputsDir, decodeURIComponent(imageUrl.slice('/outputs/'.length)))
       }
 
       if (audioUrl.startsWith('/outputs/')) {
@@ -452,13 +455,17 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
       })
 
       let imagePath: string | null = null
-      if (imageUrl.startsWith('/avatars/')) {
-        imagePath = sanitizePath(avatarsDir, path.basename(decodeURIComponent(imageUrl)))
+      if (imageUrl.startsWith('/avatars_generated/')) {
+        imagePath = sanitizePath(generatedAvatarsDir, decodeURIComponent(imageUrl.slice('/avatars_generated/'.length)))
+      } else if (imageUrl.startsWith('/avatars/')) {
+        imagePath = sanitizePath(avatarsDir, decodeURIComponent(imageUrl.slice('/avatars/'.length)))
       } else if (imageUrl.startsWith('/outputs/')) {
-        imagePath = sanitizePath(outputsDir, path.basename(decodeURIComponent(imageUrl)))
+        imagePath = sanitizePath(outputsDir, decodeURIComponent(imageUrl.slice('/outputs/'.length)))
+      } else if (imageUrl.startsWith('/uploads/')) {
+        imagePath = sanitizePath(uploadsDir, decodeURIComponent(imageUrl.slice('/uploads/'.length)))
       }
       if (!imagePath) {
-        sendError(res, 400, 'Invalid image path — must be a local avatar or output', 'INVALID_IMAGE_PATH')
+        sendError(res, 400, 'Invalid image path — must be a local avatar, output, or upload', 'INVALID_IMAGE_PATH')
         return
       }
 

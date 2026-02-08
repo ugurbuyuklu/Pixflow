@@ -25,6 +25,7 @@ interface GenerationState {
   batchError: ErrorInfo | null
   uploadError: string | null
   previewImage: string | null
+  selectedResultImages: Set<number>
 
   promptSource: 'generated' | 'custom'
   customPromptJson: string
@@ -53,6 +54,9 @@ interface GenerationState {
   setOutputFormat: (format: string) => void
   setResolution: (resolution: string) => void
   setPreviewImage: (url: string | null) => void
+  toggleResultImage: (index: number) => void
+  selectAllResultImages: () => void
+  deselectAllResultImages: () => void
 
   addReferenceFiles: (files: File[]) => void
   removeReferenceImage: (index: number) => void
@@ -81,6 +85,7 @@ export const useGenerationStore = create<GenerationState>()((set, get) => ({
   batchError: null,
   uploadError: null,
   previewImage: null,
+  selectedResultImages: new Set<number>(),
 
   promptSource: 'generated',
   customPromptJson: '',
@@ -116,6 +121,19 @@ export const useGenerationStore = create<GenerationState>()((set, get) => ({
   setOutputFormat: (outputFormat) => set({ outputFormat }),
   setResolution: (resolution) => set({ resolution }),
   setPreviewImage: (previewImage) => set({ previewImage }),
+  toggleResultImage: (index) =>
+    set((state) => {
+      const next = new Set(state.selectedResultImages)
+      if (next.has(index)) next.delete(index)
+      else next.add(index)
+      return { selectedResultImages: next }
+    }),
+  selectAllResultImages: () =>
+    set((state) => {
+      const completed = state.batchProgress?.images.filter((img) => img.status === 'completed') ?? []
+      return { selectedResultImages: new Set(completed.map((img) => img.index)) }
+    }),
+  deselectAllResultImages: () => set({ selectedResultImages: new Set<number>() }),
 
   addReferenceFiles: (files) =>
     set((state) => {

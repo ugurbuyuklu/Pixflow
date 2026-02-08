@@ -64,26 +64,45 @@ export function createApp(config: ServerConfig): express.Express {
   app.use('/uploads', express.static(path.join(projectRoot, 'uploads')))
   app.use('/outputs', express.static(path.join(projectRoot, 'outputs')))
   app.use('/avatars', express.static(path.join(projectRoot, 'avatars')))
+  app.use('/avatars_generated', express.static(path.join(projectRoot, 'avatars_generated')))
 
   app.get('/health', (_req, res) => {
     sendSuccess(res, { status: 'ok', timestamp: new Date().toISOString() })
   })
 
   const avatarsDir = path.join(projectRoot, 'avatars')
+  const generatedAvatarsDir = path.join(projectRoot, 'avatars_generated')
 
   app.get('/api/avatars', requireAuth, apiLimiter, async (_req, res) => {
     try {
       await fs.mkdir(avatarsDir, { recursive: true })
-      const files = await fs.readdir(avatarsDir)
-      const avatars = files
-        .filter((file) => VALID_IMAGE_EXTENSIONS.includes(path.extname(file).toLowerCase()))
-        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-        .map((file) => ({
-          name: file,
-          filename: file,
-          url: `/avatars/${encodeURIComponent(file)}`,
-        }))
-      sendSuccess(res, { avatars })
+      await fs.mkdir(generatedAvatarsDir, { recursive: true })
+
+      const [curatedFiles, generatedFiles] = await Promise.all([
+        fs.readdir(avatarsDir),
+        fs.readdir(generatedAvatarsDir),
+      ])
+
+      const filterAndSort = (files: string[]) =>
+        files
+          .filter((file) => VALID_IMAGE_EXTENSIONS.includes(path.extname(file).toLowerCase()))
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+
+      const curated = filterAndSort(curatedFiles).map((file) => ({
+        name: file,
+        filename: file,
+        url: `/avatars/${encodeURIComponent(file)}`,
+        source: 'curated' as const,
+      }))
+
+      const generated = filterAndSort(generatedFiles).map((file) => ({
+        name: file,
+        filename: file,
+        url: `/avatars_generated/${encodeURIComponent(file)}`,
+        source: 'generated' as const,
+      }))
+
+      sendSuccess(res, { avatars: [...curated, ...generated] })
     } catch (error) {
       console.error('[Error] Failed to list avatars:', error)
       sendError(res, 500, 'Failed to list avatars', 'AVATAR_LIST_FAILED')
@@ -96,6 +115,7 @@ export function createApp(config: ServerConfig): express.Express {
 
     const concept = sanitizeConcept(req.body.concept)
     const count = req.body.count ?? PROMPT_GENERATE_DEFAULT
+    const useStream = req.body.stream === true
 
     if (!concept) {
       sendError(res, 400, 'Concept is required (1-100 characters)', 'INVALID_CONCEPT')
@@ -114,6 +134,20 @@ export function createApp(config: ServerConfig): express.Express {
       metadata: { count: clampedCount, conceptLength: concept.length },
     })
 
+    const sendSSE = (event: string, data: unknown) => {
+      if (!useStream) return
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+    }
+
+    if (useStream) {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      })
+      sendSSE('status', { step: 'research', message: 'Researching...' })
+    }
+
     try {
       console.log(`[Research] Starting research for "${concept}"...`)
       const researchBrief = await performResearch(concept)
@@ -124,8 +158,22 @@ export function createApp(config: ServerConfig): express.Express {
         console.log(`[Research] Warnings: ${analysis.warnings.join(', ')}`)
       }
 
+      const research = {
+        summary: analysis.summary,
+        insights: analysis.keyInsights,
+        warnings: analysis.warnings,
+        subThemes: researchBrief.sub_themes.map((s) => s.name),
+      }
+
+      sendSSE('research', research)
+
       console.log(`[Prompts] Generating ${clampedCount} prompts...`)
-      const { prompts, varietyScore } = await generatePrompts(concept, clampedCount, researchBrief)
+      const { prompts, varietyScore } = await generatePrompts(
+        concept,
+        clampedCount,
+        researchBrief,
+        (completed, total) => sendSSE('progress', { completed, total }),
+      )
 
       const validation = validateAllPrompts(prompts)
       if (!validation.allValid) {
@@ -150,32 +198,39 @@ export function createApp(config: ServerConfig): express.Express {
         warningCount: analysis.warnings.length,
       })
 
-      sendSuccess(res, {
+      const result = {
         prompts,
         concept,
         count: prompts.length,
-        research: {
-          summary: analysis.summary,
-          insights: analysis.keyInsights,
-          warnings: analysis.warnings,
-          subThemes: researchBrief.sub_themes.map((s) => s.name),
-        },
+        research,
         varietyScore,
         validation: {
           allValid: validation.allValid,
           issues: validation.results.filter((r) => !r.valid),
         },
-      })
+      }
+
+      if (useStream) {
+        sendSSE('done', result)
+        res.end()
+      } else {
+        sendSuccess(res, result)
+      }
     } catch (error) {
       console.error('[Error]', error)
       span.error(error)
-      sendError(
-        res,
-        500,
-        'Failed to generate prompts',
-        'PROMPT_GENERATION_FAILED',
-        error instanceof Error ? error.message : 'Unknown error',
-      )
+      if (useStream) {
+        sendSSE('error', { message: error instanceof Error ? error.message : 'Unknown error' })
+        res.end()
+      } else {
+        sendError(
+          res,
+          500,
+          'Failed to generate prompts',
+          'PROMPT_GENERATION_FAILED',
+          error instanceof Error ? error.message : 'Unknown error',
+        )
+      }
     }
   })
 

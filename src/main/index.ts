@@ -7,6 +7,14 @@ import { createApp } from '../server/createApp.js'
 import { backupDatabase, closeDatabase } from '../server/db/index.js'
 import { stopJobCleanup } from '../server/services/fal.js'
 
+// Prevent EPIPE crashes when Electron's stdout/stderr pipe breaks
+for (const stream of [process.stdout, process.stderr]) {
+  stream?.on?.('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EPIPE') return
+    throw err
+  })
+}
+
 let mainWindow: BrowserWindow | null = null
 let serverPort = 3001
 let appDataDir = ''

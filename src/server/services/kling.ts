@@ -10,7 +10,7 @@ import {
   runWithRetries,
 } from './providerRuntime.js'
 
-const MODEL_ID = 'fal-ai/kling-video/v2.1/master/image-to-video'
+const MODEL_ID = 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video'
 
 async function fileToDataUrl(filePath: string): Promise<string> {
   const buffer = await fs.readFile(filePath)

@@ -7,6 +7,7 @@ import { useNavigationStore } from '../../stores/navigationStore'
 import { useNotificationStore } from '../../stores/notificationStore'
 import { useProductStore } from '../../stores/productStore'
 import { useThemeStore } from '../../stores/themeStore'
+// biome-ignore lint/correctness/noUnusedImports: re-enable with auth gate before release
 import { LoginPage } from '../auth/LoginPage'
 import { FeedbackWidget } from '../feedback/FeedbackWidget'
 import { ErrorBoundary } from '../ui/ErrorBoundary'
@@ -19,6 +20,7 @@ import { TopNav } from './TopNav'
 
 const PromptFactoryPage = lazy(() => import('../prompt-factory/PromptFactoryPage'))
 const AssetMonsterPage = lazy(() => import('../asset-monster/AssetMonsterPage'))
+const Img2VideoPage = lazy(() => import('../img2video/Img2VideoPage'))
 const AvatarStudioPage = lazy(() => import('../avatar-studio/AvatarStudioPage'))
 const MachinePage = lazy(() => import('../machine/MachinePage'))
 const LibraryPage = lazy(() => import('../library/LibraryPage'))
@@ -26,6 +28,7 @@ const LibraryPage = lazy(() => import('../library/LibraryPage'))
 const PAGES = {
   prompts: PromptFactoryPage,
   generate: AssetMonsterPage,
+  img2video: Img2VideoPage,
   avatars: AvatarStudioPage,
   machine: MachinePage,
   history: LibraryPage,
@@ -70,7 +73,8 @@ export function AppShell() {
     )
   }
 
-  if (!isAuthenticated) return <LoginPage />
+  // TODO: re-enable auth gate before release
+  // if (!isAuthenticated) return <LoginPage />
 
   const ActivePage = PAGES[activeTab]
 

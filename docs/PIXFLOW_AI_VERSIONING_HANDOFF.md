@@ -7,7 +7,7 @@ This document is a machine-readable handoff for another AI agent to understand:
 3. what is still pending.
 
 Date: 2026-02-07
-Last updated: 2026-02-08 (Session 5: Sprint 5C — Accessibility fixes)
+Last updated: 2026-02-08 (Session 6: Feature sprint — Img2Video presets, multi-image analysis, avatar dir separation, dev auto-login)
 Project root: `/Users/pixery/Projects/pixflow`
 
 ---
@@ -778,6 +778,50 @@ System model:
   - LOW: `noArrayIndexKey` suppressions on prompt/avatar lists that can change during session — acceptable, React reconciliation risk minimal
 - Verification: `biome check .` 0 errors/0 warnings across 119 files, `tsc --noEmit` clean, `npm run build` clean.
 
+35. Avatar directory separation (Session 6):
+- Split avatar storage: `avatars/` (curated, hand-picked) stays read-only; `avatars_generated/` (AI-generated) receives new uploads.
+- Added static serving for `avatars_generated/` in `createApp.ts`.
+- Updated `GET /api/avatars` to list from both directories, returning combined array with `source: 'curated' | 'generated'` field.
+- Updated lipsync and i2v endpoints in `avatars.ts` to resolve `/avatars_generated/` path prefix (alongside existing `/avatars/` and `/outputs/`).
+- Files:
+  - `src/server/createApp.ts`
+  - `src/server/routes/avatars.ts`
+
+36. Multi-image Image to Prompt (Session 6):
+- Replaced single-image analysis with multi-image support in Prompt Factory's "Image to Prompt" sub-tab.
+- New `AnalyzeEntry` interface: `{ file, preview, loading, prompt, error, copied }`.
+- Store changes: replaced `analyzeImage`/`analyzedPrompt` with `analyzeEntries: AnalyzeEntry[]`.
+- New methods: `addAnalyzeFiles`, `removeAnalyzeEntry`, `clearAnalyzeEntries`, `analyzeEntry` (single), `analyzeAllEntries` (parallel via Promise.all), `copyAnalyzedEntry`.
+- UI: multi-file dropzone, per-image cards with analyze/view/copy/remove buttons, "Analyze All" bulk action, "Use in Factory"/"Asset Monster" buttons for all analyzed prompts.
+- Updated `ImagePreviewOverlay.tsx` and `navigationStore.ts` to use new `addAnalyzeFiles` API.
+- Files:
+  - `src/renderer/stores/promptStore.ts`
+  - `src/renderer/components/prompt-factory/PromptFactoryPage.tsx`
+  - `src/renderer/components/layout/ImagePreviewOverlay.tsx`
+  - `src/renderer/stores/navigationStore.ts`
+
+37. Dev auto-login (auth race condition fix) (Session 6):
+- Problem: Auth gate commented out for development, but API routes require JWT. Initial `useEffect` approach in AppShell had race condition (async login not awaited, hooks ordering violation after early return).
+- Fix: moved dev auto-login into `authStore.init()`. When no token exists, `init()` awaits `login('dev@pixery.ai', 'dev123pixery!')` before setting `loading: false`. Loading spinner stays up until token is ready — no API calls can fire before authentication.
+- Bootstrap admin env vars in `.env`: `PIXFLOW_BOOTSTRAP_ADMIN_ON_STARTUP=true`, email `dev@pixery.ai`, password `dev123pixery!`.
+- Note: stale DB from previous session had admin with old password; required DB deletion and recreation.
+- TODO: remove dev auto-login and re-enable auth gate before release (marked in both `authStore.ts` and `AppShell.tsx`).
+- Files:
+  - `src/renderer/stores/authStore.ts`
+  - `src/renderer/components/layout/AppShell.tsx`
+  - `.env` (bootstrap admin vars)
+
+38. Img2Video camera & shot preset chips (Session 6):
+- Added selectable camera movement / shot type preset chips to Img2Video page.
+- 3 preset categories: Camera Movement (10 options), Camera Speed (1 option), Shot Type (9 options) — sourced from Kling AI prompt fragment library.
+- One selection per category, toggle behavior (click again to deselect).
+- `composePrompt()` helper appends selected fragments to each image's base prompt at generation time (comma-separated).
+- Store: `VIDEO_PRESETS` constant (exported), `selectedPresets` state, `setPreset`/`clearPresets` actions, `composePrompt` integration in `generateAll()`.
+- UI: chip rows between image cards and Settings panel, brand-colored selected state, "Clear" button when presets active.
+- Files:
+  - `src/renderer/stores/img2videoStore.ts`
+  - `src/renderer/components/img2video/Img2VideoPage.tsx`
+
 ---
 
 ## 6) Remaining Risks / Gaps
@@ -824,14 +868,19 @@ System model:
 12. ~~Vitest test runner + unit tests~~ → **DONE** (Session 5, Sprint 5A): 86 tests across 6 modules (http, db, providerRuntime, telemetry, auth, history). Integrated into gate:release.
 13. ~~Biome linter + formatter~~ → **DONE** (Session 5, Sprint 5B): Biome v2.3.14, 98 files auto-fixed, 3 manual fixes, integrated into gate:release + CI + nightly.
 14. ~~Accessibility sprint~~ → **DONE** (Session 5, Sprint 5C): All 77 Biome warnings fixed (30+ useButtonType, overlay role/keyboard patterns, label associations, media captions, array index keys, forEach callbacks). All rules promoted from `"warn"` to `"error"`. 0 errors/0 warnings.
+15. ~~Avatar directory separation~~ → **DONE** (Session 6): `avatars/` (curated) + `avatars_generated/` (AI-generated), both served and listed in gallery.
+16. ~~Multi-image Image to Prompt~~ → **DONE** (Session 6): batch upload + parallel analysis with per-image prompt cards.
+17. ~~Img2Video preset chips~~ → **DONE** (Session 6): Camera Movement, Camera Speed, Shot Type chip categories with toggle selection.
 
 **Immediate priorities:**
 
-1. Validate native rebuild automation on clean environments:
+1. **Re-enable auth gate before release**: Dev auto-login in `authStore.ts` and commented-out auth gate in `AppShell.tsx` must be reverted. Search for `TODO: remove when auth gate is re-enabled` and `TODO: re-enable auth gate before release`.
+
+2. Validate native rebuild automation on clean environments:
 - Confirm `postinstall` + `native:rebuild` works across fresh local clone and CI run.
 - If intermittent skips recur, add fallback script with direct `node-gyp` parameters for `better-sqlite3`.
 
-2. AvatarPreviewOverlay keyboard support: add Escape-key dismiss (Modal and ImagePreviewOverlay already have this, AvatarPreviewOverlay does not).
+3. AvatarPreviewOverlay keyboard support: add Escape-key dismiss (Modal and ImagePreviewOverlay already have this, AvatarPreviewOverlay does not).
 
 **Codex handoff (quality foundation):**
 3. ~~Add Vitest test runner + unit tests for core backend services.~~ → **DONE** (Session 5, Sprint 5A).

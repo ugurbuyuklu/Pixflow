@@ -30,6 +30,9 @@ export const useAuthStore = create<AuthState>()((set) => ({
   init: async () => {
     const token = getToken()
     if (!token) {
+      // Dev auto-login: auth gate is bypassed, auto-login so API calls have a token
+      // TODO: remove when auth gate is re-enabled before release
+      await useAuthStore.getState().login('dev@pixery.ai', 'dev123pixery!')
       set({ loading: false })
       return
     }

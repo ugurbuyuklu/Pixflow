@@ -1,12 +1,11 @@
 import { create } from 'zustand'
 import { usePromptStore } from './promptStore'
 
-export type TabId = 'prompts' | 'generate' | 'avatars' | 'machine' | 'history'
+export type TabId = 'prompts' | 'generate' | 'img2video' | 'avatars' | 'machine' | 'history'
 
 interface NavigationOptions {
   promptMode?: 'concept' | 'image'
-  analyzeFile?: File
-  analyzePreview?: string
+  analyzeFiles?: File[]
 }
 
 interface NavigationState {
@@ -24,8 +23,8 @@ export const useNavigationStore = create<NavigationState>()((set) => ({
       usePromptStore.getState().setPromptMode(options.promptMode)
     }
 
-    if (options?.analyzeFile && options?.analyzePreview) {
-      usePromptStore.getState().setAnalyzeImage(options.analyzeFile, options.analyzePreview)
+    if (options?.analyzeFiles?.length) {
+      usePromptStore.getState().addAnalyzeFiles(options.analyzeFiles)
     }
   },
 }))
