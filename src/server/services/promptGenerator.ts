@@ -1,25 +1,29 @@
-import OpenAI from 'openai'
+import Anthropic from '@anthropic-ai/sdk'
 import type { PromptOutput, ResearchBrief, SubTheme, VarietyScore } from '../utils/prompts.js'
 import { calculateVarietyScore, validatePrompt } from '../utils/prompts.js'
 import type { AnalyzedPrompt } from './vision.js'
 
-let openaiClient: OpenAI | null = null
+let anthropicClient: Anthropic | null = null
 let clientInitializing = false
 
-async function getOpenAI(): Promise<OpenAI> {
-  if (openaiClient) return openaiClient
+async function getAnthropic(): Promise<Anthropic> {
+  if (anthropicClient) return anthropicClient
   if (clientInitializing) {
     await new Promise((resolve) => setTimeout(resolve, 100))
-    return getOpenAI()
+    return getAnthropic()
   }
   clientInitializing = true
-  openaiClient = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY
+  if (!apiKey) {
+    throw new Error('ANTHROPIC_API_KEY or CLAUDE_API_KEY environment variable is required')
+  }
+  anthropicClient = new Anthropic({
+    apiKey,
     timeout: 60000,
     maxRetries: 2,
   })
   clientInitializing = false
-  return openaiClient
+  return anthropicClient
 }
 
 function safeJsonParse<T>(content: string, fallback: T): T {
@@ -302,7 +306,7 @@ export async function generatePrompts(
   onBatchDone?: (completedCount: number, total: number) => void,
   imageInsights?: AnalyzedPrompt,
 ): Promise<{ prompts: PromptOutput[]; varietyScore: VarietyScore }> {
-  const client = await getOpenAI()
+  const client = await getAnthropic()
   const prompts: PromptOutput[] = []
   const subThemesToUse = distributeSubThemes(researchBrief.sub_themes, count)
 
@@ -330,7 +334,7 @@ function distributeSubThemes(subThemes: SubTheme[], count: number): SubTheme[] {
 }
 
 async function generatePromptBatch(
-  client: OpenAI,
+  client: Anthropic,
   concept: string,
   themes: SubTheme[],
   research: ResearchBrief,
@@ -347,12 +351,7 @@ async function generatePromptBatch(
       )
       .join('\n')
 
-    const response = await client.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'developer',
-          content: `You are a Creative Director and prompt engineer for Clone AI's image-to-image model. You have deep knowledge of photography, fashion, film, and visual culture. You create prompts that are scroll-stopping, Instagram/Pinterest-worthy, and visually sophisticated.
+    const systemPrompt = `You are a Creative Director and prompt engineer for Clone AI's image-to-image model. You have deep knowledge of photography, fashion, film, and visual culture. You create prompts that are scroll-stopping, Instagram/Pinterest-worthy, and visually sophisticated.
 
 ${CREATIVE_DIRECTOR_KNOWLEDGE}
 
@@ -399,11 +398,9 @@ ${CREATIVE_DIRECTOR_KNOWLEDGE}
 21. Prompt = Technical direction document for photographer/stylist/set designer
 22. Use "CRITICAL:" prefix for the ONE hero element
 23. If you want something, SAY IT EXPLICITLY - undefined = left to chance
-24. Goal: 8/10 outputs match the brief, not 1 lucky shot out of 10`,
-        },
-        {
-          role: 'user',
-          content: `Generate ${themes.length} scroll-stopping prompts for "${concept}".
+24. Goal: 8/10 outputs match the brief, not 1 lucky shot out of 10`
+
+    const userPrompt = `Generate ${themes.length} scroll-stopping prompts for "${concept}".
 
 RESEARCH CONTEXT:
 - Technical: ${research.technical_recommendations.lens_options.slice(0, 2).join('; ')} | ${research.technical_recommendations.lighting_styles.slice(0, 2).join('; ')}
@@ -428,7 +425,7 @@ DETAIL REQUIREMENTS:
 - lighting.setup: Full scenario with sources, ratios, color temps (40+ words)
 - lighting.shadows: Direction and behavior ("shadows on right = light from left")
 - set_design.backdrop: Layered foreground/midground/background (50+ words)
-- outfit.main: Fabric type, color, cut, fit, length, details (30+ words)
+- outfit.main: Fabric type, color, style/cut, fit, length, details (30+ words)
 - makeup.skin: MUST include "natural texture, subtle pores visible"
 
 BANNED:
@@ -448,8 +445,8 @@ Return JSON:
 }
 
 Generate exactly ${themes.length} visually distinct, richly detailed prompts.${
-            imageInsights
-              ? `
+      imageInsights
+        ? `
 
 REFERENCE IMAGE ANALYSIS (use as style guide):
 - Style: ${imageInsights.style}
@@ -461,18 +458,26 @@ REFERENCE IMAGE ANALYSIS (use as style guide):
 
 Use as stylistic inspiration — match the mood, lighting approach, and camera style.
 Create variations blending this reference style with the concept. Do NOT copy the reference verbatim.`
-              : ''
-          }`,
+        : ''
+    }`
+
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 8000,
+      temperature: 0.85,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: userPrompt,
         },
       ],
-      temperature: 0.85,
-      max_tokens: 8000,
-      response_format: { type: 'json_object' },
     })
 
-    const content = response.choices[0]?.message?.content
-    if (!content) return fallbackPrompts
+    const firstBlock = response.content[0]
+    if (!firstBlock || firstBlock.type !== 'text') return fallbackPrompts
 
+    const content = firstBlock.text
     const parsed = safeJsonParse<{ prompts?: PromptOutput[] }>(content, { prompts: fallbackPrompts })
     return parsed.prompts ?? fallbackPrompts
   } catch (error) {
@@ -501,16 +506,11 @@ export function validateAllPrompts(prompts: PromptOutput[]): {
 }
 
 export async function textToPrompt(textDescription: string): Promise<PromptOutput> {
-  const openai = await getOpenAI()
+  const anthropic = await getAnthropic()
 
   console.log(`[TextToPrompt] Converting: "${textDescription.substring(0, 50)}..."`)
 
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    messages: [
-      {
-        role: 'system',
-        content: `You are a Creative Director converting descriptions into technical image prompts.
+  const systemPrompt = `You are a Creative Director converting descriptions into technical image prompts.
 
 ${CREATIVE_DIRECTOR_KNOWLEDGE}
 
@@ -540,8 +540,14 @@ ${CREATIVE_DIRECTOR_KNOWLEDGE}
 - Prompt = Technical direction document, not creative writing
 
 Output JSON with this structure:
-${PROMPT_SCHEMA_EXAMPLE}`,
-      },
+${PROMPT_SCHEMA_EXAMPLE}`
+
+  const response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5-20250929',
+    max_tokens: 4000,
+    temperature: 0.75,
+    system: systemPrompt,
+    messages: [
       {
         role: 'user',
         content: `Convert this description into a TECHNICAL JSON prompt:
@@ -560,16 +566,14 @@ REQUIREMENTS:
 Return only the JSON object.`,
       },
     ],
-    temperature: 0.75,
-    max_tokens: 4000,
-    response_format: { type: 'json_object' },
   })
 
-  const content = response.choices[0]?.message?.content
-  if (!content) {
-    throw new Error('No response from OpenAI')
+  const firstBlock = response.content[0]
+  if (!firstBlock || firstBlock.type !== 'text') {
+    throw new Error('No response from Claude')
   }
 
+  const content = firstBlock.text
   const parsed = safeJsonParse<PromptOutput>(content, {
     style: textDescription,
     pose: { framing: '', body_position: '', arms: '', posture: '', expression: { facial: '', eyes: '', mouth: '' } },
