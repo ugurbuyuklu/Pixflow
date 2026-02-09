@@ -183,10 +183,18 @@ export function createVideosRouter(config: VideosRouterConfig) {
     let tempDownloadPath: string | null = null
 
     try {
-      const { videoUrl } = req.body
+      const { videoUrl: rawVideoUrl } = req.body
 
       // Validation
-      if (!videoUrl || typeof videoUrl !== 'string') {
+      if (!rawVideoUrl || typeof rawVideoUrl !== 'string') {
+        sendError(res, 400, 'Video URL is required', 'MISSING_VIDEO_URL')
+        return
+      }
+
+      // Trim whitespace from URL
+      const videoUrl = rawVideoUrl.trim()
+
+      if (!videoUrl) {
         sendError(res, 400, 'Video URL is required', 'MISSING_VIDEO_URL')
         return
       }
