@@ -1181,9 +1181,9 @@ export default function AvatarStudioPage() {
                   Output
                 </h2>
 
-                <div className="space-y-4">
+                <div className="space-y-4 flex flex-col items-center">
                   {/* biome-ignore lint/a11y/useMediaCaption: AI-generated video, no captions available */}
-                  <video controls autoPlay loop src={assetUrl(reactionVideoUrl)} className="w-full rounded-lg" />
+                  <video controls autoPlay loop src={assetUrl(reactionVideoUrl)} className="w-1/2 rounded-lg" />
 
                   <div className="flex items-center gap-2 text-sm text-surface-500">
                     <span>
@@ -1196,7 +1196,7 @@ export default function AvatarStudioPage() {
                     <span>{reactionDuration}s</span>
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 w-full">
                     <button
                       type="button"
                       onClick={() => downloadVideo(assetUrl(reactionVideoUrl), `reaction-${selectedReaction}.mp4`)}
