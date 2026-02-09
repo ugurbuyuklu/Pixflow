@@ -34,7 +34,7 @@ import {
   RESOLUTIONS,
   useGenerationStore,
 } from '../../stores/generationStore'
-import { useImg2VideoStore } from '../../stores/img2videoStore'
+import { useImg2VideoQueueStore } from '../../stores/img2videoQueueStore'
 import { useImageRatingsStore } from '../../stores/imageRatingsStore'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { usePromptStore } from '../../stores/promptStore'
@@ -957,9 +957,12 @@ Examples:
                         batchProgress?.images.filter(
                           (img) => img.status === 'completed' && img.url && selectedResultImages.has(img.index),
                         ) ?? []
-                      useImg2VideoStore
-                        .getState()
-                        .setEntries(completed.map((img) => ({ url: img.url!, prompt: '', presets: {} })))
+                      const imageUrls = completed.map((img) => img.url!)
+                      const newIds = useImg2VideoQueueStore.getState().addItems(imageUrls)
+                      // Select first item for immediate editing
+                      if (newIds.length > 0) {
+                        useImg2VideoQueueStore.getState().selectItem(newIds[0])
+                      }
                       navigate('img2video')
                     }}
                   >

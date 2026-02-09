@@ -20,7 +20,7 @@ import { TopNav } from './TopNav'
 
 const PromptFactoryPage = lazy(() => import('../prompt-factory/PromptFactoryPage'))
 const AssetMonsterPage = lazy(() => import('../asset-monster/AssetMonsterPage'))
-const Img2VideoPage = lazy(() => import('../img2video/Img2VideoPage'))
+const Img2VideoQueuePage = lazy(() => import('../img2video/Img2VideoQueuePage'))
 const AvatarStudioPage = lazy(() => import('../avatar-studio/AvatarStudioPage'))
 const MachinePage = lazy(() => import('../machine/MachinePage'))
 const LibraryPage = lazy(() => import('../library/LibraryPage'))
@@ -28,7 +28,7 @@ const LibraryPage = lazy(() => import('../library/LibraryPage'))
 const PAGES = {
   prompts: PromptFactoryPage,
   generate: AssetMonsterPage,
-  img2video: Img2VideoPage,
+  img2video: Img2VideoQueuePage,
   avatars: AvatarStudioPage,
   machine: MachinePage,
   history: LibraryPage,
