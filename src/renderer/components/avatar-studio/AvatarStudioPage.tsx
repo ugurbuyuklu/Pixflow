@@ -22,6 +22,7 @@ import { apiUrl, assetUrl, authFetch, getApiError } from '../../lib/api'
 import type { AvatarAgeGroup, AvatarEthnicity, AvatarGender, AvatarOutfit, ScriptTone } from '../../stores/avatarStore'
 import { REACTION_DEFINITIONS, useAvatarStore } from '../../stores/avatarStore'
 import type { ReactionType } from '../../types'
+import { AudioPlayer } from '../ui/AudioPlayer'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
@@ -773,8 +774,7 @@ export default function AvatarStudioPage() {
                     <CheckCircle className="w-4 h-4" />
                     Audio generated!
                   </p>
-                  {/* biome-ignore lint/a11y/useMediaCaption: AI-generated audio, no captions available */}
-                  <audio controls src={assetUrl(generatedAudioUrl)} className="w-full" />
+                  <AudioPlayer src={assetUrl(generatedAudioUrl)} />
                 </div>
               )}
             </div>
