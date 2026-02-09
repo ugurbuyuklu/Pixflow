@@ -7,7 +7,7 @@ This document is a machine-readable handoff for another AI agent to understand:
 3. what is still pending.
 
 Date: 2026-02-07
-Last updated: 2026-02-09 (Session 11: Phase 3 Streaming UX - 24x faster perceived performance)
+Last updated: 2026-02-09 (Session 11: Desktop launcher + Img2Video improvements + Video download fixes)
 Project root: `/Users/pixery/Projects/pixflow`
 
 ---
@@ -1034,6 +1034,83 @@ System model:
   - `src/renderer/stores/promptStore.ts` — EventSource integration, progressive state management
   - `src/renderer/components/prompt-factory/PromptFactoryPage.tsx` — skeleton loaders, badges, streaming progress UI
   - `src/renderer/types/index.ts` — GeneratedPrompt flags, GenerationProgress extensions
+
+60. Image-to-Prompt model switch (Session 11):
+- Migrated from Gemini 3 Flash to GPT-4o Vision for consistency
+- Updated `src/server/services/vision.ts`:
+  - Replaced `@google/genai` import with `OpenAI` from `openai`
+  - Changed `analyzeImage()` to use `openai.chat.completions.create()` with model `gpt-4o`
+  - Kept identical ANALYSIS_PROMPT system prompt (no changes)
+  - Maintains same response format: JSON with AnalyzedPrompt structure
+- Updated UI strings in PromptFactoryPage.tsx to reflect GPT-4o Vision usage
+- Build successful, no errors
+- Files:
+  - `src/server/services/vision.ts` — API migration from Gemini to OpenAI
+  - `src/renderer/components/prompt-factory/PromptFactoryPage.tsx` — UI copy update
+
+61. Video download fixes (Session 11):
+- Fixed fullscreen navigation bug when downloading videos in Electron
+- Root cause: `<a href={videoUrl} download>` navigates Electron renderer to video URL instead of downloading
+- Solution: Fetch video as blob → create blob URL → download → revoke URL
+- Pattern implemented:
+  ```typescript
+  async function downloadVideo(url: string, filename: string) {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(blobUrl)
+  }
+  ```
+- Applied to 5 download buttons across 3 files:
+  - `src/renderer/components/avatar-studio/AvatarStudioPage.tsx` — 3 buttons (lipsync video, i2v video, "Download All")
+  - `src/renderer/components/machine/MachinePage.tsx` — 1 button (final video)
+  - `src/renderer/components/img2video/Img2VideoPage.tsx` — handleDownload + handleDownloadAll
+- User feedback: Reported issue directly, confirmed fix resolved workflow blocker
+
+62. Img2Video improvements (Session 11):
+- Added post-generation editing and management features
+- Three new capabilities:
+  1. **Edit Prompt**: Inline editing per image with textarea + Save/Cancel buttons
+  2. **Add More Images**: Adds new images to existing batch without clearing results
+  3. **Start Over**: Clears entries and presets for fresh generation
+- UI/UX changes:
+  - Changed source images grid from 8-column compact to 4-column cards
+  - Each card shows: image, status badge, prompt text, Edit button
+  - Added local state: `editingIndex` (number | null), `editingPrompt` (string)
+  - Edit mode: textarea replaces prompt text, shows Save/Cancel buttons
+  - Non-edit mode: shows prompt text, Edit button
+- State management:
+  - Editing happens in local React state, persists to Zustand on Save
+  - `setEntryPrompt(index, prompt)` updates Zustand store
+  - Add More uses existing `openFilePicker()` function
+  - Start Over calls `clearEntries()` + `clearPresets()`
+- Files:
+  - `src/renderer/components/img2video/Img2VideoPage.tsx` — edit UI, Add More, Start Over buttons
+
+63. Desktop launcher creation (Session 11):
+- Created macOS app launchers to avoid manual terminal startup
+- Three launcher options:
+  1. **launch-pixflow.sh**: Shell script in project directory
+  2. **Pixflow.command**: Double-clickable file on desktop
+  3. **Pixflow.app**: Full macOS app bundle with icon and Terminal integration
+- All launchers:
+  - Navigate to `/Users/pixery/Projects/pixflow`
+  - Check if `node_modules` exists, run `npm install` if missing
+  - Execute `npm run dev` to start app
+- macOS app bundle structure:
+  - Info.plist with bundle metadata (CFBundleIdentifier: com.pixery.pixflow)
+  - MacOS/Pixflow executable that opens Terminal window with npm run dev
+  - Resources/icon.icns (copied from Electron default icon as placeholder)
+- All executables have proper permissions (chmod +x)
+- Desktop files location: `/Users/pixery/Desktop/`
+- Files:
+  - `launch-pixflow.sh` — project directory launcher (committed)
+  - `/Users/pixery/Desktop/Pixflow.command` — desktop command file
+  - `/Users/pixery/Desktop/Pixflow.app/` — full app bundle
 
 60. GPT-4o revert + aggressive system prompt improvements (Session 10):
 - **Problem identified**: After testing 4 models (GPT-4o, Claude Sonnet 4.5, Gemini 2.0 Flash Thinking, GPT-5.2), ALL produced identical poor quality scores (overall: 76/100, outfit detail: 12/100). Root cause: weak system prompt enforcement, not the model.
