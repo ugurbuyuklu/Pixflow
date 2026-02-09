@@ -498,7 +498,7 @@ export default function Img2VideoPage() {
                   <Button variant="ghost" size="xs" icon={<Upload className="w-3.5 h-3.5" />} onClick={openFilePicker}>
                     Add More
                   </Button>
-                  {completedJobs.length > 1 && (
+                  {completedJobs.length > 0 && (
                     <Button
                       variant="success"
                       size="xs"
