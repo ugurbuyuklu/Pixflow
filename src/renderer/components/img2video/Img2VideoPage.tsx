@@ -396,29 +396,44 @@ export default function Img2VideoPage() {
                       ) : (
                         <>
                           <p className="text-xs text-surface-500 line-clamp-2">{entry.prompt || 'No prompt'}</p>
-                          <Button
-                            variant="ghost"
-                            size="xs"
-                            icon={<Pencil className="w-3 h-3" />}
-                            onClick={() => {
-                              setEditingIndex(i)
-                              setEditingPrompt(entry.prompt)
-                            }}
-                            className="w-full"
-                          >
-                            Edit Prompt
-                          </Button>
-                          {job?.status === 'completed' && (
+                          <div className="flex gap-1">
                             <Button
-                              variant="secondary"
+                              variant="ghost"
                               size="xs"
-                              icon={<Play className="w-3 h-3" />}
-                              onClick={() => regenerateSingle(i)}
-                              className="w-full mt-1"
+                              icon={<Pencil className="w-3 h-3" />}
+                              onClick={() => {
+                                setEditingIndex(i)
+                                setEditingPrompt(entry.prompt)
+                              }}
+                              className="flex-1"
                             >
-                              Generate Again
+                              Edit
                             </Button>
-                          )}
+                            {(!job || job.status === 'pending' || job.status === 'failed') && (
+                              <Button
+                                variant="primary"
+                                size="xs"
+                                icon={<Play className="w-3 h-3" />}
+                                onClick={() => regenerateSingle(i)}
+                                disabled={!entry.prompt.trim()}
+                                className="flex-1"
+                                title={!entry.prompt.trim() ? 'Add a prompt first' : 'Generate video'}
+                              >
+                                Generate
+                              </Button>
+                            )}
+                            {job?.status === 'completed' && (
+                              <Button
+                                variant="secondary"
+                                size="xs"
+                                icon={<Play className="w-3 h-3" />}
+                                onClick={() => regenerateSingle(i)}
+                                className="flex-1"
+                              >
+                                Regenerate
+                              </Button>
+                            )}
+                          </div>
                         </>
                       )}
                     </div>
