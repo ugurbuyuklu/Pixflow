@@ -82,6 +82,7 @@ export default function AvatarStudioPage() {
   const [videoSource, setVideoSource] = useState<'url' | 'upload'>('url')
   const [videoUrl, setVideoUrl] = useState('')
   const [uploadingVideo, setUploadingVideo] = useState(false)
+  const [uploadedAudioFile, setUploadedAudioFile] = useState<File | null>(null)
 
   const {
     mode,
@@ -420,12 +421,19 @@ export default function AvatarStudioPage() {
           </div>
 
           {/* Step 2: Script */}
-          <div className="bg-surface-50 rounded-lg p-4">
+          <div className={`bg-surface-50 rounded-lg p-4 ${!selectedAvatar && generatedUrls.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">2</span>
               Script
             </h2>
 
+            {!selectedAvatar && generatedUrls.length === 0 ? (
+              <p className="text-sm text-warning/80 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Please select or generate an avatar first (Step 1)
+              </p>
+            ) : (
+              <>
             {/* Mode Switcher - 4 modes in 2x2 grid */}
             <div className="grid grid-cols-2 gap-2 mb-4">
               <button
@@ -660,44 +668,57 @@ export default function AvatarStudioPage() {
                   Upload your pre-recorded audio file (from ElevenLabs, Descript, etc.)
                 </p>
 
-                <div className="border-2 border-dashed border-surface-300 rounded-lg p-6 text-center">
-                  <input
-                    type="file"
-                    accept="audio/*,.mp3,.wav,.m4a"
-                    className="hidden"
-                    id="audio-upload-step2"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) uploadAudio(file)
-                    }}
-                  />
-                  <label
-                    htmlFor="audio-upload-step2"
-                    className="cursor-pointer flex flex-col items-center gap-2"
-                  >
-                    <Upload className="w-8 h-8 text-surface-400" />
-                    <p className="text-sm text-surface-300">
-                      Click to upload audio file
-                    </p>
-                    <p className="text-xs text-surface-400">
-                      MP3, WAV, M4A (max 50MB)
-                    </p>
-                  </label>
-                </div>
+                {!generatedAudioUrl && (
+                  <div className="border-2 border-dashed border-surface-300 rounded-lg p-6 text-center">
+                    <input
+                      type="file"
+                      accept="audio/*,.mp3,.wav,.m4a"
+                      className="hidden"
+                      id="audio-upload-step2"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setUploadedAudioFile(file)
+                          uploadAudio(file)
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor="audio-upload-step2"
+                      className="cursor-pointer flex flex-col items-center gap-2"
+                    >
+                      <Upload className="w-8 h-8 text-surface-400" />
+                      <p className="text-sm text-surface-300">
+                        Click to upload audio file
+                      </p>
+                      <p className="text-xs text-surface-400">
+                        MP3, WAV, M4A (max 50MB)
+                      </p>
+                    </label>
+                  </div>
+                )}
 
                 {audioUploading && (
                   <div className="flex items-center gap-2 text-surface-400">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Uploading audio...
+                    Uploading {uploadedAudioFile?.name}...
                   </div>
                 )}
 
                 {generatedAudioUrl && (
-                  <div className="p-3 bg-success-muted/30 border border-success/40 rounded-lg">
-                    <p className="text-success text-sm flex items-center gap-2 mb-2">
-                      <CheckCircle className="w-4 h-4" />
-                      Audio uploaded! Ready for lipsync.
-                    </p>
+                  <div className="p-3 bg-success-muted/30 border border-success/40 rounded-lg space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-success text-sm flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4" />
+                        Audio uploaded!
+                      </p>
+                      {uploadedAudioFile && (
+                        <div className="flex items-center gap-2 text-xs text-surface-400">
+                          <Volume2 className="w-3 h-3" />
+                          {uploadedAudioFile.name}
+                        </div>
+                      )}
+                    </div>
                     <AudioPlayer src={assetUrl(generatedAudioUrl)} />
                   </div>
                 )}
@@ -771,15 +792,25 @@ export default function AvatarStudioPage() {
                 )}
               </div>
             )}
+              </>
+            )}
           </div>
 
           {/* Step 3: Voice Selection & TTS (Hidden if "Have an Audio" mode) */}
           {scriptMode !== 'audio' && (
-            <div className="bg-surface-50 rounded-lg p-4">
+            <div className={`bg-surface-50 rounded-lg p-4 ${!generatedScript ? 'opacity-50 pointer-events-none' : ''}`}>
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">3</span>
               Voice & Audio
             </h2>
+
+            {!generatedScript ? (
+              <p className="text-sm text-warning/80 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Please complete Step 2 first (script required)
+              </p>
+            ) : (
+              <>
 
             <div className="space-y-4">
               <div>
@@ -844,17 +875,25 @@ export default function AvatarStudioPage() {
                 </div>
               )}
             </div>
+            </>
+            )}
           </div>
           )}
 
           {/* Step 4: Lipsync Video Generation */}
-          <div className="bg-surface-50 rounded-lg p-4">
+          <div className={`bg-surface-50 rounded-lg p-4 ${!generatedAudioUrl ? 'opacity-50 pointer-events-none' : ''}`}>
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">4</span>
               Generate Video
             </h2>
 
-            <div className="space-y-4">
+            {!generatedAudioUrl ? (
+              <p className="text-sm text-warning/80 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                {scriptMode === 'audio' ? 'Please upload audio first (Step 2)' : 'Please complete Step 3 first (audio required)'}
+              </p>
+            ) : (
+              <div className="space-y-4">
               <div className="space-y-2 text-sm">
                 <div
                   className={`flex items-center gap-2 ${selectedAvatar || generatedUrls.length > 0 ? 'text-success' : 'text-surface-400'}`}
@@ -946,6 +985,7 @@ export default function AvatarStudioPage() {
                 </div>
               )}
             </div>
+            )}
           </div>
         </div>
 
