@@ -29,7 +29,8 @@ export async function downloadVideoWithYtDlp(
       url,
       '--output', outputTemplate,
       '--format', 'best[ext=mp4]/best',
-      '--no-playlist',
+      '--yes-playlist', // Allow playlists (Facebook Ads Library returns playlists)
+      '--max-downloads', '1', // Only download first video from playlist
       '--cookies-from-browser', 'chrome', // Use Chrome cookies for authentication
       '--print', '%(title)s|%(duration)s|%(extractor)s', // Print metadata
     ])
