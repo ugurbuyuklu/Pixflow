@@ -13,9 +13,10 @@ export function CameraPresetCards({ selectedPresets, onPresetsChange }: CameraPr
 
     let newSelection: string[]
     if (isSelected) {
+      // Deselect
       newSelection = current.filter((p) => p !== preset)
     } else {
-      // Check limits
+      // Select
       const categoryDef = VIDEO_PRESETS[category]
       const maxSelections = categoryDef?.multiSelect ? 3 : 1
 
@@ -23,7 +24,7 @@ export function CameraPresetCards({ selectedPresets, onPresetsChange }: CameraPr
         // Single-select: replace existing
         newSelection = [preset]
       } else if (current.length >= maxSelections) {
-        // Multi-select: enforce max limit
+        // Multi-select: enforce max limit by removing oldest
         newSelection = [...current.slice(1), preset]
       } else {
         newSelection = [...current, preset]
@@ -37,40 +38,38 @@ export function CameraPresetCards({ selectedPresets, onPresetsChange }: CameraPr
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {Object.entries(VIDEO_PRESETS).map(([category, config]) => (
         <div key={category}>
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="text-sm font-medium text-surface-900">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-xs text-surface-400 font-medium uppercase tracking-wide">
               {config.label}
-            </h4>
-            <span className="text-xs text-surface-500">
+            </p>
+            <span className="text-[10px] text-surface-300">
               {config.multiSelect ? 'Select up to 3' : 'Select one'}
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {config.presets.map((preset) => {
               const isSelected = (selectedPresets[category] || []).includes(preset)
 
               return (
                 <button
                   key={preset}
+                  type="button"
                   onClick={() => handleToggle(category, preset)}
                   className={`
-                    relative px-3 py-2 rounded-lg text-sm font-medium
-                    border-2 transition-all duration-150
+                    relative px-2.5 py-1.5 rounded-md text-xs font-medium transition-all
                     ${
                       isSelected
-                        ? 'border-brand bg-brand text-white'
-                        : 'border-surface-200 bg-white text-surface-700 hover:border-surface-300'
+                        ? 'bg-brand/20 text-brand ring-1 ring-brand/50'
+                        : 'bg-surface-100 text-surface-500 hover:bg-surface-200'
                     }
                   `}
                 >
-                  <span className="block">{preset}</span>
-                  {isSelected && (
-                    <Check className="absolute top-1 right-1 w-3.5 h-3.5" />
-                  )}
+                  {preset}
+                  {isSelected && <Check className="inline-block ml-1 w-3 h-3" />}
                 </button>
               )
             })}
