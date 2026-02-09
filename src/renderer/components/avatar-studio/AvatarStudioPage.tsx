@@ -17,7 +17,7 @@ import {
   X,
   XCircle,
 } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { apiUrl, assetUrl, authFetch, getApiError } from '../../lib/api'
 import type { AvatarAgeGroup, AvatarEthnicity, AvatarGender, AvatarOutfit, ScriptTone } from '../../stores/avatarStore'
 import { REACTION_DEFINITIONS, useAvatarStore } from '../../stores/avatarStore'
@@ -75,8 +75,17 @@ async function downloadVideo(url: string, filename: string) {
   }
 }
 
+interface VideoFile {
+  filename: string
+  url: string
+  size: number
+  modifiedAt: string
+}
+
 export default function AvatarStudioPage() {
   const avatarFileInputRef = useRef<HTMLInputElement>(null)
+  const [videos, setVideos] = useState<VideoFile[]>([])
+  const [videosLoading, setVideosLoading] = useState(false)
 
   const {
     mode,
@@ -108,11 +117,10 @@ export default function AvatarStudioPage() {
     lipsyncGenerating,
     lipsyncJob,
     generatedVideoUrl,
-    i2vPrompt,
-    i2vDuration,
-    i2vLoading,
-    i2vVideoUrl,
-    i2vError,
+    scriptMode,
+    transcribingVideo,
+    transcriptionError,
+    selectedVideoForTranscription,
     studioMode,
     selectedReaction,
     reactionDuration,
@@ -134,8 +142,8 @@ export default function AvatarStudioPage() {
     setScriptTone,
     setGeneratedScript,
     setSelectedVoice,
-    setI2vPrompt,
-    setI2vDuration,
+    setScriptMode,
+    setSelectedVideoForTranscription,
     setStudioMode,
     setSelectedReaction,
     setReactionDuration,
@@ -147,7 +155,7 @@ export default function AvatarStudioPage() {
     generateScript,
     generateTTS,
     createLipsync,
-    generateI2V,
+    transcribeVideo,
     generateReactionVideo,
     cancelReactionVideo,
   } = useAvatarStore()
@@ -156,6 +164,28 @@ export default function AvatarStudioPage() {
     loadAvatars()
     loadVoices()
   }, [loadAvatars, loadVoices])
+
+  useEffect(() => {
+    async function loadVideos() {
+      setVideosLoading(true)
+      try {
+        const res = await authFetch(apiUrl('/api/videos/list'))
+        if (!res.ok) {
+          console.error('Failed to load videos:', res.status)
+          return
+        }
+        const data = await res.json()
+        if (data.success && data.data?.videos) {
+          setVideos(data.data.videos)
+        }
+      } catch (err) {
+        console.error('Failed to load videos:', err)
+      } finally {
+        setVideosLoading(false)
+      }
+    }
+    loadVideos()
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -409,111 +439,227 @@ export default function AvatarStudioPage() {
                 )}
               </div>
             )}
+          </div>
 
-            {(selectedAvatar || generatedUrls.length > 0) && (
-              <div className="mt-4 p-3 bg-surface-100 rounded-lg">
-                <p className="text-sm text-surface-400 mb-2">Selected Avatar:</p>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    className="w-16 h-24 rounded-lg overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() =>
-                      setFullSizeAvatarUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')
-                    }
-                  >
-                    <img
-                      src={assetUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
-                      alt="Selected avatar"
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
+          {/* Step 2: Script */}
+          <div className="bg-surface-50 rounded-lg p-4">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">2</span>
+              Script
+            </h2>
+
+            {/* Mode Switcher */}
+            <div className="flex bg-surface-100 rounded-lg p-1 mb-4">
+              <button
+                type="button"
+                onClick={() => setScriptMode('existing')}
+                className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-colors ${
+                  scriptMode === 'existing' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
+                }`}
+              >
+                Already Have Script
+              </button>
+              <button
+                type="button"
+                onClick={() => setScriptMode('fetch')}
+                className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-colors ${
+                  scriptMode === 'fetch' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
+                }`}
+              >
+                Fetch from Video
+              </button>
+              <button
+                type="button"
+                onClick={() => setScriptMode('generate')}
+                className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-colors ${
+                  scriptMode === 'generate' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
+                }`}
+              >
+                Generate New
+              </button>
+            </div>
+
+            {/* Mode: Already Have Script */}
+            {scriptMode === 'existing' && (
+              <div className="space-y-2">
+                <label className="text-sm text-surface-400">Your Script</label>
+                <Textarea
+                  value={generatedScript}
+                  onChange={(e) => setGeneratedScript(e.target.value)}
+                  placeholder="Paste or type your script here..."
+                  rows={6}
+                />
+                {generatedScript && (
+                  <p className="text-xs text-surface-400">
+                    {generatedScript.split(/\s+/).filter(Boolean).length} words (~
+                    {Math.ceil((generatedScript.split(/\s+/).filter(Boolean).length / 150) * 60)}s)
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Mode: Fetch from Video */}
+            {scriptMode === 'fetch' && (
+              <div className="space-y-4">
+                <p className="text-sm text-surface-400">
+                  Select a video to transcribe its audio into a script
+                </p>
+
+                {/* Video Picker */}
+                {!transcribingVideo && !generatedScript && (
                   <div>
-                    <p className="font-medium">
-                      {generatedUrls.length > 0
-                        ? `Generated Avatar ${selectedGeneratedIndex + 1}/${generatedUrls.length}`
-                        : selectedAvatar?.name}
-                    </p>
-                    <p className="text-xs text-surface-400">Click image to view full size</p>
+                    <label className="text-sm text-surface-400 mb-2 block">Available Videos</label>
+                    {videosLoading ? (
+                      <div className="flex items-center gap-2 text-surface-400 p-3">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-sm">Loading videos...</span>
+                      </div>
+                    ) : videos.length === 0 ? (
+                      <div className="bg-surface-100 border border-surface-200 rounded-lg p-4 text-center">
+                        <p className="text-sm text-surface-400">No videos found in outputs folder</p>
+                        <p className="text-xs text-surface-400 mt-1">Generate a video first to transcribe it</p>
+                      </div>
+                    ) : (
+                      <div className="max-h-64 overflow-y-auto border border-surface-200 rounded-lg divide-y divide-surface-200">
+                        {videos.map((video) => (
+                          <button
+                            key={video.filename}
+                            type="button"
+                            onClick={() => transcribeVideo(video.url)}
+                            className="w-full p-3 hover:bg-surface-100 flex items-center gap-3 text-left transition-colors"
+                          >
+                            <Video className="w-5 h-5 text-surface-400 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-surface-900 truncate">{video.filename}</p>
+                              <p className="text-xs text-surface-400">
+                                {new Date(video.modifiedAt).toLocaleDateString()} •{' '}
+                                {(video.size / (1024 * 1024)).toFixed(1)} MB
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                )}
+
+                {/* Loading State */}
+                {transcribingVideo && (
+                  <div className="flex flex-col items-center gap-3 py-4">
+                    <Loader2 className="w-8 h-8 animate-spin text-brand" />
+                    <div className="text-center">
+                      <p className="text-sm font-medium">Extracting audio and transcribing...</p>
+                      <p className="text-xs text-surface-400 mt-1">This may take 60-90 seconds</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error State */}
+                {transcriptionError && (
+                  <div className="bg-danger-muted/50 border border-danger/40 p-3 rounded-lg">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
+                      <p className="text-danger text-sm">{transcriptionError.message}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Success - Transcribed Script */}
+                {generatedScript && !transcribingVideo && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-sm text-surface-400">Transcribed Script (Editable)</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGeneratedScript('')
+                          useAvatarStore.setState({ transcriptionError: null })
+                        }}
+                        className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Try another video
+                      </button>
+                    </div>
+                    <Textarea value={generatedScript} onChange={(e) => setGeneratedScript(e.target.value)} rows={6} />
+                    <p className="text-xs text-surface-400">
+                      {generatedScript.split(/\s+/).filter(Boolean).length} words (~
+                      {Math.ceil((generatedScript.split(/\s+/).filter(Boolean).length / 150) * 60)}s)
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Mode: Generate New Script */}
+            {scriptMode === 'generate' && (
+              <div className="space-y-4">
+                <Input
+                  label="App/Product Concept"
+                  value={scriptConcept}
+                  onChange={(e) => setScriptConcept(e.target.value)}
+                  placeholder="e.g., AI photo transformation app, fitness tracker, dating app..."
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Slider
+                    label="Duration"
+                    displayValue={`${scriptDuration}s`}
+                    min={10}
+                    max={60}
+                    value={scriptDuration}
+                    onChange={(e) => setScriptDuration(Number(e.currentTarget.value))}
+                  />
+                  <Select
+                    label="Tone"
+                    value={scriptTone}
+                    onChange={(e) => setScriptTone(e.target.value as ScriptTone)}
+                    options={TONE_OPTIONS}
+                  />
                 </div>
+
+                <Button
+                  variant="primary"
+                  size="md"
+                  icon={scriptGenerating ? undefined : <MessageSquare className="w-4 h-4" />}
+                  loading={scriptGenerating}
+                  onClick={generateScript}
+                  disabled={scriptGenerating || !scriptConcept.trim()}
+                  className="w-full"
+                >
+                  {scriptGenerating ? 'Generating Script...' : 'Generate Script'}
+                </Button>
+                {!scriptGenerating && !scriptConcept.trim() && (
+                  <p className="text-xs text-warning/80 flex items-center gap-1.5 mt-1">
+                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                    Enter an app/product concept above to generate a script
+                  </p>
+                )}
+
+                {generatedScript && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-surface-400">Generated Script:</span>
+                      <span className="text-xs text-surface-400">
+                        {scriptWordCount} words (~{scriptEstimatedDuration}s)
+                      </span>
+                    </div>
+                    <Textarea value={generatedScript} onChange={(e) => setGeneratedScript(e.target.value)} rows={4} />
+                    <button
+                      type="button"
+                      onClick={generateScript}
+                      disabled={scriptGenerating}
+                      className="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Regenerate
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Step 2: Script Generation */}
-          <div className="bg-surface-50 rounded-lg p-4">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">2</span>
-              Generate Script
-            </h2>
-
-            <div className="space-y-4">
-              <Input
-                label="App/Product Concept"
-                value={scriptConcept}
-                onChange={(e) => setScriptConcept(e.target.value)}
-                placeholder="e.g., AI photo transformation app, fitness tracker, dating app..."
-              />
-
-              <div className="grid grid-cols-2 gap-4">
-                <Slider
-                  label="Duration"
-                  displayValue={`${scriptDuration}s`}
-                  min={10}
-                  max={60}
-                  value={scriptDuration}
-                  onChange={(e) => setScriptDuration(Number(e.currentTarget.value))}
-                />
-                <Select
-                  label="Tone"
-                  value={scriptTone}
-                  onChange={(e) => setScriptTone(e.target.value as ScriptTone)}
-                  options={TONE_OPTIONS}
-                />
-              </div>
-
-              <Button
-                variant="primary"
-                size="md"
-                icon={scriptGenerating ? undefined : <MessageSquare className="w-4 h-4" />}
-                loading={scriptGenerating}
-                onClick={generateScript}
-                disabled={scriptGenerating || !scriptConcept.trim()}
-                className="w-full"
-              >
-                {scriptGenerating ? 'Generating Script...' : 'Generate Script'}
-              </Button>
-              {!scriptGenerating && !scriptConcept.trim() && (
-                <p className="text-xs text-warning/80 flex items-center gap-1.5 mt-1">
-                  <AlertTriangle className="w-3 h-3 shrink-0" />
-                  Enter an app/product concept above to generate a script
-                </p>
-              )}
-
-              {generatedScript && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-surface-400">Generated Script:</span>
-                    <span className="text-xs text-surface-400">
-                      {scriptWordCount} words (~{scriptEstimatedDuration}s)
-                    </span>
-                  </div>
-                  <Textarea value={generatedScript} onChange={(e) => setGeneratedScript(e.target.value)} rows={4} />
-                  <button
-                    type="button"
-                    onClick={generateScript}
-                    disabled={scriptGenerating}
-                    className="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    Regenerate
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="space-y-6">
           {/* Step 3: Voice Selection & TTS */}
           <div className="bg-surface-50 rounded-lg p-4">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -684,9 +830,11 @@ export default function AvatarStudioPage() {
               )}
             </div>
           </div>
+        </div>
 
-          {/* Step 5: Video Output */}
-          {generatedVideoUrl && (
+        {/* Right Column: Output Only */}
+        <div className="space-y-6">
+          {generatedVideoUrl ? (
             <div className="bg-surface-50 rounded-lg p-4">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <span className="bg-success rounded-full w-6 h-6 flex items-center justify-center text-sm">5</span>
@@ -729,91 +877,13 @@ export default function AvatarStudioPage() {
                 </div>
               </div>
             </div>
-          )}
-        </div>
-        <div className="bg-surface-100/50 rounded-xl border border-surface-200/50 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Video className="w-5 h-5 text-accent" />
-            <h3 className="text-lg font-semibold text-surface-900">Image to Video</h3>
-            <span className="text-xs text-surface-400 ml-auto">Powered by Kling AI</span>
-          </div>
-
-          {i2vError && (
-            <div
-              className={`rounded-lg p-3 mb-4 flex items-start gap-2 ${
-                i2vError.type === 'warning'
-                  ? 'bg-warning-muted/50 border border-warning/40'
-                  : 'bg-danger-muted/50 border border-danger/40'
-              }`}
-            >
-              <AlertCircle
-                className={`w-4 h-4 shrink-0 mt-0.5 ${i2vError.type === 'warning' ? 'text-warning' : 'text-danger'}`}
-              />
-              <p className={`text-sm ${i2vError.type === 'warning' ? 'text-warning' : 'text-danger'}`}>
-                {i2vError.message}
-              </p>
+          ) : (
+            <div className="bg-surface-50/50 rounded-lg p-8 text-center">
+              <Video className="w-16 h-16 mx-auto mb-4 text-surface-300 opacity-50" />
+              <p className="text-surface-400">Your video will appear here</p>
+              <p className="text-xs text-surface-400 mt-2">Complete steps 1-4 to generate</p>
             </div>
           )}
-
-          <div className="space-y-4">
-            <Textarea
-              label="Motion Prompt"
-              value={i2vPrompt}
-              onChange={(e) => setI2vPrompt(e.target.value)}
-              placeholder="Describe the motion or scene... e.g., 'Camera slowly zooms in while the subject smiles and waves'"
-              className="h-20"
-            />
-
-            <div className="flex items-center gap-4">
-              <div>
-                <span className="block text-sm font-medium text-surface-500 mb-2">Duration</span>
-                <div className="flex gap-2">
-                  {(['5', '10'] as const).map((d) => (
-                    <button
-                      type="button"
-                      key={d}
-                      onClick={() => setI2vDuration(d)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        i2vDuration === d
-                          ? 'bg-accent text-white'
-                          : 'bg-surface-200 text-surface-500 hover:bg-surface-200'
-                      }`}
-                    >
-                      {d}s
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex-1 flex justify-end">
-                <Button
-                  variant="accent"
-                  size="lg"
-                  icon={i2vLoading ? undefined : <Video className="w-5 h-5" />}
-                  loading={i2vLoading}
-                  onClick={generateI2V}
-                  disabled={i2vLoading || !i2vPrompt.trim()}
-                >
-                  {i2vLoading ? 'Generating...' : 'Generate Video'}
-                </Button>
-              </div>
-            </div>
-
-            {i2vVideoUrl && (
-              <div className="space-y-3">
-                {/* biome-ignore lint/a11y/useMediaCaption: AI-generated video, no captions available */}
-                <video controls src={assetUrl(i2vVideoUrl)} className="w-full rounded-lg" />
-                <button
-                  type="button"
-                  onClick={() => downloadVideo(assetUrl(i2vVideoUrl), 'image-to-video.mp4')}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-success to-success-hover hover:from-success-hover hover:to-success rounded-lg font-medium transition-all"
-                >
-                  <Download className="w-4 h-4" />
-                  Download Video
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       </div>
       ) : (

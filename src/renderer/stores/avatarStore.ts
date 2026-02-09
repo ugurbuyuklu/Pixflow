@@ -121,11 +121,10 @@ interface AvatarState {
   lipsyncJob: LipsyncJob | null
   generatedVideoUrl: string | null
 
-  i2vPrompt: string
-  i2vDuration: '5' | '10'
-  i2vLoading: boolean
-  i2vVideoUrl: string | null
-  i2vError: ErrorInfo | null
+  scriptMode: 'existing' | 'fetch' | 'generate'
+  transcribingVideo: boolean
+  transcriptionError: ErrorInfo | null
+  selectedVideoForTranscription: string | null
 
   studioMode: AvatarStudioMode
   selectedReaction: ReactionType | null
@@ -149,8 +148,8 @@ interface AvatarState {
   setScriptTone: (tone: ScriptTone) => void
   setGeneratedScript: (script: string) => void
   setSelectedVoice: (voice: Voice | null) => void
-  setI2vPrompt: (prompt: string) => void
-  setI2vDuration: (duration: '5' | '10') => void
+  setScriptMode: (mode: 'existing' | 'fetch' | 'generate') => void
+  setSelectedVideoForTranscription: (url: string | null) => void
   setStudioMode: (mode: AvatarStudioMode) => void
   setSelectedReaction: (reaction: ReactionType | null) => void
   setReactionDuration: (duration: ReactionDuration) => void
@@ -165,7 +164,7 @@ interface AvatarState {
   createLipsync: () => Promise<void>
   generateReactionVideo: () => Promise<void>
   cancelReactionVideo: () => void
-  generateI2V: () => Promise<void>
+  transcribeVideo: (videoUrl: string) => Promise<void>
   sendToImageToPrompt: (imageUrl: string) => Promise<File | null>
 }
 
@@ -207,11 +206,10 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
   lipsyncJob: null,
   generatedVideoUrl: null,
 
-  i2vPrompt: '',
-  i2vDuration: '5',
-  i2vLoading: false,
-  i2vVideoUrl: null,
-  i2vError: null,
+  scriptMode: 'existing',
+  transcribingVideo: false,
+  transcriptionError: null,
+  selectedVideoForTranscription: null,
 
   studioMode: 'talking',
   selectedReaction: null,
@@ -235,8 +233,8 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
   setScriptTone: (scriptTone) => set({ scriptTone }),
   setGeneratedScript: (generatedScript) => set({ generatedScript }),
   setSelectedVoice: (selectedVoice) => set({ selectedVoice }),
-  setI2vPrompt: (i2vPrompt) => set({ i2vPrompt }),
-  setI2vDuration: (i2vDuration) => set({ i2vDuration }),
+  setScriptMode: (scriptMode) => set({ scriptMode }),
+  setSelectedVideoForTranscription: (selectedVideoForTranscription) => set({ selectedVideoForTranscription }),
   setStudioMode: (studioMode) => set({ studioMode }),
   setSelectedReaction: (selectedReaction) => set({ selectedReaction }),
   setReactionDuration: (reactionDuration) => set({ reactionDuration }),
@@ -460,39 +458,33 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
     }
   },
 
-  generateI2V: async () => {
-    const { generatedUrls, selectedGeneratedIndex, selectedAvatar, i2vPrompt, i2vDuration } = get()
-    const imageUrl = generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url
-    if (!imageUrl) {
-      set({ i2vError: { message: 'Please select or generate an avatar', type: 'warning' } })
-      return
-    }
-    if (!i2vPrompt.trim()) {
-      set({ i2vError: { message: 'Please enter a motion prompt', type: 'warning' } })
+  transcribeVideo: async (videoUrl: string) => {
+    if (!videoUrl) {
+      set({ transcriptionError: { message: 'Please select a video', type: 'warning' } })
       return
     }
 
-    set({ i2vLoading: true, i2vError: null, i2vVideoUrl: null })
+    set({ transcribingVideo: true, transcriptionError: null })
 
     try {
-      const res = await authFetch(apiUrl('/api/avatars/i2v'), {
+      const res = await authFetch(apiUrl('/api/videos/transcribe'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl, prompt: i2vPrompt, duration: i2vDuration }),
+        body: JSON.stringify({ videoUrl }),
       })
 
       if (!res.ok) {
         const raw = await res.json().catch(() => ({}))
-        throw new Error(getApiError(raw, 'Failed to generate video'))
+        throw new Error(getApiError(raw, 'Failed to transcribe video'))
       }
 
       const raw = await res.json()
-      const data = unwrapApiData<{ localPath: string }>(raw)
-      set({ i2vVideoUrl: data.localPath })
+      const data = unwrapApiData<{ transcript: string; duration: number; language?: string }>(raw)
+      set({ generatedScript: data.transcript })
     } catch (err) {
-      set({ i2vError: parseError(err) })
+      set({ transcriptionError: parseError(err) })
     } finally {
-      set({ i2vLoading: false })
+      set({ transcribingVideo: false })
     }
   },
 

@@ -19,6 +19,7 @@ import { createImageRatingsRouter } from './routes/imageRatings.js'
 import { createNotificationsRouter } from './routes/notifications.js'
 import { createPresetsRouter } from './routes/presets.js'
 import { createProductsRouter } from './routes/products.js'
+import { createVideosRouter } from './routes/videos.js'
 import { ensureBootstrapAdminIfConfigured } from './services/auth.js'
 import { addToHistory } from './services/history.js'
 import {
@@ -705,6 +706,7 @@ export function createApp(config: ServerConfig): express.Express {
   app.use('/api/generate', requireAuth, createGenerateRouter({ projectRoot, openFolder: config.openFolder }))
   app.use('/api/history', requireAuth, createHistoryRouter())
   app.use('/api/avatars', requireAuth, createAvatarsRouter({ projectRoot }))
+  app.use('/api/videos', requireAuth, createVideosRouter({ projectRoot }))
   app.use('/api/presets', requireAuth, createPresetsRouter())
   app.use('/api/feedback', requireAuth, createFeedbackRouter())
   app.use('/api/notifications', requireAuth, createNotificationsRouter())
