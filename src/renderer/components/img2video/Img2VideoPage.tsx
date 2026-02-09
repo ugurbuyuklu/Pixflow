@@ -315,24 +315,26 @@ export default function Img2VideoPage() {
                 Source Images ({entries.length})
               </h2>
               <div className="grid grid-cols-5 gap-3">
-                {entries.map((entry, i) => (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: static during generation
-                  <div key={i} className="bg-surface-0 rounded-lg overflow-hidden border border-surface-100">
+                {entries.map((entry, i) => {
+                  const job = jobs[i]
+                  return (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: static during generation
+                    <div key={i} className="bg-surface-0 rounded-lg overflow-hidden border border-surface-100">
                     <div className="relative aspect-[9/16] bg-surface-100">
                       <img src={assetUrl(entry.url)} alt={`Source ${i + 1}`} className="w-full h-full object-cover" />
-                      {jobs[i] && (
+                      {job && (
                         <div className="absolute inset-0 flex items-center justify-center">
-                          {jobs[i].status === 'generating' && (
+                          {job.status === 'generating' && (
                             <div className="bg-black/60 rounded-full p-2">
                               <Loader2 className="w-5 h-5 animate-spin text-brand-400" />
                             </div>
                           )}
-                          {jobs[i].status === 'completed' && (
+                          {job.status === 'completed' && (
                             <div className="bg-success/80 rounded-full p-2">
                               <CheckCircle className="w-5 h-5 text-white" />
                             </div>
                           )}
-                          {jobs[i].status === 'failed' && (
+                          {job.status === 'failed' && (
                             <div className="bg-danger/80 rounded-full p-2">
                               <XCircle className="w-5 h-5 text-white" />
                             </div>
@@ -396,7 +398,8 @@ export default function Img2VideoPage() {
                       )}
                     </div>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
