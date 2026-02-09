@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Download, Loader2, Play, Plus, Settings, Trash2, Upload, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Download, Loader2, Play, Plus, Settings, Trash2, Upload, X } from 'lucide-react'
 import React, { useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { assetUrl } from '../../lib/api'
@@ -36,8 +36,33 @@ export default function Img2VideoQueuePage() {
 
   const [promptExpanded, setPromptExpanded] = useState(true)
   const [presetsExpanded, setPresetsExpanded] = useState(false)
+  const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set())
 
   const selectedItem = selectedId ? queueItems[selectedId] : null
+
+  const toggleVideoSelection = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const newSet = new Set(selectedVideos)
+    if (newSet.has(id)) {
+      newSet.delete(id)
+    } else {
+      newSet.add(id)
+    }
+    setSelectedVideos(newSet)
+  }
+
+  const downloadSelectedVideos = () => {
+    for (const id of selectedVideos) {
+      const item = queueItems[id]
+      if (item?.result) {
+        const a = document.createElement('a')
+        a.href = assetUrl(item.result.localPath)
+        a.download = item.result.localPath.split('/').pop() || 'video.mp4'
+        a.click()
+      }
+    }
+    setSelectedVideos(new Set())
+  }
 
   // Dropzone for workspace uploads
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -337,7 +362,19 @@ export default function Img2VideoQueuePage() {
             {/* Generated Videos */}
             {queueOrder.filter((id) => queueItems[id].status === 'completed').length > 0 && (
               <div className="mb-4 flex-1 overflow-hidden flex flex-col">
-                <h3 className="text-sm font-semibold mb-2">Generated Videos</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold">Generated Videos</h3>
+                  {selectedVideos.size > 0 && (
+                    <Button
+                      variant="primary"
+                      size="xs"
+                      icon={<Download className="w-3 h-3" />}
+                      onClick={downloadSelectedVideos}
+                    >
+                      Download {selectedVideos.size}
+                    </Button>
+                  )}
+                </div>
                 <div className="flex-1 overflow-y-auto pr-2 -mr-2">
                   <div className="grid grid-cols-2 gap-2">
                     {queueOrder
@@ -345,10 +382,13 @@ export default function Img2VideoQueuePage() {
                       .slice(0, 6)
                       .map((id) => {
                         const item = queueItems[id]
+                        const isSelected = selectedVideos.has(id)
                         return (
                           <div
                             key={id}
-                            className="relative aspect-video rounded-lg overflow-hidden bg-surface-100 cursor-pointer group"
+                            className={`relative aspect-video rounded-lg overflow-hidden bg-surface-100 cursor-pointer group border-2 transition-colors ${
+                              isSelected ? 'border-brand' : 'border-transparent'
+                            }`}
                             onClick={() => selectItem(id)}
                           >
                             <video
@@ -368,6 +408,18 @@ export default function Img2VideoQueuePage() {
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                               <Play className="w-6 h-6 text-white" />
                             </div>
+                            {/* Selection Checkbox */}
+                            <button
+                              type="button"
+                              onClick={(e) => toggleVideoSelection(id, e)}
+                              className="absolute top-2 right-2 w-5 h-5 rounded bg-surface-900/80 flex items-center justify-center hover:bg-surface-900 transition-colors z-10"
+                            >
+                              {isSelected ? (
+                                <Check className="w-3.5 h-3.5 text-brand" />
+                              ) : (
+                                <div className="w-3 h-3 border-2 border-surface-300 rounded" />
+                              )}
+                            </button>
                           </div>
                         )
                       })}
