@@ -75,19 +75,10 @@ async function downloadVideo(url: string, filename: string) {
   }
 }
 
-interface VideoFile {
-  filename: string
-  url: string
-  size: number
-  modifiedAt: string
-}
-
 export default function AvatarStudioPage() {
   const avatarFileInputRef = useRef<HTMLInputElement>(null)
   const videoFileInputRef = useRef<HTMLInputElement>(null)
-  const [videos, setVideos] = useState<VideoFile[]>([])
-  const [videosLoading, setVideosLoading] = useState(false)
-  const [videoSource, setVideoSource] = useState<'library' | 'url' | 'upload'>('library')
+  const [videoSource, setVideoSource] = useState<'url' | 'upload'>('url')
   const [videoUrl, setVideoUrl] = useState('')
   const [uploadingVideo, setUploadingVideo] = useState(false)
 
@@ -168,28 +159,6 @@ export default function AvatarStudioPage() {
     loadAvatars()
     loadVoices()
   }, [loadAvatars, loadVoices])
-
-  useEffect(() => {
-    async function loadVideos() {
-      setVideosLoading(true)
-      try {
-        const res = await authFetch(apiUrl('/api/videos/list'))
-        if (!res.ok) {
-          console.error('Failed to load videos:', res.status)
-          return
-        }
-        const data = await res.json()
-        if (data.success && data.data?.videos) {
-          setVideos(data.data.videos)
-        }
-      } catch (err) {
-        console.error('Failed to load videos:', err)
-      } finally {
-        setVideosLoading(false)
-      }
-    }
-    loadVideos()
-  }, [])
 
   return (
     <div className="space-y-6">
@@ -515,15 +484,6 @@ export default function AvatarStudioPage() {
                     <div className="flex bg-surface-100 rounded-lg p-1">
                       <button
                         type="button"
-                        onClick={() => setVideoSource('library')}
-                        className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-colors ${
-                          videoSource === 'library' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
-                        }`}
-                      >
-                        From Library
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => setVideoSource('url')}
                         className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-colors ${
                           videoSource === 'url' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
@@ -541,44 +501,6 @@ export default function AvatarStudioPage() {
                         Upload File
                       </button>
                     </div>
-
-                    {/* Source: From Library */}
-                    {videoSource === 'library' && (
-                      <div>
-                        <label className="text-sm text-surface-400 mb-2 block">Available Videos</label>
-                        {videosLoading ? (
-                          <div className="flex items-center gap-2 text-surface-400 p-3">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span className="text-sm">Loading videos...</span>
-                          </div>
-                        ) : videos.length === 0 ? (
-                          <div className="bg-surface-100 border border-surface-200 rounded-lg p-4 text-center">
-                            <p className="text-sm text-surface-400">No videos found in outputs folder</p>
-                            <p className="text-xs text-surface-400 mt-1">Generate a video first to transcribe it</p>
-                          </div>
-                        ) : (
-                          <div className="max-h-64 overflow-y-auto border border-surface-200 rounded-lg divide-y divide-surface-200">
-                            {videos.map((video) => (
-                              <button
-                                key={video.filename}
-                                type="button"
-                                onClick={() => transcribeVideo(video.url)}
-                                className="w-full p-3 hover:bg-surface-100 flex items-center gap-3 text-left transition-colors"
-                              >
-                                <Video className="w-5 h-5 text-surface-400 shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-surface-900 truncate">{video.filename}</p>
-                                  <p className="text-xs text-surface-400">
-                                    {new Date(video.modifiedAt).toLocaleDateString()} •{' '}
-                                    {(video.size / (1024 * 1024)).toFixed(1)} MB
-                                  </p>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
 
                     {/* Source: Video URL */}
                     {videoSource === 'url' && (
