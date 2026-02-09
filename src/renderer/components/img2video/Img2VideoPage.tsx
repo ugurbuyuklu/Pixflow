@@ -170,7 +170,7 @@ export default function Img2VideoPage() {
       ) : (
         <>
           {/* Per-image cards with individual prompts */}
-          {!generating && jobs.every((j) => j.status !== 'completed') && (
+          {entries.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-surface-400 uppercase tracking-wider">
