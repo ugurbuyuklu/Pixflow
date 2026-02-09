@@ -9,6 +9,8 @@ import {
   MessageSquare,
   Mic,
   RefreshCw,
+  Redo,
+  Undo,
   Upload,
   Users,
   Video,
@@ -28,6 +30,7 @@ import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
 import { Textarea } from '../ui/Textarea'
+import { ScriptDiffView } from './ScriptDiffView'
 
 const GENDER_OPTIONS = [
   { value: 'female', label: 'Female' },
@@ -85,6 +88,7 @@ export default function AvatarStudioPage() {
   const [uploadedAudioFile, setUploadedAudioFile] = useState<File | null>(null)
   const [showVariationOptions, setShowVariationOptions] = useState(false)
   const [targetDuration, setTargetDuration] = useState(30)
+  const [showDiff, setShowDiff] = useState(false)
 
   const {
     mode,
@@ -108,6 +112,8 @@ export default function AvatarStudioPage() {
     generatedScript,
     scriptWordCount,
     scriptEstimatedDuration,
+    scriptHistory,
+    scriptHistoryIndex,
     voices,
     voicesLoading,
     selectedVoice,
@@ -156,6 +162,8 @@ export default function AvatarStudioPage() {
     generateAvatar,
     generateScript,
     refineScript,
+    undoScript,
+    redoScript,
     generateTTS,
     uploadAudio,
     createLipsync,
@@ -183,6 +191,7 @@ export default function AvatarStudioPage() {
       shorter: 'Make this script shorter by removing unnecessary words, phrases, or sentences. Keep the core message intact. Do NOT rewrite the entire script - just trim it down.',
       longer: 'Expand this script by adding relevant details, examples, or elaboration between existing sentences. Keep the original content and flow - just add to it. Do NOT rewrite the entire script.',
     }
+    setShowDiff(true)
     await refineScript(instructions[type])
     setShowVariationOptions(false)
   }
@@ -500,16 +509,48 @@ export default function AvatarStudioPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-sm text-surface-400">Your Script</label>
-                  {generatedScript && !scriptGenerating && (
-                    <button
-                      type="button"
-                      onClick={() => setShowVariationOptions(!showVariationOptions)}
-                      className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      Generate Similar
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {generatedScript && !scriptGenerating && scriptHistory.length > 1 && (
+                      <div className="flex items-center gap-1 border-r border-surface-300 pr-2">
+                        <button
+                          type="button"
+                          onClick={undoScript}
+                          disabled={scriptHistoryIndex <= 0}
+                          className="text-xs text-surface-400 hover:text-surface-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Undo"
+                        >
+                          <Undo className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={redoScript}
+                          disabled={scriptHistoryIndex >= scriptHistory.length - 1}
+                          className="text-xs text-surface-400 hover:text-surface-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Redo"
+                        >
+                          <Redo className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowDiff(!showDiff)}
+                          className={`text-xs px-2 py-1 rounded ${showDiff ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-300'}`}
+                          title={showDiff ? 'Hide changes' : 'Show changes'}
+                        >
+                          {showDiff ? 'Hide' : 'Diff'}
+                        </button>
+                      </div>
+                    )}
+                    {generatedScript && !scriptGenerating && (
+                      <button
+                        type="button"
+                        onClick={() => setShowVariationOptions(!showVariationOptions)}
+                        className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Generate Similar
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {showVariationOptions && generatedScript && (
                   <div className="space-y-2">
@@ -568,13 +609,20 @@ export default function AvatarStudioPage() {
                     </div>
                   </div>
                 )}
-                <Textarea
-                  value={generatedScript}
-                  onChange={(e) => setGeneratedScript(e.target.value)}
-                  placeholder="Paste or type your script here..."
-                  rows={6}
-                  disabled={scriptGenerating}
-                />
+                {showDiff && scriptHistory.length > 1 && scriptHistoryIndex > 0 ? (
+                  <ScriptDiffView
+                    oldText={scriptHistory[scriptHistoryIndex - 1] || ''}
+                    newText={generatedScript}
+                  />
+                ) : (
+                  <Textarea
+                    value={generatedScript}
+                    onChange={(e) => setGeneratedScript(e.target.value)}
+                    placeholder="Paste or type your script here..."
+                    rows={6}
+                    disabled={scriptGenerating}
+                  />
+                )}
                 {generatedScript && (
                   <p className="text-xs text-surface-400">
                     {generatedScript.split(/\s+/).filter(Boolean).length} words (~
@@ -731,6 +779,36 @@ export default function AvatarStudioPage() {
                     <div className="flex items-center justify-between">
                       <label className="text-sm text-surface-400">Transcribed Script (Editable)</label>
                       <div className="flex items-center gap-2">
+                        {!scriptGenerating && scriptHistory.length > 1 && (
+                          <div className="flex items-center gap-1 border-r border-surface-300 pr-2">
+                            <button
+                              type="button"
+                              onClick={undoScript}
+                              disabled={scriptHistoryIndex <= 0}
+                              className="text-xs text-surface-400 hover:text-surface-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Undo"
+                            >
+                              <Undo className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={redoScript}
+                              disabled={scriptHistoryIndex >= scriptHistory.length - 1}
+                              className="text-xs text-surface-400 hover:text-surface-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Redo"
+                            >
+                              <Redo className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowDiff(!showDiff)}
+                              className={`text-xs px-2 py-1 rounded ${showDiff ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-300'}`}
+                              title={showDiff ? 'Hide changes' : 'Show changes'}
+                            >
+                              {showDiff ? 'Hide' : 'Diff'}
+                            </button>
+                          </div>
+                        )}
                         {!scriptGenerating && (
                           <button
                             type="button"
@@ -811,12 +889,19 @@ export default function AvatarStudioPage() {
                         </div>
                       </div>
                     )}
-                    <Textarea
-                      value={generatedScript}
-                      onChange={(e) => setGeneratedScript(e.target.value)}
-                      rows={6}
-                      disabled={scriptGenerating}
-                    />
+                    {showDiff && scriptHistory.length > 1 && scriptHistoryIndex > 0 ? (
+                      <ScriptDiffView
+                        oldText={scriptHistory[scriptHistoryIndex - 1] || ''}
+                        newText={generatedScript}
+                      />
+                    ) : (
+                      <Textarea
+                        value={generatedScript}
+                        onChange={(e) => setGeneratedScript(e.target.value)}
+                        rows={6}
+                        disabled={scriptGenerating}
+                      />
+                    )}
                     <p className="text-xs text-surface-400">
                       {generatedScript.split(/\s+/).filter(Boolean).length} words (~
                       {Math.ceil((generatedScript.split(/\s+/).filter(Boolean).length / 150) * 60)}s)
@@ -956,12 +1041,19 @@ export default function AvatarStudioPage() {
                         {scriptWordCount} words (~{scriptEstimatedDuration}s)
                       </span>
                     </div>
-                    <Textarea
-                      value={generatedScript}
-                      onChange={(e) => setGeneratedScript(e.target.value)}
-                      rows={4}
-                      disabled={scriptGenerating}
-                    />
+                    {showDiff && scriptHistory.length > 1 && scriptHistoryIndex > 0 ? (
+                      <ScriptDiffView
+                        oldText={scriptHistory[scriptHistoryIndex - 1] || ''}
+                        newText={generatedScript}
+                      />
+                    ) : (
+                      <Textarea
+                        value={generatedScript}
+                        onChange={(e) => setGeneratedScript(e.target.value)}
+                        rows={4}
+                        disabled={scriptGenerating}
+                      />
+                    )}
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
@@ -981,6 +1073,36 @@ export default function AvatarStudioPage() {
                           <RefreshCw className="w-3 h-3" />
                           Generate Similar
                         </button>
+                      )}
+                      {!scriptGenerating && scriptHistory.length > 1 && (
+                        <div className="flex items-center gap-1 border-l border-surface-300 pl-3">
+                          <button
+                            type="button"
+                            onClick={undoScript}
+                            disabled={scriptHistoryIndex <= 0}
+                            className="text-xs text-surface-400 hover:text-surface-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Undo"
+                          >
+                            <Undo className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={redoScript}
+                            disabled={scriptHistoryIndex >= scriptHistory.length - 1}
+                            className="text-xs text-surface-400 hover:text-surface-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Redo"
+                          >
+                            <Redo className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowDiff(!showDiff)}
+                            className={`text-xs px-2 py-1 rounded ${showDiff ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-300'}`}
+                            title={showDiff ? 'Hide changes' : 'Show changes'}
+                          >
+                            {showDiff ? 'Hide' : 'Diff'}
+                          </button>
+                        </div>
                       )}
                     </div>
                     {showVariationOptions && (

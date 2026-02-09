@@ -110,6 +110,8 @@ interface AvatarState {
   generatedScript: string
   scriptWordCount: number
   scriptEstimatedDuration: number
+  scriptHistory: string[]
+  scriptHistoryIndex: number
 
   voices: Voice[]
   voicesLoading: boolean
@@ -149,6 +151,8 @@ interface AvatarState {
   setScriptDuration: (duration: number) => void
   setScriptTone: (tone: ScriptTone) => void
   setGeneratedScript: (script: string) => void
+  undoScript: () => void
+  redoScript: () => void
   setSelectedVoice: (voice: Voice | null) => void
   setAudioMode: (mode: 'tts' | 'upload') => void
   setScriptMode: (mode: 'existing' | 'audio' | 'fetch' | 'generate') => void
@@ -200,6 +204,8 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
   generatedScript: '',
   scriptWordCount: 0,
   scriptEstimatedDuration: 0,
+  scriptHistory: [],
+  scriptHistoryIndex: -1,
 
   voices: [],
   voicesLoading: false,
@@ -238,7 +244,36 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
   setScriptConcept: (scriptConcept) => set({ scriptConcept }),
   setScriptDuration: (scriptDuration) => set({ scriptDuration }),
   setScriptTone: (scriptTone) => set({ scriptTone }),
-  setGeneratedScript: (generatedScript) => set({ generatedScript }),
+  setGeneratedScript: (generatedScript) => {
+    const { scriptHistory, scriptHistoryIndex } = get()
+    const newHistory = scriptHistory.slice(0, scriptHistoryIndex + 1)
+    newHistory.push(generatedScript)
+    set({
+      generatedScript,
+      scriptHistory: newHistory,
+      scriptHistoryIndex: newHistory.length - 1,
+    })
+  },
+  undoScript: () => {
+    const { scriptHistory, scriptHistoryIndex } = get()
+    if (scriptHistoryIndex > 0) {
+      const newIndex = scriptHistoryIndex - 1
+      set({
+        generatedScript: scriptHistory[newIndex],
+        scriptHistoryIndex: newIndex,
+      })
+    }
+  },
+  redoScript: () => {
+    const { scriptHistory, scriptHistoryIndex } = get()
+    if (scriptHistoryIndex < scriptHistory.length - 1) {
+      const newIndex = scriptHistoryIndex + 1
+      set({
+        generatedScript: scriptHistory[newIndex],
+        scriptHistoryIndex: newIndex,
+      })
+    }
+  },
   setSelectedVoice: (selectedVoice) => set({ selectedVoice }),
   setAudioMode: (audioMode) => set({ audioMode }),
   setScriptMode: (scriptMode) => set({ scriptMode }),
