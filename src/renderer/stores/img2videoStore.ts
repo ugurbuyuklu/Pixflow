@@ -90,6 +90,7 @@ interface Img2VideoState {
 
   generateAll: () => Promise<void>
   regenerateSingle: (index: number) => Promise<void>
+  cancelJob: (index: number) => void
   cancelGenerate: () => void
   reset: () => void
 }
@@ -111,7 +112,7 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
   addEntries: (urls) =>
     set((state) => ({
       entries: [...state.entries, ...urls.map((url) => ({ url, prompt: '', presets: {} }))],
-      jobs: [],
+      // Don't reset jobs - preserve existing job state
       error: null,
     })),
   removeEntry: (index) =>
@@ -179,13 +180,13 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
     }
     set((state) => ({
       entries: [...state.entries, ...uploaded.map((url) => ({ url, prompt: '', presets: {} }))],
-      jobs: [],
+      // Don't reset jobs - preserve existing job state
       uploading: false,
     }))
   },
 
   generateAll: async () => {
-    const { entries, duration, aspectRatio } = get()
+    const { entries, jobs, duration, aspectRatio } = get()
 
     if (entries.length === 0) {
       set({ error: { message: 'No images selected', type: 'warning' } })
@@ -201,15 +202,29 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
     const controller = new AbortController()
     abortController = controller
 
-    const initialJobs: VideoJob[] = entries.map((e) => ({
-      imageUrl: e.url,
-      prompt: composePrompt(e.prompt, e.presets),
-      status: 'pending',
-    }))
+    // Initialize jobs array, keeping existing completed/failed jobs
+    const initialJobs: VideoJob[] = entries.map((e, i) => {
+      // Keep existing completed/failed jobs
+      if (jobs[i] && (jobs[i].status === 'completed' || jobs[i].status === 'failed')) {
+        return jobs[i]
+      }
+      // Create new pending job
+      return {
+        imageUrl: e.url,
+        prompt: composePrompt(e.prompt, e.presets),
+        status: 'pending',
+      }
+    })
     set({ generating: true, error: null, jobs: initialJobs })
 
     const generateOne = async (i: number) => {
       if (controller.signal.aborted) return
+
+      // Skip if job is already completed/failed
+      const currentJob = get().jobs[i]
+      if (currentJob.status === 'completed' || currentJob.status === 'failed') {
+        return
+      }
 
       set((state) => {
         const updated = [...state.jobs]
@@ -262,8 +277,11 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
       }
     }
 
-    const queue = [...Array(entries.length).keys()]
-    const concurrency = Math.min(MAX_CONCURRENCY, entries.length)
+    // Build queue only from pending jobs
+    const queue = initialJobs
+      .map((job, i) => (job.status === 'pending' ? i : -1))
+      .filter((i) => i !== -1)
+    const concurrency = Math.min(MAX_CONCURRENCY, queue.length)
     const workers = Array.from({ length: concurrency }, async () => {
       while (queue.length > 0) {
         if (controller.signal.aborted) return
@@ -344,6 +362,20 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
         return { jobs: updated }
       })
     }
+  },
+
+  cancelJob: (index) => {
+    set((state) => {
+      const updated = [...state.jobs]
+      if (updated[index] && updated[index].status === 'generating') {
+        updated[index] = {
+          ...updated[index],
+          status: 'failed',
+          error: 'Cancelled by user',
+        }
+      }
+      return { jobs: updated }
+    })
   },
 
   cancelGenerate: () => {

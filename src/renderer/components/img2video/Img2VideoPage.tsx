@@ -44,6 +44,7 @@ export default function Img2VideoPage() {
     uploadFiles,
     generateAll,
     regenerateSingle,
+    cancelJob,
     cancelGenerate,
   } = useImg2VideoStore()
 
@@ -54,7 +55,7 @@ export default function Img2VideoPage() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { 'image/jpeg': [], 'image/png': [], 'image/webp': [] },
     maxSize: 10 * 1024 * 1024,
-    disabled: generating || uploading,
+    disabled: uploading,  // Only block during upload, not generation
     onDrop: (accepted) => {
       if (accepted.length > 0) uploadFiles(accepted)
     },
@@ -63,6 +64,12 @@ export default function Img2VideoPage() {
   const completedJobs = jobs.filter((j) => j.status === 'completed')
   const failedJobs = jobs.filter((j) => j.status === 'failed')
   const allPromptsSet = entries.length > 0 && entries.every((e) => e.prompt.trim())
+
+  // Count pending jobs (entries without jobs or with pending/failed status)
+  const pendingCount = entries.filter((_, i) => {
+    const job = jobs[i]
+    return !job || job.status === 'pending' || job.status === 'failed'
+  }).length
 
   const handleDownload = async (localPath: string) => {
     try {
@@ -325,9 +332,19 @@ export default function Img2VideoPage() {
                       {job && (
                         <div className="absolute inset-0 flex items-center justify-center">
                           {job.status === 'generating' && (
-                            <div className="bg-black/60 rounded-full p-2">
-                              <Loader2 className="w-5 h-5 animate-spin text-brand-400" />
-                            </div>
+                            <>
+                              <div className="bg-black/60 rounded-full p-3">
+                                <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => cancelJob(i)}
+                                className="absolute top-2 right-2 bg-danger/80 hover:bg-danger rounded-full p-1.5 transition-colors"
+                                title="Cancel generation"
+                              >
+                                <X className="w-4 h-4 text-white" />
+                              </button>
+                            </>
                           )}
                           {job.status === 'completed' && (
                             <div className="bg-success/80 rounded-full p-2">
@@ -339,6 +356,14 @@ export default function Img2VideoPage() {
                               <XCircle className="w-5 h-5 text-white" />
                             </div>
                           )}
+                        </div>
+                      )}
+                      {/* Queued indicator for entries without jobs */}
+                      {!job && generating && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="bg-surface-800/80 rounded-full px-3 py-1.5">
+                            <span className="text-xs font-medium text-surface-200">Queued</span>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -427,10 +452,12 @@ export default function Img2VideoPage() {
                 size="lg"
                 icon={<Play className="w-5 h-5" />}
                 onClick={generateAll}
-                disabled={!allPromptsSet}
+                disabled={!allPromptsSet || pendingCount === 0}
                 className="w-full"
               >
-                Generate {entries.length} Video{entries.length !== 1 ? 's' : ''}
+                {completedJobs.length > 0
+                  ? `Generate ${pendingCount} More Video${pendingCount !== 1 ? 's' : ''}`
+                  : `Generate ${pendingCount} Video${pendingCount !== 1 ? 's' : ''}`}
               </Button>
             </div>
           )}
