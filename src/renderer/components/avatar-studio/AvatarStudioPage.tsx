@@ -166,6 +166,13 @@ export default function AvatarStudioPage() {
     loadVoices()
   }, [loadAvatars, loadVoices])
 
+  // Reset video source to URL when switching to fetch mode
+  useEffect(() => {
+    if (scriptMode === 'fetch') {
+      setVideoSource('url')
+    }
+  }, [scriptMode])
+
   return (
     <div className="space-y-6">
       {/* Tab Switcher */}
@@ -989,58 +996,61 @@ export default function AvatarStudioPage() {
           </div>
         </div>
 
-        {/* Right Column: Output Only */}
+        {/* Right Column: Preview & Status */}
         <div className="space-y-6">
-          {generatedVideoUrl ? (
-            <div className="bg-surface-50 rounded-lg p-4">
-              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <span className="bg-success rounded-full w-6 h-6 flex items-center justify-center text-sm">5</span>
-                Output
-              </h2>
+          <div className="bg-surface-50 rounded-lg p-4">
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">5</span>
+              Preview
+            </h2>
 
-              <div className="space-y-4">
-                {/* biome-ignore lint/a11y/useMediaCaption: AI-generated video, no captions available */}
-                <video controls src={assetUrl(generatedVideoUrl)} className="w-full rounded-lg" />
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => downloadVideo(assetUrl(generatedVideoUrl), 'avatar-video.mp4')}
-                    className="flex-1 bg-gradient-to-r from-success to-success-hover hover:from-success-hover hover:to-success rounded-lg px-4 py-2 font-medium transition-all flex items-center justify-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download Video
-                  </button>
-                  <Button
-                    variant="secondary"
-                    size="md"
-                    icon={<FolderOpen className="w-4 h-4" />}
-                    onClick={async () => {
-                      const response = await authFetch(apiUrl('/api/generate/open-folder'), {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ folderPath: 'outputs' }),
-                      })
-                      if (!response.ok) {
-                        const raw = await response.json().catch(() => ({}))
-                        useAvatarStore.setState({
-                          error: { message: getApiError(raw, 'Failed to open folder'), type: 'error' },
-                        })
-                      }
-                    }}
-                  >
-                    Open Folder
-                  </Button>
+            <div className="space-y-4">
+              {/* Avatar Thumbnail */}
+              {(selectedAvatar || generatedUrls.length > 0) && (
+                <div className="relative">
+                  <img
+                    src={assetUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
+                    alt="Avatar"
+                    className="w-full aspect-[9/16] object-cover rounded-lg"
+                  />
+                  {lipsyncGenerating && (
+                    <div className="absolute inset-0 bg-surface-900/80 rounded-lg flex flex-col items-center justify-center gap-3">
+                      <Loader2 className="w-8 h-8 animate-spin text-brand-400" />
+                      <div className="text-center px-4">
+                        <p className="text-sm font-medium text-surface-100">Generating Video...</p>
+                        {lipsyncJob && (
+                          <p className="text-xs text-surface-300 mt-1">
+                            Status: {lipsyncJob.status === 'processing' ? 'Processing' : lipsyncJob.status === 'completed' ? 'Downloading' : 'Queued'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {generatedVideoUrl && !lipsyncGenerating && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-surface-900/90 via-surface-900/20 to-transparent rounded-lg flex items-end p-4">
+                      <button
+                        type="button"
+                        onClick={() => downloadVideo(assetUrl(generatedVideoUrl), 'avatar-video.mp4')}
+                        className="w-full bg-success hover:bg-success-hover rounded-lg px-4 py-3 font-medium transition-all flex items-center justify-center gap-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download Video
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
+
+              {/* Empty State */}
+              {!selectedAvatar && generatedUrls.length === 0 && (
+                <div className="aspect-[9/16] bg-surface-50/50 rounded-lg flex flex-col items-center justify-center text-center p-8">
+                  <Video className="w-12 h-12 mb-3 text-surface-300 opacity-50" />
+                  <p className="text-sm text-surface-400">Preview will appear here</p>
+                  <p className="text-xs text-surface-400 mt-1">Select an avatar to begin</p>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="bg-surface-50/50 rounded-lg p-8 text-center">
-              <Video className="w-16 h-16 mx-auto mb-4 text-surface-300 opacity-50" />
-              <p className="text-surface-400">Your video will appear here</p>
-              <p className="text-xs text-surface-400 mt-2">Complete steps 1-4 to generate</p>
-            </div>
-          )}
+          </div>
         </div>
       </div>
       ) : (
