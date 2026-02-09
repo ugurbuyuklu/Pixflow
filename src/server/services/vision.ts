@@ -186,7 +186,34 @@ Return a JSON object with this EXACT structure:
 
 Return ONLY the JSON object, no other text.`
 
-export async function analyzeImage(imagePath: string): Promise<AnalyzedPrompt> {
+function buildAnalysisPrompt(theme?: string): string {
+  if (!theme || !theme.trim()) {
+    return ANALYSIS_PROMPT
+  }
+
+  // Inject theme guidance at the top of the prompt
+  const themeGuidance = `
+
+## CONTEXT GUIDANCE
+
+**User Context:** "${theme.trim()}"
+
+Apply this context/theme when analyzing:
+- **Outfit**: Consider colors, materials, and design elements that align with this theme
+- **Lighting**: Suggest mood and atmosphere that complements the theme
+- **Set Design**: Recommend background and props that support the theme
+- **Effects**: Include atmospheric effects relevant to the theme (e.g., fog for gothic, neon glow for cyberpunk)
+- **Style**: Ensure the overall aesthetic description reflects this theme
+
+CRITICAL: While following the theme, you MUST still respect all technical requirements below (banned descriptors, face visibility, specificity).
+
+---
+`
+
+  return themeGuidance + ANALYSIS_PROMPT
+}
+
+export async function analyzeImage(imagePath: string, theme?: string): Promise<AnalyzedPrompt> {
   const openai = getOpenAI()
   const buffer = await fs.readFile(imagePath)
   const base64Image = buffer.toString('base64')
@@ -197,7 +224,7 @@ export async function analyzeImage(imagePath: string): Promise<AnalyzedPrompt> {
     messages: [
       {
         role: 'system',
-        content: ANALYSIS_PROMPT,
+        content: buildAnalysisPrompt(theme),
       },
       {
         role: 'user',

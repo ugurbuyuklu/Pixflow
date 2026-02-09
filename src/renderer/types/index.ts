@@ -149,6 +149,25 @@ export interface Notification {
   created_at: string
 }
 
+export interface GeneratedImageRecord {
+  id: number
+  userId: number
+  jobId: string
+  batchIndex: number
+  promptIndex: number
+  url: string
+  localPath: string
+  fileName: string
+  concept: string
+  prompt: GeneratedPrompt
+  aspectRatio?: string
+  resolution?: string
+  generatedAt: string
+  rating?: number
+  ratingNotes?: string
+  ratedAt?: string
+}
+
 export type MachineStep = 'idle' | 'prompts' | 'images' | 'script' | 'tts' | 'lipsync' | 'done' | 'error'
 
 export function parseError(err: unknown, response?: Response): ErrorInfo {

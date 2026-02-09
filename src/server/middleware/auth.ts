@@ -7,6 +7,13 @@ export interface AuthRequest extends Request {
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
+  // Dev mode bypass - use mock user
+  if (process.env.NODE_ENV === 'development') {
+    req.user = { id: 1, email: 'dev@test.com', name: 'Dev User', role: 'admin' }
+    next()
+    return
+  }
+
   const header = req.headers.authorization
   if (!header?.startsWith('Bearer ')) {
     sendError(res, 401, 'Missing authorization header', 'AUTH_HEADER_MISSING')

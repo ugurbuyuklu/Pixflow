@@ -140,6 +140,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
       await fs.mkdir(outputDir, { recursive: true })
 
       const job = createBatchJob(concept, totalImages, outputDir, req.user?.id)
+      job.prompts = prompts
 
       const referenceImageUrls = files.map((file) => `file://${file.path}`)
       const textPrompts = prompts.map((p) => formatPromptForFal(p))
@@ -251,8 +252,10 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
         return
       }
 
-      console.log(`[Vision] Analyzing image: ${file.filename}`)
-      const prompt = await analyzeImage(file.path)
+      const theme = req.body.theme // Extract optional theme from FormData
+
+      console.log(`[Vision] Analyzing image: ${file.filename}${theme ? ` with theme: "${theme}"` : ''}`)
+      const prompt = await analyzeImage(file.path, theme)
       console.log(`[Vision] Analysis complete`)
 
       sendSuccess(res, {

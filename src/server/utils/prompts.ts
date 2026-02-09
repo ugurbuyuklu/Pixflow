@@ -119,6 +119,7 @@ export interface VarietyScore {
   lighting_setups_used: string[]
   has_duplicates: boolean
   passed: boolean
+  score: number
 }
 
 const AESTHETIC_KEYWORDS: Record<string, string[]> = {
@@ -135,6 +136,52 @@ const EMOTION_KEYWORDS: Record<string, string[]> = {
   Confident: ['confident', 'bold', 'strong', 'powerful', 'fierce', 'empowered'],
   Intimate: ['intimate', 'cozy', 'personal', 'close', 'private', 'quiet'],
   Mysterious: ['mysterious', 'enigmatic', 'dark', 'moody', 'dramatic', 'shadowy'],
+}
+
+// Vagueness detection patterns
+const VAGUE_PATTERNS = [
+  /\b(elevated|appropriate|stylish|nice|beautiful|gorgeous)\b/i,
+  /concept-appropriate/i,
+  /^[^,]{10,30}attire[^,]*$/i, // Short phrases ending in "attire"
+  /\boutfit\b(?!\s+(in|with|of|features))/i, // "outfit" without specifics
+  /\bwear\b(?!\s+with)/i,
+  /casual\s+wear/i,
+]
+
+// Required outfit keyword patterns (fabric, color, cut/style)
+const REQUIRED_OUTFIT_PATTERNS = {
+  fabric: /(silk|linen|cotton|leather|velvet|satin|cashmere|denim|wool|chiffon|charmeuse|crepe|jersey|knit)/i,
+  color:
+    /(ivory|terracotta|navy|burgundy|sage|cream|charcoal|olive|rust|blush|black|white|beige|camel|taupe|grey|gray|blue|red|green|pink|purple|yellow|orange|brown)/i,
+  cut: /(bias-cut|oversized|slim|fitted|tailored|wrap|a-line|sheath|shift|bodycon|relaxed|loose|cropped|midi|maxi|mini|knee-length|ankle-length)/i,
+}
+
+export function isVagueOutfit(outfit: string): boolean {
+  // Check for vague patterns
+  if (VAGUE_PATTERNS.some((pattern) => pattern.test(outfit))) {
+    return true
+  }
+
+  // Check for required keywords (at least 2 of 3 categories)
+  const hasKeywords = Object.values(REQUIRED_OUTFIT_PATTERNS).filter((pattern) => pattern.test(outfit))
+  return hasKeywords.length < 2
+}
+
+export function validateOutfitSpecificity(outfit: string): { valid: boolean; reason?: string } {
+  if (outfit.length < 40) {
+    return { valid: false, reason: 'Outfit description too short (min 40 chars)' }
+  }
+
+  if (isVagueOutfit(outfit)) {
+    return { valid: false, reason: 'Outfit contains vague or generic language' }
+  }
+
+  // Check for fabric
+  if (!REQUIRED_OUTFIT_PATTERNS.fabric.test(outfit)) {
+    return { valid: false, reason: 'Must specify fabric type (silk, linen, leather, etc.)' }
+  }
+
+  return { valid: true }
 }
 
 export function validatePrompt(prompt: PromptOutput): { valid: boolean; errors: string[] } {
@@ -155,8 +202,11 @@ export function validatePrompt(prompt: PromptOutput): { valid: boolean; errors: 
   if (!prompt.set_design?.backdrop || prompt.set_design.backdrop.length < 50) {
     errors.push('set_design.backdrop needs more detail (min 50 chars)')
   }
-  if (!prompt.outfit?.main || prompt.outfit.main.length < 30) {
-    errors.push('outfit.main needs more detail (min 30 chars)')
+
+  // Replace simple length check with specificity validation
+  const outfitCheck = validateOutfitSpecificity(prompt.outfit?.main || '')
+  if (!outfitCheck.valid) {
+    errors.push(`outfit.main: ${outfitCheck.reason}`)
   }
   if (!prompt.camera?.lens || prompt.camera.lens.length < 20) {
     errors.push('camera.lens needs more detail (min 20 chars)')
@@ -241,11 +291,20 @@ export function calculateVarietyScore(prompts: PromptOutput[]): VarietyScore {
     lightingSetups.size >= minRequired &&
     !hasDuplicates
 
+  // Calculate numeric score (0-100)
+  const maxExpected = Math.max(5, prompts.length)
+  const aestheticScore = Math.min(100, (aesthetics.size / maxExpected) * 100)
+  const emotionScore = Math.min(100, (emotions.size / maxExpected) * 100)
+  const lightingScore = Math.min(100, (lightingSetups.size / maxExpected) * 100)
+  const duplicatePenalty = hasDuplicates ? 20 : 0
+  const score = Math.round((aestheticScore + emotionScore + lightingScore) / 3 - duplicatePenalty)
+
   return {
     aesthetics_used: Array.from(aesthetics),
     emotions_used: Array.from(emotions),
     lighting_setups_used: Array.from(lightingSetups),
     has_duplicates: hasDuplicates,
     passed,
+    score,
   }
 }

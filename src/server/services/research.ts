@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { getDb } from '../db/index.js'
 import type {
   CompetitorInsights,
   ResearchBrief,
@@ -6,7 +7,6 @@ import type {
   TechnicalRecommendations,
   TrendFindings,
 } from '../utils/prompts.js'
-import { getDb } from '../db/index.js'
 
 let openaiClient: OpenAI | null = null
 let clientInitializing = false
@@ -132,12 +132,7 @@ export async function performResearch(concept: string): Promise<ResearchBrief> {
 
   // Phase 4: Generate sub-themes from merged data
   const client = await getOpenAI()
-  const subThemes = await generateSubThemes(
-    client,
-    concept,
-    merged.trend_findings,
-    merged.competitor_insights,
-  )
+  const subThemes = await generateSubThemes(client, concept, merged.trend_findings, merged.competitor_insights)
 
   return {
     ...merged,
@@ -574,7 +569,7 @@ export async function lookupCachedResearch(keywords: string[]): Promise<CacheRes
 export async function cacheResearchResults(
   keyword: string,
   data: CachedResearchData,
-  sourceUrls?: string[]
+  sourceUrls?: string[],
 ): Promise<void> {
   const db = getDb()
   const now = Date.now()
@@ -610,7 +605,9 @@ export async function cacheResearchResults(
       now,
     )
 
-    console.log(`[Research Cache] Cached results for "${keyword}" with ${sourceUrls?.length || 0} sources (expires in 48h)`)
+    console.log(
+      `[Research Cache] Cached results for "${keyword}" with ${sourceUrls?.length || 0} sources (expires in 48h)`,
+    )
   } catch (error) {
     console.error(`[Research Cache] Error caching "${keyword}":`, error)
   }

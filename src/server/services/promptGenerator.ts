@@ -319,7 +319,7 @@ export async function generateSinglePrompt(
     concept,
     [subTheme],
     researchBrief,
-    0,  // startIndex
+    0, // startIndex
     imageInsights,
   )
 
@@ -351,13 +351,15 @@ export async function generatePrompts(
 
   for (let i = 0; i < count; i += batchSize) {
     const batchCount = Math.min(batchSize, count - i)
-    console.log(`[generatePrompts] Starting batch ${i / batchSize + 1}/${Math.ceil(count / batchSize)} (${batchCount} prompts)`)
+    console.log(
+      `[generatePrompts] Starting batch ${i / batchSize + 1}/${Math.ceil(count / batchSize)} (${batchCount} prompts)`,
+    )
     const batchThemes = subThemesToUse.slice(i, Math.min(i + batchSize, count))
 
     // Add manual timeout wrapper
     const batchPromise = generatePromptBatch(client, concept, batchThemes, researchBrief, i, imageInsights)
     const timeoutPromise = new Promise<PromptOutput[]>((_, reject) =>
-      setTimeout(() => reject(new Error('Batch generation timeout after 90s')), BATCH_TIMEOUT)
+      setTimeout(() => reject(new Error('Batch generation timeout after 90s')), BATCH_TIMEOUT),
     )
 
     try {

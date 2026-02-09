@@ -32,7 +32,7 @@ function calculateDetailScore(text: string | undefined, keywords: string[]): num
   if (!text) return 0
 
   const lowerText = text.toLowerCase()
-  const matchedKeywords = keywords.filter(kw => lowerText.includes(kw))
+  const matchedKeywords = keywords.filter((kw) => lowerText.includes(kw))
 
   // Base score from keyword coverage
   const keywordScore = (matchedKeywords.length / keywords.length) * 70
@@ -48,9 +48,7 @@ function scoreIndividualPrompt(prompt: PromptOutput): { score: number; issues: s
   let totalScore = 100
 
   // Check outfit specificity
-  const outfitText = [prompt.outfit?.main, prompt.outfit?.accessories, prompt.outfit?.styling]
-    .filter(Boolean)
-    .join(' ')
+  const outfitText = [prompt.outfit?.main, prompt.outfit?.accessories, prompt.outfit?.styling].filter(Boolean).join(' ')
 
   if (outfitText.includes('Elevated, concept-appropriate') || outfitText.length < 30) {
     issues.push('Generic outfit description')
@@ -73,9 +71,7 @@ function scoreIndividualPrompt(prompt: PromptOutput): { score: number; issues: s
   }
 
   // Check pose specificity
-  const poseText = [prompt.pose?.body_position, prompt.pose?.arms, prompt.pose?.posture]
-    .filter(Boolean)
-    .join(' ')
+  const poseText = [prompt.pose?.body_position, prompt.pose?.arms, prompt.pose?.posture].filter(Boolean).join(' ')
 
   if (poseText.length < 40) {
     issues.push('Vague pose description')
@@ -103,32 +99,29 @@ function scoreIndividualPrompt(prompt: PromptOutput): { score: number; issues: s
   return { score: Math.max(0, totalScore), issues }
 }
 
-export function calculatePromptQualityMetrics(
-  prompts: PromptOutput[],
-  modelUsed?: string,
-): PromptQualityMetrics {
+export function calculatePromptQualityMetrics(prompts: PromptOutput[], modelUsed?: string): PromptQualityMetrics {
   const varietyScore = calculateVarietyScore(prompts)
   const issues: string[] = []
   const strengths: string[] = []
 
   // Score each prompt individually
-  const scoredPrompts = prompts.map(p => scoreIndividualPrompt(p))
+  const scoredPrompts = prompts.map((p) => scoreIndividualPrompt(p))
   const avgIndividualScore = scoredPrompts.reduce((sum, s) => sum + s.score, 0) / prompts.length
 
   // Calculate detail scores
-  const outfitScores = prompts.map(p =>
+  const outfitScores = prompts.map((p) =>
     calculateDetailScore([p.outfit?.main, p.outfit?.accessories].join(' '), REQUIRED_OUTFIT_KEYWORDS),
   )
-  const lightingScores = prompts.map(p =>
+  const lightingScores = prompts.map((p) =>
     calculateDetailScore(
       [p.lighting?.setup, p.lighting?.key_light, p.lighting?.fill_light].join(' '),
       REQUIRED_LIGHTING_KEYWORDS,
     ),
   )
-  const poseScores = prompts.map(p =>
+  const poseScores = prompts.map((p) =>
     calculateDetailScore([p.pose?.body_position, p.pose?.arms, p.pose?.posture].join(' '), REQUIRED_POSE_KEYWORDS),
   )
-  const setScores = prompts.map(p =>
+  const setScores = prompts.map((p) =>
     calculateDetailScore(
       [p.set_design?.backdrop, p.set_design?.surface, p.set_design?.atmosphere].join(' '),
       REQUIRED_SET_KEYWORDS,
@@ -141,15 +134,15 @@ export function calculatePromptQualityMetrics(
   const setDesignDetail = setScores.reduce((sum, s) => sum + s, 0) / prompts.length
 
   // Calculate specificity score (how non-generic are the prompts)
-  const uniqueOutfits = new Set(prompts.map(p => p.outfit?.main?.substring(0, 50)))
-  const uniqueLighting = new Set(prompts.map(p => p.lighting?.setup?.substring(0, 50)))
+  const uniqueOutfits = new Set(prompts.map((p) => p.outfit?.main?.substring(0, 50)))
+  const uniqueLighting = new Set(prompts.map((p) => p.lighting?.setup?.substring(0, 50)))
   const specificityScore = Math.min(
     100,
     ((uniqueOutfits.size / prompts.length) * 50 + (uniqueLighting.size / prompts.length) * 50) * 100,
   )
 
   // Calculate completeness score (are all fields filled)
-  const completeFields = prompts.map(p => {
+  const completeFields = prompts.map((p) => {
     const fields = [
       p.style,
       p.pose?.framing,
@@ -173,7 +166,7 @@ export function calculatePromptQualityMetrics(
       specificityScore * 0.25 +
       completenessScore * 0.15 +
       varietyContribution * 0.15 +
-      (outfitDetail + lightingDetail + poseDetail + setDesignDetail) / 4 * 0.15,
+      ((outfitDetail + lightingDetail + poseDetail + setDesignDetail) / 4) * 0.15,
   )
 
   // Collect issues
@@ -194,11 +187,14 @@ export function calculatePromptQualityMetrics(
   }
 
   // All prompt-specific issues
-  const allIssues = scoredPrompts.flatMap(s => s.issues)
-  const issueFrequency = allIssues.reduce((acc, issue) => {
-    acc[issue] = (acc[issue] || 0) + 1
-    return acc
-  }, {} as Record<string, number>)
+  const allIssues = scoredPrompts.flatMap((s) => s.issues)
+  const issueFrequency = allIssues.reduce(
+    (acc, issue) => {
+      acc[issue] = (acc[issue] || 0) + 1
+      return acc
+    },
+    {} as Record<string, number>,
+  )
 
   // Only include issues that appear in more than 30% of prompts
   for (const [issue, count] of Object.entries(issueFrequency)) {
@@ -238,6 +234,7 @@ export function calculatePromptQualityMetrics(
       pose_detail: Math.round(poseDetail),
       set_design_detail: Math.round(setDesignDetail),
     },
+    individual_scores: scoredPrompts.map((s) => s.score),
     issues,
     strengths,
     model_used: modelUsed,
@@ -246,7 +243,7 @@ export function calculatePromptQualityMetrics(
 }
 
 export function scorePrompts(prompts: PromptOutput[]): ScoredPrompt[] {
-  return prompts.map(prompt => {
+  return prompts.map((prompt) => {
     const { score, issues } = scoreIndividualPrompt(prompt)
     return {
       ...prompt,

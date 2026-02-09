@@ -69,6 +69,7 @@ export default function PromptFactoryPage() {
     varietyScore,
     promptMode,
     analyzeEntries,
+    analyzeTheme,
     updateConcept,
     addConcept,
     duplicateConcept,
@@ -84,6 +85,7 @@ export default function PromptFactoryPage() {
     addAnalyzeFiles,
     removeAnalyzeEntry,
     clearAnalyzeEntries,
+    setAnalyzeTheme,
     analyzeEntry,
     analyzeAllEntries,
     copyAnalyzedEntry,
@@ -154,6 +156,19 @@ export default function PromptFactoryPage() {
           </Button>
         </div>
 
+        {/* Context Input - FULLY OPTIONAL */}
+        <div className="mb-4">
+          <Input
+            label="Context (optional)"
+            value={analyzeTheme}
+            onChange={(e) => setAnalyzeTheme(e.target.value)}
+            placeholder="e.g., vampire theme, valentine's day, cyberpunk, minimalist fashion..."
+          />
+          <p className="text-xs text-surface-400 mt-1.5">
+            Optional: Add context to guide the analysis. Leave empty for standard analysis.
+          </p>
+        </div>
+
         {analyzeEntries.length === 0 ? (
           <div
             {...analyzeDropzone.getRootProps()}
@@ -171,7 +186,7 @@ export default function PromptFactoryPage() {
         ) : (
           <>
             {/* Header + actions */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-surface-400 uppercase tracking-wider">
                 Images ({analyzeEntries.length}){analyzedCount > 0 && ` · ${analyzedCount} analyzed`}
               </h2>
@@ -204,13 +219,23 @@ export default function PromptFactoryPage() {
               </div>
             </div>
 
-            {/* Per-image cards */}
-            <div className="space-y-3">
+            {/* Drag & drop zone covering entire card area */}
+            <div
+              {...analyzeDropzone.getRootProps()}
+              className={`rounded-xl p-4 border-2 border-dashed transition-colors ${
+                analyzeDropzone.isDragActive
+                  ? 'border-brand-400 bg-brand-600/5'
+                  : 'border-surface-100 hover:border-surface-200 bg-surface-50'
+              }`}
+            >
+              <input {...analyzeDropzone.getInputProps()} />
+              <div className="space-y-3">
               {analyzeEntries.map((entry, i) => (
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: entries reorder via remove only
                   key={i}
                   className="bg-surface-50 rounded-xl p-3 flex gap-3"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <div className="w-20 shrink-0 relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-100">
                     <img src={entry.preview} alt={`Analyze ${i + 1}`} className="w-full h-full object-cover" />
@@ -363,10 +388,11 @@ export default function PromptFactoryPage() {
                   </div>
                 </div>
               ))}
+              </div>
             </div>
 
             {/* Analyze All + Send actions */}
-            <div className="bg-surface-50 rounded-xl p-4 space-y-3">
+            <div className="bg-surface-50 rounded-xl p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
               {!allAnalyzed && (
                 <Button
                   variant="primary"

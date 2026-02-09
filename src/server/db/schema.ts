@@ -85,6 +85,53 @@ export function createTables(db: Database.Database): void {
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS research_cache (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      concept_keyword TEXT UNIQUE NOT NULL,
+      trend_findings TEXT NOT NULL,
+      competitor_insights TEXT NOT NULL,
+      technical_recommendations TEXT NOT NULL,
+      sources_analyzed INTEGER DEFAULT 0,
+      source_urls TEXT,
+      last_web_search INTEGER,
+      created_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      access_count INTEGER DEFAULT 1,
+      last_accessed_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS generated_images (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      job_id TEXT NOT NULL,
+      batch_index INTEGER NOT NULL,
+      prompt_index INTEGER NOT NULL,
+      variant_index INTEGER NOT NULL,
+      url TEXT NOT NULL,
+      local_path TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      concept TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      aspect_ratio TEXT,
+      resolution TEXT,
+      output_format TEXT,
+      generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS image_ratings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      image_id INTEGER NOT NULL,
+      rating INTEGER NOT NULL CHECK(rating IN (-1, 1)),
+      notes TEXT,
+      rated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (image_id) REFERENCES generated_images(id) ON DELETE CASCADE,
+      UNIQUE(user_id, image_id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_history_user ON history(user_id);
     CREATE INDEX IF NOT EXISTS idx_history_product ON history(product_id);
     CREATE INDEX IF NOT EXISTS idx_favorites_user ON favorites(user_id);
@@ -92,6 +139,15 @@ export function createTables(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback(user_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, read);
+    CREATE INDEX IF NOT EXISTS idx_research_cache_keyword ON research_cache(concept_keyword);
+    CREATE INDEX IF NOT EXISTS idx_research_cache_expires ON research_cache(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_research_cache_accessed ON research_cache(last_accessed_at);
+    CREATE INDEX IF NOT EXISTS idx_generated_images_user ON generated_images(user_id);
+    CREATE INDEX IF NOT EXISTS idx_generated_images_job ON generated_images(job_id);
+    CREATE INDEX IF NOT EXISTS idx_generated_images_generated_at ON generated_images(generated_at);
+    CREATE INDEX IF NOT EXISTS idx_image_ratings_user ON image_ratings(user_id);
+    CREATE INDEX IF NOT EXISTS idx_image_ratings_image ON image_ratings(image_id);
+    CREATE INDEX IF NOT EXISTS idx_image_ratings_user_rating ON image_ratings(user_id, rating);
   `)
 }
 

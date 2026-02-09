@@ -42,6 +42,7 @@ interface PromptState {
 
   promptMode: 'concept' | 'image'
   analyzeEntries: AnalyzeEntry[]
+  analyzeTheme: string
   analyzeError: ErrorInfo | null
 
   updateConcept: (index: number, value: string) => void
@@ -62,6 +63,7 @@ interface PromptState {
   addAnalyzeFiles: (files: File[]) => void
   removeAnalyzeEntry: (index: number) => void
   clearAnalyzeEntries: () => void
+  setAnalyzeTheme: (theme: string) => void
   analyzeEntry: (index: number) => Promise<void>
   analyzeAllEntries: () => Promise<void>
   copyAnalyzedEntry: (index: number) => Promise<void>
@@ -94,6 +96,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
 
   promptMode: 'concept',
   analyzeEntries: [],
+  analyzeTheme: '',
   analyzeError: null,
 
   updateConcept: (index, value) =>
@@ -167,9 +170,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
 
     try {
       // Build URL with query params for GET (EventSource requires GET)
-      const url = apiUrl(
-        `/api/prompts/generate?concept=${encodeURIComponent(concept)}&count=${count}&stream=true`,
-      )
+      const url = apiUrl(`/api/prompts/generate?concept=${encodeURIComponent(concept)}&count=${count}&stream=true`)
 
       eventSource = new EventSource(url)
 
@@ -377,7 +378,10 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
     set({ analyzeEntries: [], analyzeError: null })
   },
 
+  setAnalyzeTheme: (theme) => set({ analyzeTheme: theme }),
+
   analyzeEntry: async (index) => {
+    const { analyzeTheme } = get()
     const entry = get().analyzeEntries[index]
     if (!entry || entry.loading) return
 
@@ -390,6 +394,9 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
     try {
       const formData = new FormData()
       formData.append('image', entry.file)
+      if (analyzeTheme.trim()) {
+        formData.append('theme', analyzeTheme.trim())
+      }
 
       const res = await authFetch(apiUrl('/api/generate/analyze-image'), {
         method: 'POST',

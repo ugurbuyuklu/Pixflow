@@ -16,6 +16,8 @@ import {
   Pencil,
   Play,
   Sparkles,
+  ThumbsUp,
+  ThumbsDown,
   Upload,
   Users,
   WifiOff,
@@ -33,9 +35,10 @@ import {
   useGenerationStore,
 } from '../../stores/generationStore'
 import { useImg2VideoStore } from '../../stores/img2videoStore'
+import { useImageRatingsStore } from '../../stores/imageRatingsStore'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { usePromptStore } from '../../stores/promptStore'
-import type { GeneratedPrompt } from '../../types'
+import type { GeneratedPrompt, GeneratedImageRecord } from '../../types'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Select } from '../ui/Select'
@@ -222,6 +225,9 @@ export default function AssetMonsterPage() {
   const { prompts, concepts } = usePromptStore()
   const concept = concepts.find((c) => c.value.trim())?.value || ''
   const { navigate } = useNavigationStore()
+  const { rateImage: rateImageInStore, removeRating } = useImageRatingsStore()
+
+  const [batchImageIds, setBatchImageIds] = useState<Map<number, number>>(new Map())
 
   const {
     getRootProps,
@@ -262,6 +268,34 @@ export default function AssetMonsterPage() {
   useEffect(() => {
     loadAvatars()
   }, [loadAvatars])
+
+  useEffect(() => {
+    if (batchProgress?.status === 'completed' && batchProgress.jobId) {
+      authFetch(apiUrl(`/api/images?jobId=${batchProgress.jobId}`))
+        .then((res) => res.json())
+        .then((raw) => {
+          const data = unwrapApiData<{ images: GeneratedImageRecord[] }>(raw)
+          const idMap = new Map(data.images.map((img) => [img.batchIndex, img.id]))
+          setBatchImageIds(idMap)
+        })
+        .catch(console.error)
+    }
+  }, [batchProgress?.status, batchProgress?.jobId])
+
+  const handleRateImage = async (batchIndex: number, rating: 1 | -1) => {
+    const imageId = batchImageIds.get(batchIndex)
+    if (!imageId) {
+      console.error('Image ID not found for index:', batchIndex)
+      return
+    }
+
+    try {
+      await rateImageInStore(imageId, rating)
+      console.log(`Rated image ${imageId} with ${rating}`)
+    } catch (err) {
+      console.error('Failed to rate image:', err)
+    }
+  }
 
   const downloadImages = async (urls: string[]) => {
     if (urls.length === 0) return
@@ -814,6 +848,32 @@ Examples:
                       }`}
                     >
                       {selectedResultImages.has(img.index) && <Check className="w-3 h-3 text-white" />}
+                    </div>
+                  )}
+                  {img.status === 'completed' && img.url && batchImageIds.has(img.index) && (
+                    <div className="absolute bottom-2 right-2 flex gap-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRateImage(img.index, 1)
+                        }}
+                        className="w-7 h-7 rounded-full bg-black/60 hover:bg-success/80 flex items-center justify-center transition-colors"
+                        title="Like"
+                      >
+                        <ThumbsUp className="w-3.5 h-3.5 text-white" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleRateImage(img.index, -1)
+                        }}
+                        className="w-7 h-7 rounded-full bg-black/60 hover:bg-danger/80 flex items-center justify-center transition-colors"
+                        title="Dislike"
+                      >
+                        <ThumbsDown className="w-3.5 h-3.5 text-white" />
+                      </button>
                     </div>
                   )}
                 </button>

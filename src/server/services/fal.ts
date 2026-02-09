@@ -34,6 +34,7 @@ export interface BatchJob {
   outputDir: string
   createdAt: Date
   userId?: number
+  prompts?: Record<string, unknown>[]
 }
 
 const activeJobs = new Map<string, BatchJob>()
@@ -235,10 +236,11 @@ export async function generateBatch(
           .replace(/[<>:"/\\|?*]/g, '')
           .replace(/\s+/g, '_')
           .slice(0, 50)
+        const filePrefix = safeConcept === 'untitled' ? 'image' : safeConcept
         const fileName =
           numImagesPerPrompt > 1
-            ? `${safeConcept}_${String(promptIndex + 1).padStart(2, '0')}_v${variantIndex + 1}.${outputFormat}`
-            : `${safeConcept}_${String(imageIndex + 1).padStart(2, '0')}.${outputFormat}`
+            ? `${filePrefix}_${String(promptIndex + 1).padStart(2, '0')}_v${variantIndex + 1}.${outputFormat}`
+            : `${filePrefix}_${String(imageIndex + 1).padStart(2, '0')}.${outputFormat}`
         const localPath = path.join(job.outputDir, fileName)
 
         try {
@@ -270,6 +272,20 @@ export async function generateBatch(
     await Promise.all(workers)
 
     job.status = job.images.every((img) => img.status === 'completed') ? 'completed' : 'failed'
+
+    if (job.status === 'completed' && job.userId && job.prompts) {
+      try {
+        const { saveBatchImages } = await import('./imageRatings.js')
+        await saveBatchImages(job.userId, job, job.prompts, {
+          aspectRatio: options.aspectRatio,
+          resolution: options.resolution,
+          outputFormat: options.outputFormat,
+        })
+        console.log(`[Batch] Saved ${job.completedImages} images to database`)
+      } catch (err) {
+        console.error('[Batch] Failed to save images to DB:', err)
+      }
+    }
 
     if (job.userId) {
       const ok = job.status === 'completed'

@@ -15,19 +15,26 @@ import { createAvatarsRouter } from './routes/avatars.js'
 import { createFeedbackRouter } from './routes/feedback.js'
 import { createGenerateRouter } from './routes/generate.js'
 import { createHistoryRouter } from './routes/history.js'
+import { createImageRatingsRouter } from './routes/imageRatings.js'
 import { createNotificationsRouter } from './routes/notifications.js'
 import { createPresetsRouter } from './routes/presets.js'
 import { createProductsRouter } from './routes/products.js'
 import { ensureBootstrapAdminIfConfigured } from './services/auth.js'
 import { addToHistory } from './services/history.js'
-import { generatePrompts, generateSinglePrompt, textToPrompt, validateAllPrompts, validateVariety } from './services/promptGenerator.js'
+import {
+  generatePrompts,
+  generateSinglePrompt,
+  textToPrompt,
+  validateAllPrompts,
+  validateVariety,
+} from './services/promptGenerator.js'
 import { analyzeResearchResults, DEFAULT_RESEARCH_BRIEF, performResearch } from './services/research.js'
-import { calculateVarietyScore } from './utils/prompts.js'
 import { createPipelineSpan } from './services/telemetry.js'
 import { analyzeImage } from './services/vision.js'
 import { sendError, sendSuccess } from './utils/http.js'
 import { calculatePromptQualityMetrics } from './utils/promptScoring.js'
 import type { PromptOutput } from './utils/prompts.js'
+import { calculateVarietyScore } from './utils/prompts.js'
 
 export interface ServerConfig {
   projectRoot: string
@@ -182,17 +189,13 @@ export function createApp(config: ServerConfig): express.Express {
           console.log('[Streaming Phase 1] Generating quick first prompt...')
           sendSSE('status', { step: 'quick_prompt', message: 'Generating preview...' })
 
-          quickPrompt = await generateSinglePrompt(
-            concept,
-            { ...DEFAULT_RESEARCH_BRIEF, concept },
-            imageInsights,
-          )
+          quickPrompt = await generateSinglePrompt(concept, { ...DEFAULT_RESEARCH_BRIEF, concept }, imageInsights)
 
           sendSSE('prompt', {
             prompt: quickPrompt,
             index: 0,
             total: clampedCount,
-            quick: true,  // Flag for UI indicator
+            quick: true, // Flag for UI indicator
           })
 
           console.log('[Streaming Phase 1] Quick prompt sent')
@@ -237,9 +240,9 @@ export function createApp(config: ServerConfig): express.Express {
           enrichedPrompts.forEach((prompt, idx) => {
             sendSSE('prompt', {
               prompt,
-              index: idx + 1,  // Offset by 1 since index 0 is quick prompt
+              index: idx + 1, // Offset by 1 since index 0 is quick prompt
               total: clampedCount,
-              enriched: true,  // Flag for UI indicator
+              enriched: true, // Flag for UI indicator
             })
           })
           console.log(`[Streaming Phase 3] Sent ${enrichedPrompts.length} enriched prompts`)
@@ -266,7 +269,7 @@ export function createApp(config: ServerConfig): express.Express {
         console.log(
           `[Complete] Generated ${prompts.length} prompts, variety: ${varietyScore.score}/100, quality: ${qualityMetrics.overall_score}/100`,
         )
-        console.log(`[Scores] Individual prompt scores: ${prompts.map(p => p.quality_score).join(', ')}`)
+        console.log(`[Scores] Individual prompt scores: ${prompts.map((p) => p.quality_score).join(', ')}`)
 
         if (qualityMetrics.issues.length > 0) {
           console.log(`[Quality Issues] ${qualityMetrics.issues.join(', ')}`)
@@ -336,7 +339,7 @@ export function createApp(config: ServerConfig): express.Express {
     const concept = sanitizeConcept(req.query.concept as string)
     const rawCount = req.query.count ?? PROMPT_GENERATE_DEFAULT
     const count = typeof rawCount === 'string' ? Number.parseInt(rawCount, 10) : Number(rawCount)
-    const useStream = true  // GET endpoint is always streaming
+    const useStream = true // GET endpoint is always streaming
 
     if (!concept) {
       sendError(res, 400, 'Concept is required (1-300 characters)', 'INVALID_CONCEPT')
@@ -373,7 +376,7 @@ export function createApp(config: ServerConfig): express.Express {
       const quickPrompt = await generateSinglePrompt(
         concept,
         { ...DEFAULT_RESEARCH_BRIEF, concept },
-        undefined,  // no image insights for GET
+        undefined, // no image insights for GET
       )
 
       sendSSE('prompt', {
@@ -412,7 +415,7 @@ export function createApp(config: ServerConfig): express.Express {
         remainingCount,
         researchBrief,
         (completed, total) => sendSSE('progress', { completed, total }),
-        undefined,  // no image insights
+        undefined, // no image insights
       )
 
       // Send enriched prompts
@@ -475,7 +478,11 @@ export function createApp(config: ServerConfig): express.Express {
   app.post('/api/prompts/generate-batch', requireAuth, apiLimiter, async (req, res) => {
     const { concepts: rawConcepts } = req.body
 
-    console.log('[Batch] Received request:', { conceptsType: typeof rawConcepts, isArray: Array.isArray(rawConcepts), length: rawConcepts?.length })
+    console.log('[Batch] Received request:', {
+      conceptsType: typeof rawConcepts,
+      isArray: Array.isArray(rawConcepts),
+      length: rawConcepts?.length,
+    })
 
     // Validate concepts array
     if (!Array.isArray(rawConcepts) || rawConcepts.length === 0) {
@@ -525,9 +532,7 @@ export function createApp(config: ServerConfig): express.Express {
 
     try {
       // Process each concept independently: research + generate
-      console.log(
-        `[Batch] Processing ${conceptEntries.length} concepts sequentially (total ${totalPrompts} prompts)`,
-      )
+      console.log(`[Batch] Processing ${conceptEntries.length} concepts sequentially (total ${totalPrompts} prompts)`)
 
       const prompts: PromptOutput[] = []
       const allResearch: Array<{ concept: string; analysis: any; brief: any }> = []
@@ -625,19 +630,18 @@ export function createApp(config: ServerConfig): express.Express {
           issues: validation.results.filter((r) => !r.valid),
         },
       })
-      } catch (error) {
-        console.error('[Error]', error)
-        span.error(error)
-        sendError(
-          res,
-          500,
-          'Failed to generate prompts',
-          'PROMPT_GENERATION_FAILED',
-          error instanceof Error ? error.message : 'Unknown error',
-        )
-      }
-    },
-  )
+    } catch (error) {
+      console.error('[Error]', error)
+      span.error(error)
+      sendError(
+        res,
+        500,
+        'Failed to generate prompts',
+        'PROMPT_GENERATION_FAILED',
+        error instanceof Error ? error.message : 'Unknown error',
+      )
+    }
+  })
 
   app.get('/api/prompts/research/:concept', requireAuth, apiLimiter, async (req, res) => {
     const concept = sanitizeConcept(req.params.concept)
@@ -704,6 +708,7 @@ export function createApp(config: ServerConfig): express.Express {
   app.use('/api/presets', requireAuth, createPresetsRouter())
   app.use('/api/feedback', requireAuth, createFeedbackRouter())
   app.use('/api/notifications', requireAuth, createNotificationsRouter())
+  app.use('/api/images', requireAuth, createImageRatingsRouter())
 
   app.get('/api/settings/status', requireAuth, (_req, res) => {
     sendSuccess(res, {
