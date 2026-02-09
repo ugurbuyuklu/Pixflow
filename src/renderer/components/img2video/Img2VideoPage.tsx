@@ -1,4 +1,20 @@
-import { AlertCircle, CheckCircle, Copy, Download, Film, Loader2, Pencil, Play, Trash2, Upload, X, XCircle } from 'lucide-react'
+import JSZip from 'jszip'
+import {
+  AlertCircle,
+  CheckCircle,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Download,
+  Film,
+  Loader2,
+  Pencil,
+  Play,
+  Trash2,
+  Upload,
+  X,
+  XCircle,
+} from 'lucide-react'
 import React from 'react'
 import { useDropzone } from 'react-dropzone'
 import { assetUrl } from '../../lib/api'
@@ -22,17 +38,18 @@ export default function Img2VideoPage() {
     applyPromptToAll,
     setDuration,
     setAspectRatio,
-    selectedPresets,
     setPreset,
     clearPresets,
     setError,
     uploadFiles,
     generateAll,
+    regenerateSingle,
     cancelGenerate,
   } = useImg2VideoStore()
 
   const [editingIndex, setEditingIndex] = React.useState<number | null>(null)
   const [editingPrompt, setEditingPrompt] = React.useState('')
+  const [cameraControlOpen, setCameraControlOpen] = React.useState<Record<number, boolean>>({})
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { 'image/jpeg': [], 'image/png': [], 'image/webp': [] },
@@ -64,9 +81,36 @@ export default function Img2VideoPage() {
   }
 
   const handleDownloadAll = async () => {
-    for (const job of completedJobs) {
+    if (completedJobs.length === 0) return
+
+    // Single video: direct download
+    if (completedJobs.length === 1) {
+      const job = completedJobs[0]
       if (job.localPath) await handleDownload(job.localPath)
+      return
     }
+
+    // Multiple videos: create ZIP
+    const zip = new JSZip()
+    await Promise.all(
+      completedJobs.map(async (job, index) => {
+        if (!job.localPath) return
+        const res = await fetch(assetUrl(job.localPath))
+        const blob = await res.blob()
+        const fileName = job.localPath.split('/').pop() || `video_${String(index + 1).padStart(2, '0')}.mp4`
+        zip.file(fileName, blob)
+      }),
+    )
+
+    const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' })
+    const blobUrl = URL.createObjectURL(zipBlob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = 'img2video_videos.zip'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(blobUrl)
   }
 
   const openFilePicker = () => {
@@ -78,6 +122,11 @@ export default function Img2VideoPage() {
       if (input.files?.length) uploadFiles(Array.from(input.files))
     }
     input.click()
+  }
+
+  const handleAddMoreClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    openFilePicker()
   }
 
   return (
@@ -125,8 +174,8 @@ export default function Img2VideoPage() {
                     variant="ghost"
                     size="xs"
                     icon={<Upload className="w-3.5 h-3.5" />}
+                    onClick={handleAddMoreClick}
                     disabled={uploading}
-                    onClick={openFilePicker}
                   >
                     {uploading ? 'Uploading...' : 'Add More'}
                   </Button>
@@ -145,80 +194,114 @@ export default function Img2VideoPage() {
                 <div
                   // biome-ignore lint/suspicious/noArrayIndexKey: entries reorder via remove only
                   key={i}
-                  className="bg-surface-50 rounded-xl p-3 flex gap-3"
+                  className="bg-surface-50 rounded-xl overflow-hidden"
                 >
-                  <div className="w-20 shrink-0 relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-100">
-                    <img src={assetUrl(entry.url)} alt={`Source ${i + 1}`} className="w-full h-full object-cover" />
+                  <div className="p-3 flex gap-3">
+                    <div className="w-20 shrink-0 relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-100">
+                      <img src={assetUrl(entry.url)} alt={`Source ${i + 1}`} className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-surface-400">Image {i + 1}</span>
+                        <div className="flex items-center gap-1">
+                          {entry.prompt.trim() && entries.length > 1 && (
+                            <Button
+                              variant="ghost-muted"
+                              size="xs"
+                              icon={<Copy className="w-3 h-3" />}
+                              onClick={() => applyPromptToAll(entry.prompt)}
+                              title="Apply this prompt to all images"
+                            >
+                              Apply to all
+                            </Button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeEntry(i)}
+                            className="p-1 text-surface-300 hover:text-danger transition-colors rounded"
+                            title="Remove image"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <textarea
+                        value={entry.prompt}
+                        onChange={(e) => setEntryPrompt(i, e.target.value)}
+                        placeholder="Describe the motion (e.g., 'person slowly turns head and smiles at camera')"
+                        className="w-full bg-surface-0 border border-surface-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none flex-1"
+                        rows={3}
+                      />
+                    </div>
                   </div>
-                  <div className="flex-1 flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-surface-400">Image {i + 1}</span>
-                      <div className="flex items-center gap-1">
-                        {entry.prompt.trim() && entries.length > 1 && (
+
+                  {/* Camera Control Panel */}
+                  <div className="border-t border-surface-100">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCameraControlOpen((prev) => ({
+                          ...prev,
+                          [i]: !prev[i],
+                        }))
+                      }
+                      className="w-full flex items-center justify-between p-3 hover:bg-surface-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-wider">
+                          Camera Control
+                        </h3>
+                        {Object.keys(entry.presets).length > 0 && (
+                          <Badge variant="primary" className="text-xs">
+                            {Object.keys(entry.presets).length}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {Object.keys(entry.presets).length > 0 && (
                           <Button
                             variant="ghost-muted"
                             size="xs"
-                            icon={<Copy className="w-3 h-3" />}
-                            onClick={() => applyPromptToAll(entry.prompt)}
-                            title="Apply this prompt to all images"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              clearPresets(i)
+                            }}
                           >
-                            Apply to all
+                            Clear
                           </Button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => removeEntry(i)}
-                          className="p-1 text-surface-300 hover:text-danger transition-colors rounded"
-                          title="Remove image"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                        {cameraControlOpen[i] ? (
+                          <ChevronUp className="w-4 h-4 text-surface-400" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-surface-400" />
+                        )}
                       </div>
-                    </div>
-                    <textarea
-                      value={entry.prompt}
-                      onChange={(e) => setEntryPrompt(i, e.target.value)}
-                      placeholder="Describe the motion (e.g., 'person slowly turns head and smiles at camera')"
-                      className="w-full bg-surface-0 border border-surface-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 resize-none flex-1"
-                      rows={3}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Camera & Shot Presets */}
-          {!generating && jobs.every((j) => j.status !== 'completed') && entries.length > 0 && (
-            <div className="bg-surface-50 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-surface-400 uppercase tracking-wider">
-                  Camera & Shot Presets
-                </h2>
-                {Object.keys(selectedPresets).length > 0 && (
-                  <Button variant="ghost-muted" size="xs" onClick={clearPresets}>
-                    Clear
-                  </Button>
-                )}
-              </div>
-              {VIDEO_PRESETS.map((category) => (
-                <div key={category.key}>
-                  <p className="text-xs text-surface-300 mb-1.5">{category.label}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {category.options.map((option) => (
-                      <button
-                        type="button"
-                        key={option}
-                        onClick={() => setPreset(category.key, option)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                          selectedPresets[category.key] === option
-                            ? 'bg-brand-500/20 text-brand-300 ring-1 ring-brand-500/50'
-                            : 'bg-surface-100 text-surface-400 hover:bg-surface-200'
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    ))}
+                    </button>
+                    {cameraControlOpen[i] && (
+                      <div className="p-3 pt-0 space-y-2">
+                        {VIDEO_PRESETS.map((category) => (
+                          <div key={category.key}>
+                            <p className="text-xs text-surface-300 mb-1">{category.label}</p>
+                            <div className="flex flex-wrap gap-1">
+                              {category.options.map((option) => (
+                                <button
+                                  type="button"
+                                  key={option}
+                                  onClick={() => setPreset(i, category.key, option)}
+                                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                                    entry.presets[category.key] === option
+                                      ? 'bg-brand-500/20 text-brand-300 ring-1 ring-brand-500/50'
+                                      : 'bg-surface-100 text-surface-400 hover:bg-surface-200'
+                                  }`}
+                                >
+                                  {option}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -231,7 +314,7 @@ export default function Img2VideoPage() {
               <h2 className="text-sm font-semibold text-surface-400 uppercase tracking-wider mb-3">
                 Source Images ({entries.length})
               </h2>
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-5 gap-3">
                 {entries.map((entry, i) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: static during generation
                   <div key={i} className="bg-surface-0 rounded-lg overflow-hidden border border-surface-100">
@@ -278,12 +361,7 @@ export default function Img2VideoPage() {
                             >
                               Save
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              onClick={() => setEditingIndex(null)}
-                              className="flex-1"
-                            >
+                            <Button variant="ghost" size="xs" onClick={() => setEditingIndex(null)} className="flex-1">
                               Cancel
                             </Button>
                           </div>
@@ -303,6 +381,17 @@ export default function Img2VideoPage() {
                           >
                             Edit Prompt
                           </Button>
+                          {job?.status === 'completed' && (
+                            <Button
+                              variant="secondary"
+                              size="xs"
+                              icon={<Play className="w-3 h-3" />}
+                              onClick={() => regenerateSingle(i)}
+                              className="w-full mt-1"
+                            >
+                              Generate Again
+                            </Button>
+                          )}
                         </>
                       )}
                     </div>
@@ -394,7 +483,6 @@ export default function Img2VideoPage() {
                     size="xs"
                     onClick={() => {
                       clearEntries()
-                      clearPresets()
                     }}
                   >
                     Start Over

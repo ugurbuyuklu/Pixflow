@@ -54,6 +54,7 @@ function composePrompt(base: string, presets: Record<string, string>): string {
 export interface ImageEntry {
   url: string
   prompt: string
+  presets: Record<string, string>
 }
 
 interface VideoJob {
@@ -69,7 +70,6 @@ interface Img2VideoState {
   entries: ImageEntry[]
   duration: string
   aspectRatio: string
-  selectedPresets: Record<string, string>
   jobs: VideoJob[]
   generating: boolean
   uploading: boolean
@@ -83,12 +83,13 @@ interface Img2VideoState {
   applyPromptToAll: (prompt: string) => void
   setDuration: (duration: string) => void
   setAspectRatio: (ratio: string) => void
-  setPreset: (key: string, value: string) => void
-  clearPresets: () => void
+  setPreset: (index: number, key: string, value: string) => void
+  clearPresets: (index: number) => void
   setError: (error: ErrorInfo | null) => void
   uploadFiles: (files: File[]) => Promise<void>
 
   generateAll: () => Promise<void>
+  regenerateSingle: (index: number) => Promise<void>
   cancelGenerate: () => void
   reset: () => void
 }
@@ -101,7 +102,6 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
   entries: [],
   duration: '5',
   aspectRatio: '9:16',
-  selectedPresets: {},
   jobs: [],
   generating: false,
   uploading: false,
@@ -110,7 +110,7 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
   setEntries: (entries) => set({ entries, jobs: [], error: null }),
   addEntries: (urls) =>
     set((state) => ({
-      entries: [...state.entries, ...urls.map((url) => ({ url, prompt: '' }))],
+      entries: [...state.entries, ...urls.map((url) => ({ url, prompt: '', presets: {} }))],
       jobs: [],
       error: null,
     })),
@@ -132,14 +132,23 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
     })),
   setDuration: (duration) => set({ duration }),
   setAspectRatio: (aspectRatio) => set({ aspectRatio }),
-  setPreset: (key, value) =>
+  setPreset: (index, key, value) =>
     set((state) => {
-      const next = { ...state.selectedPresets }
+      const updated = [...state.entries]
+      if (!updated[index]) return state
+      const next = { ...updated[index].presets }
       if (next[key] === value) delete next[key]
       else next[key] = value
-      return { selectedPresets: next }
+      updated[index] = { ...updated[index], presets: next }
+      return { entries: updated }
     }),
-  clearPresets: () => set({ selectedPresets: {} }),
+  clearPresets: (index) =>
+    set((state) => {
+      const updated = [...state.entries]
+      if (!updated[index]) return state
+      updated[index] = { ...updated[index], presets: {} }
+      return { entries: updated }
+    }),
   setError: (error) => set({ error }),
 
   uploadFiles: async (files) => {
@@ -169,14 +178,14 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
       }
     }
     set((state) => ({
-      entries: [...state.entries, ...uploaded.map((url) => ({ url, prompt: '' }))],
+      entries: [...state.entries, ...uploaded.map((url) => ({ url, prompt: '', presets: {} }))],
       jobs: [],
       uploading: false,
     }))
   },
 
   generateAll: async () => {
-    const { entries, duration, aspectRatio, selectedPresets } = get()
+    const { entries, duration, aspectRatio } = get()
 
     if (entries.length === 0) {
       set({ error: { message: 'No images selected', type: 'warning' } })
@@ -194,7 +203,7 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
 
     const initialJobs: VideoJob[] = entries.map((e) => ({
       imageUrl: e.url,
-      prompt: composePrompt(e.prompt, selectedPresets),
+      prompt: composePrompt(e.prompt, e.presets),
       status: 'pending',
     }))
     set({ generating: true, error: null, jobs: initialJobs })
@@ -214,7 +223,7 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             imageUrl: entries[i].url,
-            prompt: composePrompt(entries[i].prompt, selectedPresets),
+            prompt: composePrompt(entries[i].prompt, entries[i].presets),
             duration,
             aspectRatio,
           }),
@@ -269,6 +278,74 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
     if (abortController === controller) abortController = null
   },
 
+  regenerateSingle: async (index) => {
+    const { entries, duration, aspectRatio } = get()
+
+    if (!entries[index]) {
+      set({ error: { message: 'Image not found', type: 'error' } })
+      return
+    }
+
+    const entry = entries[index]
+    if (!entry.prompt.trim()) {
+      set({ error: { message: 'Video prompt is required', type: 'warning' } })
+      return
+    }
+
+    // Update job status to generating
+    set((state) => {
+      const updated = [...state.jobs]
+      updated[index] = {
+        imageUrl: entry.url,
+        prompt: composePrompt(entry.prompt, entry.presets),
+        status: 'generating',
+      }
+      return { jobs: updated, error: null }
+    })
+
+    try {
+      const res = await authFetch(apiUrl('/api/avatars/i2v'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrl: entry.url,
+          prompt: composePrompt(entry.prompt, entry.presets),
+          duration,
+          aspectRatio,
+        }),
+      })
+
+      if (!res.ok) {
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, `Video generation failed (${res.status})`))
+      }
+
+      const raw = await res.json()
+      const data = unwrapApiData<{ videoUrl: string; localPath: string; requestId: string }>(raw)
+
+      set((state) => {
+        const updated = [...state.jobs]
+        updated[index] = {
+          ...updated[index],
+          status: 'completed',
+          videoUrl: data.videoUrl,
+          localPath: data.localPath,
+        }
+        return { jobs: updated }
+      })
+    } catch (err) {
+      set((state) => {
+        const updated = [...state.jobs]
+        updated[index] = {
+          ...updated[index],
+          status: 'failed',
+          error: err instanceof Error ? err.message : 'Unknown error',
+        }
+        return { jobs: updated }
+      })
+    }
+  },
+
   cancelGenerate: () => {
     abortController?.abort()
     abortController = null
@@ -282,7 +359,6 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
       entries: [],
       duration: '5',
       aspectRatio: '9:16',
-      selectedPresets: {},
       jobs: [],
       generating: false,
       uploading: false,
