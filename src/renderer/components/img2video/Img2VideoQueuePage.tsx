@@ -7,6 +7,7 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Select } from '../ui/Select'
 import { CameraPresetCards } from './CameraPresetCards'
+import { ResultsGrid } from './ResultsGrid'
 
 export default function Img2VideoQueuePage() {
   const {
@@ -64,6 +65,18 @@ export default function Img2VideoQueuePage() {
       }
     }
     input.click()
+  }
+
+  const handleDownloadAll = () => {
+    const completedItems = queueOrder.map((id) => queueItems[id]).filter((item) => item.status === 'completed' && item.result)
+
+    for (const item of completedItems) {
+      if (!item.result) continue
+      const a = document.createElement('a')
+      a.href = assetUrl(item.result.localPath)
+      a.download = item.result.localPath.split('/').pop() || 'video.mp4'
+      a.click()
+    }
   }
 
   // Queue stats
@@ -369,6 +382,13 @@ export default function Img2VideoQueuePage() {
             <p className="text-sm text-danger">{error.message}</p>
           </div>
         )}
+
+        {/* Results Grid */}
+        <ResultsGrid
+          items={queueOrder.map((id) => queueItems[id])}
+          onSelectItem={selectItem}
+          onDownloadAll={handleDownloadAll}
+        />
       </div>
     </div>
   )
