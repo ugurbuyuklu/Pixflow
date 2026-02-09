@@ -1083,7 +1083,7 @@ export default function AvatarStudioPage() {
                         onClick={() => setReactionAspectRatio(ar)}
                         className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                           reactionAspectRatio === ar
-                            ? 'bg-brand text-white'
+                            ? 'bg-brand-600 text-white'
                             : 'bg-surface-200 text-surface-500 hover:bg-surface-300'
                         }`}
                       >
@@ -1103,7 +1103,7 @@ export default function AvatarStudioPage() {
                         onClick={() => setReactionDuration(d)}
                         className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                           reactionDuration === d
-                            ? 'bg-brand text-white'
+                            ? 'bg-brand-600 text-white'
                             : 'bg-surface-200 text-surface-500 hover:bg-surface-300'
                         }`}
                       >
