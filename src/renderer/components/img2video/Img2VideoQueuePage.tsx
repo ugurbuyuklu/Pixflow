@@ -355,14 +355,17 @@ export default function Img2VideoQueuePage() {
                               src={assetUrl(item.result!.videoUrl)}
                               className="w-full h-full object-cover"
                               muted
+                              loop
                               playsInline
-                              onMouseEnter={(e) => e.currentTarget.play()}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.play().catch(() => {})
+                              }}
                               onMouseLeave={(e) => {
                                 e.currentTarget.pause()
                                 e.currentTarget.currentTime = 0
                               }}
                             />
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                               <Play className="w-6 h-6 text-white" />
                             </div>
                           </div>

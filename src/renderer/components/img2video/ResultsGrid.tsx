@@ -142,15 +142,18 @@ export function ResultsGrid({ items, onSelectItem, onDownloadAll }: ResultsGridP
                   src={assetUrl(item.result!.videoUrl)}
                   className="w-full h-full object-cover"
                   muted
+                  loop
                   playsInline
-                  onMouseEnter={(e) => e.currentTarget.play()}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.play().catch(() => {})
+                  }}
                   onMouseLeave={(e) => {
                     e.currentTarget.pause()
                     e.currentTarget.currentTime = 0
                   }}
                 />
                 {!comparisonMode && (
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                     <Play className="w-8 h-8 text-white" />
                   </div>
                 )}
@@ -162,8 +165,8 @@ export function ResultsGrid({ items, onSelectItem, onDownloadAll }: ResultsGridP
               </div>
 
               {/* Metadata */}
-              <div className="p-2 bg-white space-y-1">
-                <p className="text-xs text-surface-700 line-clamp-2 min-h-[2rem]">
+              <div className="p-2 bg-surface-100 space-y-1">
+                <p className="text-xs text-surface-600 line-clamp-2 min-h-[2rem]">
                   {item.prompt || 'No prompt'}
                 </p>
                 <div className="flex gap-1 flex-wrap">
@@ -194,7 +197,7 @@ export function ResultsGrid({ items, onSelectItem, onDownloadAll }: ResultsGridP
             <div className="aspect-video bg-danger/10 flex items-center justify-center">
               <p className="text-danger text-sm font-medium">Failed</p>
             </div>
-            <div className="p-2 bg-white/80">
+            <div className="p-2 bg-surface-100">
               <p className="text-xs text-danger line-clamp-2">{item.error}</p>
             </div>
           </div>
