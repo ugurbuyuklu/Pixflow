@@ -38,15 +38,15 @@ export function CameraPresetCards({ selectedPresets, onPresetsChange }: CameraPr
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {Object.entries(VIDEO_PRESETS).map(([category, config]) => (
         <div key={category}>
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-xs text-surface-400 font-medium uppercase tracking-wide">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[11px] text-surface-400 font-semibold uppercase tracking-wider">
               {config.label}
             </p>
-            <span className="text-[10px] text-surface-300">
-              {config.multiSelect ? 'Select up to 3' : 'Select one'}
+            <span className="text-[10px] text-surface-300 font-medium">
+              {config.multiSelect ? 'up to 3' : 'select one'}
             </span>
           </div>
 

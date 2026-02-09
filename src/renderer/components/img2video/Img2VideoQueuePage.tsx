@@ -295,14 +295,23 @@ export default function Img2VideoQueuePage() {
                 onClick={() => setPresetsExpanded(!presetsExpanded)}
                 className="flex items-center justify-between w-full mb-2"
               >
-                <h3 className="text-sm font-semibold">Camera Controls</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold">Camera Controls</h3>
+                  {Object.values(selectedItem.presets).flat().length > 0 && (
+                    <span className="px-1.5 py-0.5 bg-brand/20 text-brand text-[10px] font-semibold rounded">
+                      {Object.values(selectedItem.presets).flat().length}
+                    </span>
+                  )}
+                </div>
                 {presetsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
               {presetsExpanded && (
-                <CameraPresetCards
-                  selectedPresets={selectedItem.presets}
-                  onPresetsChange={(presets) => setItemPresets(selectedItem.id, presets)}
-                />
+                <div className="max-h-64 overflow-y-auto overscroll-contain pr-2 -mr-2">
+                  <CameraPresetCards
+                    selectedPresets={selectedItem.presets}
+                    onPresetsChange={(presets) => setItemPresets(selectedItem.id, presets)}
+                  />
+                </div>
               )}
             </div>
 
