@@ -83,6 +83,8 @@ export default function AvatarStudioPage() {
   const [videoUrl, setVideoUrl] = useState('')
   const [uploadingVideo, setUploadingVideo] = useState(false)
   const [uploadedAudioFile, setUploadedAudioFile] = useState<File | null>(null)
+  const [showVariationOptions, setShowVariationOptions] = useState(false)
+  const [targetDuration, setTargetDuration] = useState(30)
 
   const {
     mode,
@@ -153,6 +155,7 @@ export default function AvatarStudioPage() {
     uploadAvatars,
     generateAvatar,
     generateScript,
+    refineScript,
     generateTTS,
     uploadAudio,
     createLipsync,
@@ -172,6 +175,17 @@ export default function AvatarStudioPage() {
       setVideoSource('url')
     }
   }, [scriptMode])
+
+  const handleRefineScript = async (type: 'similar' | 'improved' | 'shorter' | 'longer') => {
+    const instructions = {
+      similar: 'Generate a similar variation of this script with the same tone and structure but different wording',
+      improved: 'Improve this script to be more engaging, persuasive, and impactful while maintaining the same message',
+      shorter: 'Make this script shorter and more concise while keeping the key message and impact',
+      longer: 'Expand this script with more details, examples, and elaboration while maintaining the tone',
+    }
+    await refineScript(instructions[type])
+    setShowVariationOptions(false)
+  }
 
   return (
     <div className="space-y-6">
@@ -484,12 +498,82 @@ export default function AvatarStudioPage() {
             {/* Mode: Already Have Script */}
             {scriptMode === 'existing' && (
               <div className="space-y-2">
-                <label className="text-sm text-surface-400">Your Script</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm text-surface-400">Your Script</label>
+                  {generatedScript && !scriptGenerating && (
+                    <button
+                      type="button"
+                      onClick={() => setShowVariationOptions(!showVariationOptions)}
+                      className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Generate Similar
+                    </button>
+                  )}
+                </div>
+                {showVariationOptions && generatedScript && (
+                  <div className="space-y-2">
+                    <div className="flex gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => handleRefineScript('similar')}
+                        disabled={scriptGenerating}
+                        className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                      >
+                        Similar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRefineScript('improved')}
+                        disabled={scriptGenerating}
+                        className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                      >
+                        Improved
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRefineScript('shorter')}
+                        disabled={scriptGenerating}
+                        className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                      >
+                        Shorter
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRefineScript('longer')}
+                        disabled={scriptGenerating}
+                        className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                      >
+                        Longer
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={targetDuration}
+                        onChange={(e) => setTargetDuration(Number(e.target.value))}
+                        min={5}
+                        max={120}
+                        className="w-16 px-2 py-1 text-xs rounded bg-surface-200 text-surface-900 border border-surface-300"
+                      />
+                      <span className="text-xs text-surface-400">seconds</span>
+                      <button
+                        type="button"
+                        onClick={() => refineScript(`Adjust this script to be exactly ${targetDuration} seconds long when read at a natural pace (approximately ${Math.round(targetDuration * 2.5)} words). Maintain the core message and tone.`, targetDuration)}
+                        disabled={scriptGenerating}
+                        className="px-3 py-1.5 rounded bg-brand-600 hover:bg-brand-700 text-surface-900 text-xs disabled:opacity-50"
+                      >
+                        Adjust to Duration
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <Textarea
                   value={generatedScript}
                   onChange={(e) => setGeneratedScript(e.target.value)}
                   placeholder="Paste or type your script here..."
                   rows={6}
+                  disabled={scriptGenerating}
                 />
                 {generatedScript && (
                   <p className="text-xs text-surface-400">
@@ -646,19 +730,93 @@ export default function AvatarStudioPage() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-sm text-surface-400">Transcribed Script (Editable)</label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setGeneratedScript('')
-                          useAvatarStore.setState({ transcriptionError: null })
-                        }}
-                        className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        Try another video
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {!scriptGenerating && (
+                          <button
+                            type="button"
+                            onClick={() => setShowVariationOptions(!showVariationOptions)}
+                            className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                            Generate Similar
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGeneratedScript('')
+                            useAvatarStore.setState({ transcriptionError: null })
+                          }}
+                          className="text-xs text-surface-400 hover:text-surface-300 flex items-center gap-1"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Try another video
+                        </button>
+                      </div>
                     </div>
-                    <Textarea value={generatedScript} onChange={(e) => setGeneratedScript(e.target.value)} rows={6} />
+                    {showVariationOptions && (
+                      <div className="space-y-2">
+                        <div className="flex gap-2 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => handleRefineScript('similar')}
+                            disabled={scriptGenerating}
+                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                          >
+                            Similar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRefineScript('improved')}
+                            disabled={scriptGenerating}
+                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                          >
+                            Improved
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRefineScript('shorter')}
+                            disabled={scriptGenerating}
+                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                          >
+                            Shorter
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRefineScript('longer')}
+                            disabled={scriptGenerating}
+                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                          >
+                            Longer
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={targetDuration}
+                            onChange={(e) => setTargetDuration(Number(e.target.value))}
+                            min={5}
+                            max={120}
+                            className="w-16 px-2 py-1 text-xs rounded bg-surface-200 text-surface-900 border border-surface-300"
+                          />
+                          <span className="text-xs text-surface-400">seconds</span>
+                          <button
+                            type="button"
+                            onClick={() => refineScript(`Adjust this script to be exactly ${targetDuration} seconds long when read at a natural pace (approximately ${Math.round(targetDuration * 2.5)} words). Maintain the core message and tone.`, targetDuration)}
+                            disabled={scriptGenerating}
+                            className="px-3 py-1.5 rounded bg-brand-600 hover:bg-brand-700 text-surface-900 text-xs disabled:opacity-50"
+                          >
+                            Adjust to Duration
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <Textarea
+                      value={generatedScript}
+                      onChange={(e) => setGeneratedScript(e.target.value)}
+                      rows={6}
+                      disabled={scriptGenerating}
+                    />
                     <p className="text-xs text-surface-400">
                       {generatedScript.split(/\s+/).filter(Boolean).length} words (~
                       {Math.ceil((generatedScript.split(/\s+/).filter(Boolean).length / 150) * 60)}s)
@@ -719,12 +877,25 @@ export default function AvatarStudioPage() {
                         <CheckCircle className="w-4 h-4" />
                         Audio uploaded!
                       </p>
-                      {uploadedAudioFile && (
-                        <div className="flex items-center gap-2 text-xs text-surface-400">
-                          <Volume2 className="w-3 h-3" />
-                          {uploadedAudioFile.name}
-                        </div>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {uploadedAudioFile && (
+                          <div className="flex items-center gap-2 text-xs text-surface-400">
+                            <Volume2 className="w-3 h-3" />
+                            {uploadedAudioFile.name}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            useAvatarStore.setState({ generatedAudioUrl: null })
+                            setUploadedAudioFile(null)
+                          }}
+                          className="text-xs text-danger hover:text-danger/80 flex items-center gap-1"
+                          title="Remove audio"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                     <AudioPlayer src={assetUrl(generatedAudioUrl)} />
                   </div>
@@ -785,16 +956,90 @@ export default function AvatarStudioPage() {
                         {scriptWordCount} words (~{scriptEstimatedDuration}s)
                       </span>
                     </div>
-                    <Textarea value={generatedScript} onChange={(e) => setGeneratedScript(e.target.value)} rows={4} />
-                    <button
-                      type="button"
-                      onClick={generateScript}
+                    <Textarea
+                      value={generatedScript}
+                      onChange={(e) => setGeneratedScript(e.target.value)}
+                      rows={4}
                       disabled={scriptGenerating}
-                      className="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      Regenerate
-                    </button>
+                    />
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={generateScript}
+                        disabled={scriptGenerating}
+                        className="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Regenerate
+                      </button>
+                      {!scriptGenerating && (
+                        <button
+                          type="button"
+                          onClick={() => setShowVariationOptions(!showVariationOptions)}
+                          className="text-sm text-brand-400 hover:text-brand-300 flex items-center gap-1"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Generate Similar
+                        </button>
+                      )}
+                    </div>
+                    {showVariationOptions && (
+                      <div className="space-y-2">
+                        <div className="flex gap-2 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => handleRefineScript('similar')}
+                            disabled={scriptGenerating}
+                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                          >
+                            Similar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRefineScript('improved')}
+                            disabled={scriptGenerating}
+                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                          >
+                            Improved
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRefineScript('shorter')}
+                            disabled={scriptGenerating}
+                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                          >
+                            Shorter
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRefineScript('longer')}
+                            disabled={scriptGenerating}
+                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
+                          >
+                            Longer
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={targetDuration}
+                            onChange={(e) => setTargetDuration(Number(e.target.value))}
+                            min={5}
+                            max={120}
+                            className="w-16 px-2 py-1 text-xs rounded bg-surface-200 text-surface-900 border border-surface-300"
+                          />
+                          <span className="text-xs text-surface-400">seconds</span>
+                          <button
+                            type="button"
+                            onClick={() => refineScript(`Adjust this script to be exactly ${targetDuration} seconds long when read at a natural pace (approximately ${Math.round(targetDuration * 2.5)} words). Maintain the core message and tone.`, targetDuration)}
+                            disabled={scriptGenerating}
+                            className="px-3 py-1.5 rounded bg-brand-600 hover:bg-brand-700 text-surface-900 text-xs disabled:opacity-50"
+                          >
+                            Adjust to Duration
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

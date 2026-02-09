@@ -163,6 +163,7 @@ interface AvatarState {
   uploadAvatars: (files: FileList) => Promise<void>
   generateAvatar: () => Promise<void>
   generateScript: () => Promise<void>
+  refineScript: (instruction: string, targetDuration?: number) => Promise<void>
   generateTTS: () => Promise<void>
   uploadAudio: (file: File) => Promise<void>
   createLipsync: () => Promise<void>
@@ -373,6 +374,48 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
       if (!res.ok) {
         const raw = await res.json().catch(() => ({}))
         throw new Error(getApiError(raw, 'Failed to generate script'))
+      }
+
+      const raw = await res.json()
+      const data = unwrapApiData<{ script: string; wordCount: number; estimatedDuration: number }>(raw)
+      set({
+        generatedScript: data.script,
+        scriptWordCount: data.wordCount,
+        scriptEstimatedDuration: data.estimatedDuration,
+      })
+    } catch (err) {
+      set({ error: parseError(err) })
+    } finally {
+      set({ scriptGenerating: false })
+    }
+  },
+
+  refineScript: async (instruction: string, targetDuration?: number) => {
+    const { generatedScript } = get()
+    if (!generatedScript.trim()) {
+      set({ error: { message: 'No script to refine', type: 'warning' } })
+      return
+    }
+
+    const wordCount = generatedScript.split(/\s+/).length
+    const estimatedDuration = targetDuration || Math.ceil(wordCount / 2.5)
+
+    set({ scriptGenerating: true, error: null })
+
+    try {
+      const res = await authFetch(apiUrl('/api/avatars/script/refine'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          script: generatedScript,
+          feedback: instruction,
+          duration: estimatedDuration,
+        }),
+      })
+
+      if (!res.ok) {
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Failed to refine script'))
       }
 
       const raw = await res.json()
