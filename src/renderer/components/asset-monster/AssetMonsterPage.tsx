@@ -776,16 +776,6 @@ Examples:
           <div className="flex bg-surface-100 rounded-lg p-1 mb-4">
             <button
               type="button"
-              onClick={() => setImageSource('upload')}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
-                imageSource === 'upload' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
-              }`}
-            >
-              <Upload className="w-4 h-4" />
-              Upload
-            </button>
-            <button
-              type="button"
               onClick={() => setImageSource('gallery')}
               className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
                 imageSource === 'gallery' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
@@ -794,66 +784,17 @@ Examples:
               <FolderOpen className="w-4 h-4" />
               Gallery {avatars.length > 0 && `(${avatars.length})`}
             </button>
+            <button
+              type="button"
+              onClick={() => setImageSource('upload')}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
+                imageSource === 'upload' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
+              }`}
+            >
+              <Upload className="w-4 h-4" />
+              Upload
+            </button>
           </div>
-
-          {/* Unified Drag & Drop Zone - Always Visible */}
-          <div
-            {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-4 min-h-[140px] transition-colors ${
-              isDragActive ? 'border-brand-500 bg-brand-500/10' : 'border-surface-200 hover:border-surface-300'
-            }`}
-          >
-            <input {...getInputProps()} />
-
-            {referencePreviews.length === 0 ? (
-              <div className="text-center py-8">
-                <Upload className="w-8 h-8 mx-auto mb-2 text-surface-400" />
-                <p className="text-surface-400 text-sm">
-                  {isDragActive ? 'Drop images here' : 'Drop images here or use Add Image button'}
-                </p>
-                <p className="text-xs text-surface-400 mt-1">JPEG, PNG, WebP • Max 5 images</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-5 gap-3">
-                {referencePreviews.map((preview, idx) => (
-                  <div
-                    // biome-ignore lint/suspicious/noArrayIndexKey: static list
-                    key={idx}
-                    className="relative aspect-square rounded-lg overflow-hidden border border-surface-200"
-                  >
-                    <img src={preview} alt={`Reference ${idx + 1}`} className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        removeReferenceImage(idx)
-                      }}
-                      className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center hover:bg-danger transition-colors"
-                      title="Remove image"
-                    >
-                      <X className="w-4 h-4 text-white" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Add Image Button */}
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Plus className="w-4 h-4" />}
-            onClick={() => {
-              if (imageSource === 'upload') {
-                openFilePicker()
-              }
-              // Gallery mode: user picks from gallery grid below
-            }}
-            disabled={referenceImages.length >= MAX_REFERENCE_IMAGES}
-          >
-            Add Image {referenceImages.length >= MAX_REFERENCE_IMAGES && '(Max 5)'}
-          </Button>
 
           {/* Gallery Grid - Conditionally Shown */}
           {imageSource === 'gallery' && (
@@ -871,7 +812,7 @@ Examples:
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-6 gap-2 max-h-[200px] overflow-y-auto">
+                <div className="flex gap-2 overflow-x-auto pb-2">
                   {avatars.map((avatar) => {
                     const isSelected = referenceImages.some((f) => f.name === avatar.filename)
                     return (
@@ -880,7 +821,7 @@ Examples:
                         key={avatar.filename}
                         onClick={() => selectAvatar(avatar)}
                         disabled={referenceImages.length >= MAX_REFERENCE_IMAGES && !isSelected}
-                        className={`aspect-square rounded-lg overflow-hidden border-2 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 relative ${
+                        className={`flex-shrink-0 w-24 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 relative ${
                           isSelected
                             ? 'border-brand-500 ring-2 ring-brand-500/50'
                             : 'border-transparent hover:border-surface-300'
@@ -897,6 +838,64 @@ Examples:
                   })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Selected Images Display */}
+          {referencePreviews.length > 0 && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-surface-600">
+                  Selected Images ({referencePreviews.length}/{MAX_REFERENCE_IMAGES})
+                </span>
+              </div>
+              <div
+                {...getRootProps()}
+                className={`border-2 border-dashed rounded-lg p-4 transition-colors ${
+                  isDragActive ? 'border-brand-500 bg-brand-500/10' : 'border-surface-200 hover:border-surface-300'
+                }`}
+              >
+                <input {...getInputProps()} />
+                <div className="grid grid-cols-5 gap-3">
+                  {referencePreviews.map((preview, idx) => (
+                    <div
+                      // biome-ignore lint/suspicious/noArrayIndexKey: static list
+                      key={idx}
+                      className="relative aspect-square rounded-lg overflow-hidden border border-surface-200"
+                    >
+                      <img src={preview} alt={`Reference ${idx + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removeReferenceImage(idx)
+                        }}
+                        className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center hover:bg-danger transition-colors"
+                        title="Remove image"
+                      >
+                        <X className="w-4 h-4 text-white" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Add Image Button - Upload Mode */}
+          {imageSource === 'upload' && (
+            <div
+              {...getRootProps()}
+              className={`mt-4 border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
+                isDragActive ? 'border-brand-500 bg-brand-500/10' : 'border-surface-200 hover:border-surface-300'
+              }`}
+            >
+              <input {...getInputProps()} />
+              <Upload className="w-8 h-8 mx-auto mb-2 text-surface-400" />
+              <p className="text-surface-400 text-sm">
+                {isDragActive ? 'Drop images here' : 'Drop images here or click to browse'}
+              </p>
+              <p className="text-xs text-surface-400 mt-1">JPEG, PNG, WebP • Max 5 images</p>
             </div>
           )}
         </div>
