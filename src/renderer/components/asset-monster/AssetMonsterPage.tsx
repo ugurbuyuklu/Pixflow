@@ -188,7 +188,9 @@ export default function AssetMonsterPage() {
     batchError,
     uploadError,
     promptSource,
-    customPrompts,
+    currentCustomPromptInput,
+    currentCustomPromptError,
+    savedCustomPrompts,
     imageSource,
     avatars,
     avatarsLoading,
@@ -201,10 +203,10 @@ export default function AssetMonsterPage() {
     selectAllPrompts,
     deselectAllPrompts,
     setPromptSource,
-    addCustomPrompt,
-    updateCustomPrompt,
-    removeCustomPrompt,
-    setCustomPromptError,
+    updateCurrentCustomPromptInput,
+    setCurrentCustomPromptError,
+    saveCurrentCustomPrompt,
+    removeSavedCustomPrompt,
     setImageSource,
     setAspectRatio,
     setNumImagesPerPrompt,
@@ -351,23 +353,13 @@ export default function AssetMonsterPage() {
 
   const handleBatchGenerate = async () => {
     if (promptSource === 'custom') {
-      // Parse all custom prompts
-      const parsedPrompts = await Promise.all(
-        customPrompts.map(async (cp, idx) => {
-          const parsed = await parseCustomPrompt(cp.json, 1, (error) =>
-            setCustomPromptError(cp.id, error),
-          )
-          return parsed ? parsed[0] : null
-        }),
-      )
-
-      // Filter out any that failed to parse
-      const validPrompts = parsedPrompts.filter((p): p is GeneratedPrompt => p !== null)
-      if (validPrompts.length === 0) {
-        setBatchError({ message: 'All custom prompts have errors. Please fix them first.', type: 'warning' })
+      if (savedCustomPrompts.length === 0) {
+        setBatchError({ message: 'Please save at least one custom prompt first.', type: 'warning' })
         return
       }
 
+      // Use saved custom prompts directly
+      const validPrompts = savedCustomPrompts.map((sp) => sp.prompt)
       startBatch(validPrompts, 'custom')
     } else if (promptSource === 'library') {
       if (selectedLibraryPrompts.size === 0) {
@@ -398,7 +390,7 @@ export default function AssetMonsterPage() {
 
   const totalImages =
     promptSource === 'custom'
-      ? customPrompts.length
+      ? savedCustomPrompts.length
       : promptSource === 'library'
         ? selectedLibraryPrompts.size
         : selectedPrompts.size
@@ -684,70 +676,86 @@ export default function AssetMonsterPage() {
               </div>
             )
           ) : promptSource === 'custom' ? (
-            <div className="space-y-3">
-              <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                {customPrompts.map((cp, idx) => (
-                  <div key={cp.id} className="border border-surface-200 rounded-lg p-3 bg-surface-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-surface-400">Custom Prompt #{idx + 1}</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            // Parse, save to library, then add as new card
-                            const parsed = await parseCustomPrompt(cp.json, 1, (error) =>
-                              setCustomPromptError(cp.id, error),
-                            )
-                            if (parsed && parsed[0]) {
-                              const prompt = parsed[0]
-                              const name = prompt.style?.split(' ').slice(0, 4).join(' ') || `Custom #${idx + 1}`
-                              await addToFavorites(prompt, name, 'custom')
-                              // Clear current textarea and add new empty card
-                              updateCustomPrompt(cp.id, '')
-                              addCustomPrompt()
-                            }
-                          }}
-                          className="text-surface-400 hover:text-brand-500 transition-colors"
-                          title="Save to Library"
-                        >
-                          <Save className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeCustomPrompt(cp.id)}
-                          className="text-surface-400 hover:text-danger transition-colors"
-                          title="Remove prompt"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <textarea
-                      value={cp.json}
-                      onChange={(e) => updateCustomPrompt(cp.id, e.target.value)}
-                      placeholder={`Describe the scene or paste JSON...
+            <div className="space-y-4">
+              {/* Input Area */}
+              <div className="border border-surface-200 rounded-lg p-4 bg-surface-100">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-medium text-surface-600">New Custom Prompt</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const parsed = await parseCustomPrompt(currentCustomPromptInput, 1, setCurrentCustomPromptError)
+                      if (parsed && parsed[0]) {
+                        const prompt = parsed[0]
+                        const name = prompt.style?.split(' ').slice(0, 4).join(' ') || 'Custom Prompt'
+                        await addToFavorites(prompt, name, 'custom')
+                        saveCurrentCustomPrompt(prompt, name)
+                      }
+                    }}
+                    disabled={!currentCustomPromptInput.trim()}
+                    className="text-surface-400 hover:text-brand-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Save to Library & Add Card"
+                  >
+                    <Save className="w-5 h-5" />
+                  </button>
+                </div>
+                <textarea
+                  value={currentCustomPromptInput}
+                  onChange={(e) => updateCurrentCustomPromptInput(e.target.value)}
+                  placeholder={`Describe the scene or paste JSON...
 
 Examples:
 • Black & white editorial photoshoot with dramatic lighting
 • {"style": "Romantic portrait...", "lighting": {...}}`}
-                      className={`w-full h-32 bg-surface-0 rounded-lg p-3 text-sm resize-none border ${
-                        cp.error ? 'border-danger focus:border-danger' : 'border-surface-200 focus:border-brand-500'
-                      } focus:outline-none`}
-                      rows={8}
-                    />
-                    {cp.error && (
-                      <p className="text-danger text-xs mt-2 flex items-center gap-1">
-                        <AlertCircle className="w-3 h-3" />
-                        {cp.error}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                  className={`w-full h-32 bg-surface-0 rounded-lg p-3 text-sm resize-none border ${
+                    currentCustomPromptError
+                      ? 'border-danger focus:border-danger'
+                      : 'border-surface-200 focus:border-brand-500'
+                  } focus:outline-none`}
+                  rows={8}
+                />
+                {currentCustomPromptError && (
+                  <p className="text-danger text-xs mt-2 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {currentCustomPromptError}
+                  </p>
+                )}
               </div>
 
-              <Button variant="secondary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={addCustomPrompt}>
-                Add New Prompt
-              </Button>
+              {/* Saved Cards Grid */}
+              {savedCustomPrompts.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-surface-600">
+                      Saved Prompts ({savedCustomPrompts.length})
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-3 max-h-[400px] overflow-y-auto">
+                    {savedCustomPrompts.map((sp) => (
+                      <div
+                        key={sp.id}
+                        className="relative border border-surface-200 rounded-lg p-3 bg-surface-100 hover:bg-surface-200 transition-colors"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => removeSavedCustomPrompt(sp.id)}
+                          className="absolute top-2 right-2 w-5 h-5 rounded-full bg-surface-900/60 hover:bg-danger flex items-center justify-center transition-colors"
+                        >
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                        <div className="pr-6">
+                          <p className="text-xs font-medium text-surface-900 line-clamp-2">{sp.name}</p>
+                          {sp.prompt.camera && (
+                            <p className="text-xs text-surface-500 mt-1 line-clamp-1">
+                              {sp.prompt.camera.lens || sp.prompt.camera.angle}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : null}
         </div>

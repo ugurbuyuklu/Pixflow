@@ -45,7 +45,9 @@ interface GenerationState {
   completedBatches: CompletedBatch[]
 
   promptSource: 'generated' | 'custom' | 'library'
-  customPrompts: Array<{ id: string; json: string; error: string | null }>
+  currentCustomPromptInput: string
+  currentCustomPromptError: string | null
+  savedCustomPrompts: Array<{ id: string; prompt: GeneratedPrompt; name: string }>
 
   imageSource: 'upload' | 'gallery'
   avatars: Avatar[]
@@ -60,10 +62,10 @@ interface GenerationState {
   selectAllPrompts: (count: number) => void
   deselectAllPrompts: () => void
   setPromptSource: (source: 'generated' | 'custom' | 'library') => void
-  addCustomPrompt: () => void
-  updateCustomPrompt: (id: string, json: string) => void
-  removeCustomPrompt: (id: string) => void
-  setCustomPromptError: (id: string, error: string | null) => void
+  updateCurrentCustomPromptInput: (json: string) => void
+  setCurrentCustomPromptError: (error: string | null) => void
+  saveCurrentCustomPrompt: (prompt: GeneratedPrompt, name: string) => void
+  removeSavedCustomPrompt: (id: string) => void
   setImageSource: (source: 'upload' | 'gallery') => void
   setAspectRatio: (ratio: string) => void
   setNumImagesPerPrompt: (count: number) => void
@@ -107,7 +109,9 @@ export const useGenerationStore = create<GenerationState>()((set, get) => ({
   completedBatches: [],
 
   promptSource: 'generated',
-  customPrompts: [],
+  currentCustomPromptInput: '',
+  currentCustomPromptError: null,
+  savedCustomPrompts: [],
 
   imageSource: 'upload',
   avatars: [],
@@ -130,28 +134,23 @@ export const useGenerationStore = create<GenerationState>()((set, get) => ({
   deselectAllPrompts: () => set({ selectedPrompts: new Set() }),
   setPromptSource: (promptSource) => set({ promptSource }),
 
-  addCustomPrompt: () => {
-    const id = `custom-${Date.now()}`
+  updateCurrentCustomPromptInput: (currentCustomPromptInput) =>
+    set({ currentCustomPromptInput, currentCustomPromptError: null }),
+
+  setCurrentCustomPromptError: (currentCustomPromptError) => set({ currentCustomPromptError }),
+
+  saveCurrentCustomPrompt: (prompt, name) => {
+    const id = `saved-${Date.now()}`
     set((state) => ({
-      customPrompts: [...state.customPrompts, { id, json: '', error: null }],
+      savedCustomPrompts: [...state.savedCustomPrompts, { id, prompt, name }],
+      currentCustomPromptInput: '',
+      currentCustomPromptError: null,
     }))
   },
 
-  updateCustomPrompt: (id, json) => {
+  removeSavedCustomPrompt: (id) => {
     set((state) => ({
-      customPrompts: state.customPrompts.map((cp) => (cp.id === id ? { ...cp, json, error: null } : cp)),
-    }))
-  },
-
-  removeCustomPrompt: (id) => {
-    set((state) => ({
-      customPrompts: state.customPrompts.filter((cp) => cp.id !== id),
-    }))
-  },
-
-  setCustomPromptError: (id, error) => {
-    set((state) => ({
-      customPrompts: state.customPrompts.map((cp) => (cp.id === id ? { ...cp, error } : cp)),
+      savedCustomPrompts: state.savedCustomPrompts.filter((sp) => sp.id !== id),
     }))
   },
 
