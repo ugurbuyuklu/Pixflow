@@ -126,99 +126,100 @@ function Img2ImgContent() {
     <div className="grid grid-cols-2 gap-6">
       {/* LEFT COLUMN: INPUTS */}
       <div className="space-y-6">
-        {/* Step 1: Upload Images */}
+        {/* Step 1: Select Images */}
         <div className="bg-surface-50 rounded-lg p-4">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
               1
             </span>
-            Upload Images
+            Select Images
           </h2>
           <div
             {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+            className={`min-h-[200px] border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
               isDragActive
                 ? 'border-brand-500 bg-brand-500/10'
                 : 'border-surface-200 hover:border-surface-300'
             }`}
           >
             <input {...getInputProps()} />
-            <Upload className="w-8 h-8 mx-auto mb-2 text-surface-400" />
-            <p className="text-surface-400 text-sm">
-              {isDragActive ? 'Drop images here' : 'Drag & drop images or click to browse'}
-            </p>
-            <p className="text-xs text-surface-400 mt-1">JPEG, PNG, WebP • Max 10MB each</p>
+            {img2imgItems.length > 0 ? (
+              <div>
+                <p className="text-xs font-medium text-surface-500 mb-2">SELECTED IMAGES</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {img2imgItems.map((item) => {
+                    const isSelected = selectedId === item.id
+                    return (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          selectItem(item.id)
+                        }}
+                        className={`relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all group ${
+                          isSelected
+                            ? 'border-brand-500 ring-2 ring-brand-500/50'
+                            : 'border-transparent hover:border-surface-200'
+                        }`}
+                      >
+                        <img src={assetUrl(item.imageUrl)} className="w-full h-full object-cover" alt="" />
+                        <Badge
+                          variant={
+                            item.status === 'completed'
+                              ? 'success'
+                              : item.status === 'failed'
+                                ? 'danger'
+                                : item.status === 'generating'
+                                  ? 'primary'
+                                  : 'secondary'
+                          }
+                          className="absolute top-1 right-1 text-[10px]"
+                        >
+                          {item.status}
+                        </Badge>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeItem(item.id)
+                          }}
+                          className="absolute top-1 left-1 w-4 h-4 bg-danger rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full py-8">
+                <Upload className="w-12 h-12 mb-3 text-surface-400" />
+                <p className="text-surface-400 text-sm">
+                  {isDragActive ? 'Drop images here' : 'Drag & drop images or click to browse'}
+                </p>
+                <p className="text-xs text-surface-400 mt-1">JPEG, PNG, WebP • Max 10MB each</p>
+              </div>
+            )}
           </div>
           {/* Queue stats */}
-          <div className="flex gap-2 mt-3 text-xs">
-            <Badge variant="primary">{totalCount} Total</Badge>
-            {completedCount > 0 && <Badge variant="success">{completedCount} Completed</Badge>}
-            {failedCount > 0 && <Badge variant="danger">{failedCount} Failed</Badge>}
-          </div>
+          {img2imgItems.length > 0 && (
+            <div className="flex gap-2 mt-3 text-xs">
+              <Badge variant="primary">{totalCount} Total</Badge>
+              {completedCount > 0 && <Badge variant="success">{completedCount} Completed</Badge>}
+              {failedCount > 0 && <Badge variant="danger">{failedCount} Failed</Badge>}
+            </div>
+          )}
         </div>
 
-        {/* Step 2: Select Image */}
-        {img2imgItems.length > 0 && (
-          <div className="bg-surface-50 rounded-lg p-4">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
-                2
-              </span>
-              Select Image
-            </h2>
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {img2imgItems.map((item) => {
-                const isSelected = selectedId === item.id
-                return (
-                  <button
-                    type="button"
-                    key={item.id}
-                    onClick={() => selectItem(item.id)}
-                    className={`relative w-20 shrink-0 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all group ${
-                      isSelected
-                        ? 'border-brand-500 ring-2 ring-brand-500/50'
-                        : 'border-transparent hover:border-surface-200'
-                    }`}
-                  >
-                    <img src={assetUrl(item.imageUrl)} className="w-full h-full object-cover" alt="" />
-                    <Badge
-                      variant={
-                        item.status === 'completed'
-                          ? 'success'
-                          : item.status === 'failed'
-                            ? 'danger'
-                            : item.status === 'generating'
-                              ? 'primary'
-                              : 'secondary'
-                      }
-                      className="absolute top-1 right-1 text-[10px]"
-                    >
-                      {item.status}
-                    </Badge>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        removeItem(item.id)
-                      }}
-                      className="absolute top-1 left-1 w-4 h-4 bg-danger rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3 text-white" />
-                    </button>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Transformation Prompt */}
+        {/* Step 2: Transformation Prompt */}
         <div
           className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
-              3
+              2
             </span>
             Transformation Prompt
           </h2>
@@ -231,13 +232,13 @@ function Img2ImgContent() {
           />
         </div>
 
-        {/* Step 4: Settings */}
+        {/* Step 3: Settings */}
         <div
           className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
-              4
+              3
             </span>
             Settings
           </h2>
@@ -273,13 +274,13 @@ function Img2ImgContent() {
           </div>
         </div>
 
-        {/* Step 5: Generate Actions */}
+        {/* Step 4: Generate Actions */}
         <div
           className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
-              5
+              4
             </span>
             Actions
           </h2>
@@ -519,121 +520,123 @@ function Img2VideoContent() {
     <div className="grid grid-cols-2 gap-6">
       {/* LEFT COLUMN: INPUTS */}
       <div className="space-y-6">
-        {/* Step 1: Upload Images & Queue */}
+        {/* Step 1: Select Images */}
         <div className="bg-surface-50 rounded-lg p-4">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
               1
             </span>
-            Upload Images & Queue
+            Select Images
           </h2>
           <div
             {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+            className={`min-h-[200px] border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
               isDragActive
                 ? 'border-brand-500 bg-brand-500/10'
                 : 'border-surface-200 hover:border-surface-300'
             }`}
           >
             <input {...getInputProps()} />
-            <Upload className="w-8 h-8 mx-auto mb-2 text-surface-400" />
-            <p className="text-surface-400 text-sm">
-              {isDragActive ? 'Drop images here' : 'Drag & drop images or click to browse'}
-            </p>
-            <p className="text-xs text-surface-400 mt-1">JPEG, PNG, WebP • Max 10MB each</p>
-          </div>
-          {/* Queue stats */}
-          <div className="flex gap-2 mt-3 text-xs">
-            <Badge variant="primary">{totalCount} Total</Badge>
-            {completedCount > 0 && <Badge variant="success">{completedCount} Completed</Badge>}
-            {failedCount > 0 && <Badge variant="danger">{failedCount} Failed</Badge>}
-          </div>
-          {/* Queue controls */}
-          <div className="flex gap-2 mt-3">
-            <Button
-              variant={generating ? 'danger' : 'success'}
-              icon={generating ? <X className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              onClick={generating ? pauseQueue : generateQueue}
-              disabled={queuedCount === 0 && !generating}
-              className="flex-1"
-            >
-              {generating ? 'Pause Queue' : `Run Queue${queuedCount > 0 ? ` (${queuedCount})` : ''}`}
-            </Button>
-            {failedCount > 0 && (
-              <>
-                <Button variant="warning" size="sm" onClick={retryFailed}>
-                  Retry ({failedCount})
-                </Button>
-                <Button variant="danger" size="sm" onClick={clearFailed}>
-                  Clear
-                </Button>
-              </>
+            {img2videoItems.length > 0 ? (
+              <div>
+                <p className="text-xs font-medium text-surface-500 mb-2">SELECTED IMAGES</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {img2videoItems.map((item) => {
+                    const isSelected = selectedId === item.id
+                    return (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          selectItem(item.id)
+                        }}
+                        className={`relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all group ${
+                          isSelected
+                            ? 'border-brand-500 ring-2 ring-brand-500/50'
+                            : 'border-transparent hover:border-surface-200'
+                        }`}
+                      >
+                        <img src={assetUrl(item.imageUrl)} className="w-full h-full object-cover" alt="" />
+                        <Badge
+                          variant={
+                            item.status === 'completed'
+                              ? 'success'
+                              : item.status === 'failed'
+                                ? 'danger'
+                                : item.status === 'generating'
+                                  ? 'primary'
+                                  : 'secondary'
+                          }
+                          className="absolute top-1 right-1 text-[10px]"
+                        >
+                          {item.status}
+                        </Badge>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeItem(item.id)
+                          }}
+                          className="absolute top-1 left-1 w-4 h-4 bg-danger rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3 text-white" />
+                        </button>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full py-8">
+                <Upload className="w-12 h-12 mb-3 text-surface-400" />
+                <p className="text-surface-400 text-sm">
+                  {isDragActive ? 'Drop images here' : 'Drag & drop images or click to browse'}
+                </p>
+                <p className="text-xs text-surface-400 mt-1">JPEG, PNG, WebP • Max 10MB each</p>
+              </div>
             )}
           </div>
+          {/* Queue stats and controls */}
+          {img2videoItems.length > 0 && (
+            <>
+              <div className="flex gap-2 mt-3 text-xs">
+                <Badge variant="primary">{totalCount} Total</Badge>
+                {completedCount > 0 && <Badge variant="success">{completedCount} Completed</Badge>}
+                {failedCount > 0 && <Badge variant="danger">{failedCount} Failed</Badge>}
+              </div>
+              <div className="flex gap-2 mt-3">
+                <Button
+                  variant={generating ? 'danger' : 'success'}
+                  icon={generating ? <X className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  onClick={generating ? pauseQueue : generateQueue}
+                  disabled={queuedCount === 0 && !generating}
+                  className="flex-1"
+                >
+                  {generating ? 'Pause Queue' : `Run Queue${queuedCount > 0 ? ` (${queuedCount})` : ''}`}
+                </Button>
+                {failedCount > 0 && (
+                  <>
+                    <Button variant="warning" size="sm" onClick={retryFailed}>
+                      Retry ({failedCount})
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={clearFailed}>
+                      Clear
+                    </Button>
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Step 2: Select Image from Queue */}
-        {img2videoItems.length > 0 && (
-          <div className="bg-surface-50 rounded-lg p-4">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
-                2
-              </span>
-              Select Image from Queue
-            </h2>
-            <div className="flex gap-2 overflow-x-auto pb-2">
-              {img2videoItems.map((item) => {
-                const isSelected = selectedId === item.id
-                return (
-                  <button
-                    type="button"
-                    key={item.id}
-                    onClick={() => selectItem(item.id)}
-                    className={`relative w-20 shrink-0 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all group ${
-                      isSelected
-                        ? 'border-brand-500 ring-2 ring-brand-500/50'
-                        : 'border-transparent hover:border-surface-200'
-                    }`}
-                  >
-                    <img src={assetUrl(item.imageUrl)} className="w-full h-full object-cover" alt="" />
-                    <Badge
-                      variant={
-                        item.status === 'completed'
-                          ? 'success'
-                          : item.status === 'failed'
-                            ? 'danger'
-                            : item.status === 'generating'
-                              ? 'primary'
-                              : 'secondary'
-                      }
-                      className="absolute top-1 right-1 text-[10px]"
-                    >
-                      {item.status}
-                    </Badge>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        removeItem(item.id)
-                      }}
-                      className="absolute top-1 left-1 w-4 h-4 bg-danger rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3 text-white" />
-                    </button>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Motion Prompt */}
+        {/* Step 2: Motion Prompt */}
         <div
           className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
-              3
+              2
             </span>
             Motion Prompt
           </h2>
@@ -645,39 +648,39 @@ function Img2VideoContent() {
           />
         </div>
 
-        {/* Step 4: Video Settings */}
+        {/* Step 3: Settings */}
         <div
           className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
-              4
+              3
             </span>
-            Video Settings
+            Settings
           </h2>
           <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Duration"
-              value={selectedItem?.settings.duration || '5'}
-              onChange={(e) => selectedItem && setItemSettings(selectedItem.id, { duration: e.target.value })}
-              options={DURATIONS.map((d) => ({ value: d, label: `${d}s` }))}
-            />
             <Select
               label="Aspect Ratio"
               value={selectedItem?.settings.aspectRatio || '9:16'}
               onChange={(e) => selectedItem && setItemSettings(selectedItem.id, { aspectRatio: e.target.value })}
               options={ASPECT_RATIOS.map((ar) => ({ value: ar, label: ar }))}
             />
+            <Select
+              label="Duration"
+              value={selectedItem?.settings.duration || '5'}
+              onChange={(e) => selectedItem && setItemSettings(selectedItem.id, { duration: e.target.value })}
+              options={DURATIONS.map((d) => ({ value: d, label: `${d}s` }))}
+            />
           </div>
         </div>
 
-        {/* Step 5: Camera Controls */}
+        {/* Step 4: Camera Controls */}
         <div
           className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
-              5
+              4
             </span>
             Camera Controls
             {selectedItem && Object.values(selectedItem.presets).flat().length > 0 && (
@@ -692,13 +695,13 @@ function Img2VideoContent() {
           />
         </div>
 
-        {/* Step 6: Generate Actions */}
+        {/* Step 5: Generate Actions */}
         <div
           className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
-              6
+              5
             </span>
             Actions
           </h2>
