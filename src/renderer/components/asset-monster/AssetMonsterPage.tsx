@@ -138,8 +138,9 @@ async function convertTextToPrompt(
     const raw = await res.json()
     const data = unwrapApiData<{ prompt: GeneratedPrompt }>(raw)
     return data.prompt
-  } catch {
-    setError('Failed to convert text to prompt')
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to convert text to prompt'
+    setError(message)
     return null
   }
 }
