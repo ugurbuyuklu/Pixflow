@@ -1080,7 +1080,159 @@ src/renderer/components/img2video/Img2VideoQueuePage.tsx  # All UI/UX improvemen
 
 ---
 
-**Last Updated:** February 10, 2026 - Session 12
+### Session 13: Security Audit & Critical Bug Fixes 🔒
+**Date:** February 10, 2026 (continued)
+**Trigger:** Code review requested by user
+**Method:** OpenAI Codex CLI code review (gpt-4o model via MCP)
+
+**Critical Issues Found:**
+
+**HIGH Priority (Security & Critical Bugs):**
+1. **State Corruption in transformBatch**
+   - Issue: `img2imgItems` included completed outputs, not just references
+   - Impact: Subsequent transforms reused generated outputs as references
+   - Fix: Separated `referenceItems` (draft/generating) from `completedItems`
+
+2. **Upload Limit Broken**
+   - Issue: Counted completed outputs in 4-image limit
+   - Impact: Uploads permanently blocked after first batch
+   - Fix: Changed to `referenceItems.length >= 4`
+
+3. **Path Traversal Vulnerability** (CRITICAL SECURITY)
+   - Issue: Format parameter not sanitized before filename use
+   - Impact: Crafted format could write files outside intended directory
+   - Fix: Whitelist allowed formats: `['PNG', 'JPG', 'JPEG', 'WEBP']`
+
+4. **Arbitrary File Read Vulnerability** (CRITICAL SECURITY)
+   - Issue: User-controlled URLs could be `file://` paths
+   - Impact: Server reads local files and sends to external API
+   - Fix: Restrict URLs to `/uploads/` and `/outputs/` only, block `..` and `~`
+
+**MID Priority (Code Quality):**
+5. **Missing numberOfOutputs Validation**
+   - Issue: Non-numeric/negative values could trigger 500s
+   - Fix: Validate integer in range `[1,4]`
+
+6. **Empty Array Fallback Bug**
+   - Issue: `imageUrls: []` is truthy, ignores `imageUrl` fallback
+   - Fix: Check `imageUrls.length > 0` explicitly
+
+7. **Sensitive Data in Logs**
+   - Issue: Logging prompts, URLs, full error bodies in production
+   - Fix: Sanitized logs, stack traces only in dev mode
+
+8. **Incorrect UI Messaging**
+   - Issue: Used `img2imgItems.length` (includes outputs)
+   - Fix: Changed to `referenceItems.length`
+
+**Implementation:**
+
+**Backend Security (`src/server/routes/generate.ts`):**
+```typescript
+// Format whitelist
+const ALLOWED_FORMATS = ['PNG', 'JPG', 'JPEG', 'WEBP']
+if (!ALLOWED_FORMATS.includes(format.toUpperCase())) {
+  sendError(res, 400, `Invalid format. Allowed: ${ALLOWED_FORMATS.join(', ')}`)
+}
+
+// numberOfOutputs validation
+const numOutputs = Number(numberOfOutputs)
+if (!Number.isInteger(numOutputs) || numOutputs < 1 || numOutputs > 4) {
+  sendError(res, 400, 'numberOfOutputs must be integer [1,4]')
+}
+
+// URL restriction
+for (const url of urls) {
+  if (url.includes('..') || url.includes('~')) {
+    sendError(res, 400, 'Path traversal detected')
+  }
+  if (!url.startsWith('/uploads/') && !url.startsWith('/outputs/')) {
+    sendError(res, 400, 'Must be from /uploads/ or /outputs/')
+  }
+}
+
+// Sanitized logging
+console.log(`[Img2Img] Transforming ${urls.length} images`)
+// No prompts, URLs, or sensitive data logged in production
+```
+
+**Frontend State Management (`Img2VideoQueuePage.tsx`):**
+```typescript
+// Separate reference items from outputs
+const referenceItems = img2imgItems.filter(
+  item => item.status === 'draft' || item.status === 'generating'
+)
+const completedItems = img2imgItems.filter(
+  item => item.status === 'completed'
+)
+
+// Use referenceItems for all actions
+disabled: uploading || referenceItems.length >= 4
+const ids = referenceItems.map(item => item.id)
+Transform {referenceItems.length} Images
+```
+
+**Like/Dislike Implementation:**
+```typescript
+const [likedItems, setLikedItems] = useState<Set<string>>(new Set())
+const [dislikedItems, setDislikedItems] = useState<Set<string>>(new Set())
+
+// Toggle behavior
+onClick={() => {
+  const newLiked = new Set(likedItems)
+  const newDisliked = new Set(dislikedItems)
+
+  if (likedItems.has(id)) {
+    newLiked.delete(id)  // Toggle off
+  } else {
+    newLiked.add(id)
+    newDisliked.delete(id)  // Remove opposite
+  }
+
+  setLikedItems(newLiked)
+  setDislikedItems(newDisliked)
+}
+
+// Visual indicators
+{likedItems.has(item.id) && (
+  <div className="bg-secondary-600 rounded-full p-1.5">
+    <ThumbsUp className="w-3.5 h-3.5 text-white" />
+  </div>
+)}
+```
+
+**Files Modified:**
+- `src/server/routes/generate.ts` - Security fixes, validation
+- `src/renderer/components/img2video/Img2VideoQueuePage.tsx` - State fixes, Like/Dislike
+- `src/renderer/stores/img2videoQueueStore.ts` - Reference preservation
+- `src/renderer/index.css` - Secondary colors, shimmer
+- `src/renderer/components/layout/TopNav.tsx` - "Img2 Engine" naming
+- `docs/PIXFLOW_HANDOFF_FEB2026.md` - Session 13 documentation
+
+**Testing:**
+- ✅ Type check passed (`npx tsc --noEmit`)
+- ✅ Build succeeded (`npm run build`)
+- ✅ No compiler errors or warnings
+- ✅ All security vulnerabilities patched
+- ✅ State corruption resolved
+- ✅ Like/Dislike functional with local state
+
+**Security Impact:**
+- **Path Traversal:** Eliminated by format whitelist
+- **File Read:** Eliminated by URL path restrictions
+- **Data Leaks:** Eliminated by log sanitization
+- **Input Validation:** All parameters validated and sanitized
+
+**Known Limitations:**
+- Like/Dislike uses local state (session-only, not persisted)
+- Img2Img images not saved to database yet (unlike Asset Monster)
+- Future: Integrate `saveBatchImages()` for persistence
+
+**Commit:** `9c86047` - "Fix critical security issues and state corruption in Img2 Engine"
+
+---
+
+**Last Updated:** February 10, 2026 - Session 13
 **Active Agent:** Claude Sonnet 4.5
-**Status:** Img2 Engine fully polished with brand colors and optimized UX
-**Next Session:** Git commit, code review, and continue with next feature
+**Status:** All critical security issues resolved, state management fixed, Like/Dislike implemented
+**Next Session:** Continue with next feature or enhancements
