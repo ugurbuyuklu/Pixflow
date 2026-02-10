@@ -266,9 +266,19 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
 
       // Handle completion
       eventSource.addEventListener('done', (e: MessageEvent) => {
-        const { varietyScore, qualityMetrics } = JSON.parse(e.data)
+        const { varietyScore, qualityMetrics, individualScores } = JSON.parse(e.data)
+
+        // Assign individual scores to prompts
+        const updatedPrompts = get().prompts.map((prompt, i) => {
+          if (!prompt) return prompt
+          return {
+            ...prompt,
+            quality_score: individualScores?.[i] ?? qualityMetrics?.overall_score ?? 0
+          }
+        })
 
         set({
+          prompts: updatedPrompts,
           varietyScore,
           qualityMetrics,
           loading: false,
