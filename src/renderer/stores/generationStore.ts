@@ -383,8 +383,8 @@ export const useGenerationStore = create<GenerationState>()((set, get) => ({
       batchError: null,
       uploadError: null,
       previewImage: null,
-      customPromptJson: '',
-      customPromptError: null,
+      currentCustomPromptInput: '',
+      currentCustomPromptError: null,
       completedBatches: [],
     })
   },

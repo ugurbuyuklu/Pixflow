@@ -1,6 +1,16 @@
 import { getDb } from '../db/index.js'
 import type { BatchJob } from './fal.js'
 
+// Safe JSON parse helper to prevent crashes from corrupt DB data
+function safeParseJSON(jsonString: string): Record<string, unknown> {
+  try {
+    return JSON.parse(jsonString)
+  } catch (err) {
+    console.error('[ImageRatings] Failed to parse JSON:', err)
+    return {}
+  }
+}
+
 export interface GeneratedImageRecord {
   id: number
   userId: number
@@ -131,7 +141,7 @@ export async function getGeneratedImages(
     localPath: row.local_path,
     fileName: row.file_name,
     concept: row.concept,
-    prompt: JSON.parse(row.prompt),
+    prompt: safeParseJSON(row.prompt),
     aspectRatio: row.aspect_ratio,
     resolution: row.resolution,
     outputFormat: row.output_format,
@@ -217,7 +227,7 @@ export async function getImageById(userId: number, imageId: number): Promise<Gen
     localPath: row.local_path,
     fileName: row.file_name,
     concept: row.concept,
-    prompt: JSON.parse(row.prompt),
+    prompt: safeParseJSON(row.prompt),
     aspectRatio: row.aspect_ratio,
     resolution: row.resolution,
     outputFormat: row.output_format,
