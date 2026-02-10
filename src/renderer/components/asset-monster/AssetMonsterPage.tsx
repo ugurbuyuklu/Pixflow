@@ -1040,7 +1040,7 @@ Examples:
                         : `Download Selected (${selectedResultImages.size})`}
                     </Button>
                     <Button
-                      variant="secondary"
+                      variant="lime"
                       size="sm"
                       icon={<ImagePlus className="w-4 h-4" />}
                       onClick={() => {
@@ -1065,7 +1065,7 @@ Examples:
                         : `Img2Img (${selectedResultImages.size})`}
                     </Button>
                     <Button
-                      variant="secondary"
+                      variant="lime"
                       size="sm"
                       icon={<Film className="w-4 h-4" />}
                       onClick={() => {

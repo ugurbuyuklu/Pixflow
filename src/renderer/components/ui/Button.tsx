@@ -4,6 +4,7 @@ import { type ButtonHTMLAttributes, forwardRef, type ReactNode } from 'react'
 type Variant =
   | 'primary'
   | 'secondary'
+  | 'lime'
   | 'ghost'
   | 'ghost-danger'
   | 'ghost-warning'
@@ -25,6 +26,7 @@ const variantClasses: Record<Variant, string> = {
   primary:
     'bg-gradient-to-r from-brand-600 to-brand-500 text-white hover:from-brand-500 hover:to-brand-400 focus:ring-brand-500',
   secondary: 'bg-surface-100 text-surface-800 hover:bg-surface-200 focus:ring-surface-300',
+  lime: 'bg-secondary-600 text-white hover:bg-secondary-700 focus:ring-secondary-500',
   ghost: 'bg-transparent text-surface-500 hover:bg-surface-100 hover:text-surface-800 focus:ring-surface-300',
   'ghost-danger': 'bg-transparent text-surface-400 hover:bg-danger-muted/30 hover:text-danger focus:ring-danger',
   'ghost-warning': 'bg-transparent text-surface-400 hover:bg-warning-muted/30 hover:text-warning focus:ring-warning',
