@@ -635,7 +635,7 @@ export default function PromptFactoryPage() {
                 key={i}
                 onClick={() => setSelectedIndex(i)}
                 className={`
-                  aspect-square rounded-lg p-4 flex flex-col items-center justify-center
+                  aspect-square rounded-lg p-3 flex flex-col items-center justify-center
                   text-lg font-semibold transition-all relative
                   ${
                     isSelected
@@ -648,15 +648,27 @@ export default function PromptFactoryPage() {
                   }
                 `}
               >
-                <span className="text-2xl">{i + 1}</span>
-                {prompt && (
-                  <div className="absolute top-1 right-1 flex gap-1">
-                    {prompt._enriched && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-success" title="Enhanced" />
-                    )}
-                    {prompt.quality_score !== undefined && prompt.quality_score >= 80 && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-warning" title={`Quality: ${prompt.quality_score}`} />
-                    )}
+                <span className="text-2xl mb-1">{i + 1}</span>
+                {prompt && prompt.quality_score !== undefined && (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span
+                      className={`text-xs font-bold ${
+                        isSelected
+                          ? 'text-white'
+                          : prompt.quality_score >= 80
+                            ? 'text-success'
+                            : prompt.quality_score >= 60
+                              ? 'text-warning'
+                              : 'text-danger'
+                      }`}
+                    >
+                      {prompt.quality_score}
+                    </span>
+                    <div className="flex gap-1">
+                      {prompt._enriched && (
+                        <span className={`w-1 h-1 rounded-full ${isSelected ? 'bg-white' : 'bg-success'}`} title="Enhanced" />
+                      )}
+                    </div>
                   </div>
                 )}
               </button>
@@ -669,7 +681,30 @@ export default function PromptFactoryPage() {
       {selectedIndex !== null && prompts[selectedIndex] && (
         <div className="flex-1 bg-surface-100/50 rounded-xl border border-surface-200/50 p-6 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-surface-900">Prompt #{selectedIndex + 1}</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-semibold text-surface-900">Prompt #{selectedIndex + 1}</h3>
+              {prompts[selectedIndex].quality_score !== undefined && (
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-xl font-bold ${
+                      prompts[selectedIndex].quality_score >= 80
+                        ? 'text-success'
+                        : prompts[selectedIndex].quality_score >= 60
+                          ? 'text-warning'
+                          : 'text-danger'
+                    }`}
+                  >
+                    {prompts[selectedIndex].quality_score}
+                  </span>
+                  <span className="text-xs text-surface-400">/100</span>
+                  {prompts[selectedIndex]._enriched && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-success/20 text-success">
+                      Enhanced
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
