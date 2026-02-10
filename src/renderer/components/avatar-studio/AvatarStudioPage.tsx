@@ -813,7 +813,7 @@ export default function AvatarStudioPage() {
                             type="button"
                             onClick={() => handleRefineScript('improved')}
                             disabled={scriptGenerating}
-                            className="px-3 py-1.5 rounded bg-brand-600 hover:bg-brand-700 text-surface-900 disabled:opacity-50"
+                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
                           >
                             Improved
                           </button>
@@ -1039,7 +1039,7 @@ export default function AvatarStudioPage() {
                             type="button"
                             onClick={() => handleRefineScript('improved')}
                             disabled={scriptGenerating}
-                            className="px-3 py-1.5 rounded bg-brand-600 hover:bg-brand-700 text-surface-900 disabled:opacity-50"
+                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
                           >
                             Improved
                           </button>
