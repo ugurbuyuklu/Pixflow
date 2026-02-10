@@ -681,7 +681,7 @@ export default function AssetMonsterPage() {
 Examples:
 • Black & white editorial photoshoot with dramatic lighting
 • {"style": "Romantic portrait...", "lighting": {...}}`}
-                      className={`w-full h-32 bg-white rounded-lg p-3 text-sm resize-none border ${
+                      className={`w-full h-32 bg-surface-0 rounded-lg p-3 text-sm resize-none border ${
                         cp.error ? 'border-danger focus:border-danger' : 'border-surface-200 focus:border-brand-500'
                       } focus:outline-none`}
                       rows={8}
