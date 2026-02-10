@@ -437,10 +437,8 @@ export default function AssetMonsterPage() {
             </button>
             <button
               type="button"
-              onClick={() => setPromptSource('library')}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-sm transition-colors ${
-                promptSource === 'library' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
-              }`}
+              disabled
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-sm text-surface-400 opacity-50 cursor-not-allowed"
             >
               <Bookmark className="w-4 h-4" />
               Library
@@ -448,6 +446,12 @@ export default function AssetMonsterPage() {
           </div>
 
           {promptSource === 'library' ? (
+            <div className="text-center py-8 text-surface-400 border-2 border-dashed border-surface-200 rounded-lg">
+              <Bookmark className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">Library integration coming soon</p>
+              <p className="text-xs mt-1">This feature is temporarily disabled</p>
+            </div>
+          ) : false ? (
             <div className="space-y-3">
               {favorites.length === 0 ? (
                 <div className="text-center py-8 text-surface-400 border-2 border-dashed border-surface-200 rounded-lg">
