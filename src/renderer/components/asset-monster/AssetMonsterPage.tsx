@@ -17,6 +17,7 @@ import {
   Pencil,
   Play,
   Plus,
+  Save,
   Sparkles,
   ThumbsDown,
   ThumbsUp,
@@ -229,7 +230,7 @@ export default function AssetMonsterPage() {
   const concept = concepts.find((c) => c.value.trim())?.value || ''
   const { navigate } = useNavigationStore()
   const { rateImage: rateImageInStore } = useImageRatingsStore()
-  const { favorites, loadAll: loadHistory } = useHistoryStore()
+  const { favorites, loadAll: loadHistory, addToFavorites } = useHistoryStore()
 
   const [batchImageIds, setBatchImageIds] = useState<Map<number, number>>(new Map())
   const [previewPrompt, setPreviewPrompt] = useState<GeneratedPrompt | null>(null)
@@ -638,18 +639,30 @@ export default function AssetMonsterPage() {
             )
           ) : promptSource === 'custom' ? (
             <div className="space-y-3">
-              {customPrompts.length === 0 ? (
-                <div className="text-center py-8 text-surface-400 border-2 border-dashed border-surface-200 rounded-lg">
-                  <FileJson className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No custom prompts yet</p>
-                  <p className="text-xs mt-1">Click "Add Custom Prompt" to start</p>
-                </div>
-              ) : (
-                <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                  {customPrompts.map((cp, idx) => (
-                    <div key={cp.id} className="border border-surface-200 rounded-lg p-3 bg-surface-100">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-surface-400">Custom Prompt #{idx + 1}</span>
+              <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                {customPrompts.map((cp, idx) => (
+                  <div key={cp.id} className="border border-surface-200 rounded-lg p-3 bg-surface-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-surface-400">Custom Prompt #{idx + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            // Parse and save to library
+                            const parsed = await parseCustomPrompt(cp.json, 1, (error) =>
+                              setCustomPromptError(cp.id, error),
+                            )
+                            if (parsed && parsed[0]) {
+                              const prompt = parsed[0]
+                              const name = prompt.style?.split(' ').slice(0, 4).join(' ') || `Custom #${idx + 1}`
+                              await addToFavorites(prompt, name, 'custom')
+                            }
+                          }}
+                          className="text-surface-400 hover:text-brand-500 transition-colors"
+                          title="Save to Library"
+                        >
+                          <Save className="w-4 h-4" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => removeCustomPrompt(cp.id)}
@@ -659,39 +672,32 @@ export default function AssetMonsterPage() {
                           <X className="w-4 h-4" />
                         </button>
                       </div>
-                      <textarea
-                        value={cp.json}
-                        onChange={(e) => updateCustomPrompt(cp.id, e.target.value)}
-                        placeholder={`Describe the scene or paste JSON...
+                    </div>
+                    <textarea
+                      value={cp.json}
+                      onChange={(e) => updateCustomPrompt(cp.id, e.target.value)}
+                      placeholder={`Describe the scene or paste JSON...
 
 Examples:
 • Black & white editorial photoshoot with dramatic lighting
 • {"style": "Romantic portrait...", "lighting": {...}}`}
-                        className={`w-full h-32 bg-white rounded-lg p-3 text-sm resize-none border ${
-                          cp.error
-                            ? 'border-danger focus:border-danger'
-                            : 'border-surface-200 focus:border-brand-500'
-                        } focus:outline-none`}
-                        rows={8}
-                      />
-                      {cp.error && (
-                        <p className="text-danger text-xs mt-2 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />
-                          {cp.error}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                      className={`w-full h-32 bg-white rounded-lg p-3 text-sm resize-none border ${
+                        cp.error ? 'border-danger focus:border-danger' : 'border-surface-200 focus:border-brand-500'
+                      } focus:outline-none`}
+                      rows={8}
+                    />
+                    {cp.error && (
+                      <p className="text-danger text-xs mt-2 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" />
+                        {cp.error}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
 
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<Plus className="w-4 h-4" />}
-                onClick={addCustomPrompt}
-              >
-                Add Custom Prompt
+              <Button variant="secondary" size="sm" icon={<Plus className="w-4 h-4" />} onClick={addCustomPrompt}>
+                Add New Prompt
               </Button>
             </div>
           ) : null}
