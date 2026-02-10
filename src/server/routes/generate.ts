@@ -280,6 +280,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
     let span: ReturnType<typeof createPipelineSpan> | null = null
     try {
       const {
+        imageUrl,
         imageUrls,
         prompt,
         aspectRatio = '1:1',
@@ -288,9 +289,52 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
         format = 'PNG',
       } = req.body
 
-      if (!imageUrls || !Array.isArray(imageUrls) || imageUrls.length === 0 || !prompt) {
-        sendError(res, 400, 'Image URLs array and prompt are required', 'INVALID_IMG2IMG_PAYLOAD')
+      // Validate format parameter (whitelist to prevent path traversal)
+      const ALLOWED_FORMATS = ['PNG', 'JPG', 'JPEG', 'WEBP']
+      if (!format || !ALLOWED_FORMATS.includes(format.toUpperCase())) {
+        sendError(res, 400, `Invalid format. Allowed formats: ${ALLOWED_FORMATS.join(', ')}`, 'INVALID_IMG2IMG_PAYLOAD')
         return
+      }
+
+      // Validate numberOfOutputs (must be integer in range [1,4])
+      const numOutputs = Number(numberOfOutputs)
+      if (!Number.isInteger(numOutputs) || numOutputs < 1 || numOutputs > 4) {
+        sendError(res, 400, 'numberOfOutputs must be an integer between 1 and 4', 'INVALID_IMG2IMG_PAYLOAD')
+        return
+      }
+
+      // Support both single imageUrl and multiple imageUrls
+      // Fix empty array fallback: check length explicitly
+      const urls = (imageUrls && imageUrls.length > 0) ? imageUrls : (imageUrl ? [imageUrl] : null)
+
+      if (!urls || !Array.isArray(urls) || urls.length === 0) {
+        sendError(res, 400, 'At least one image URL is required', 'INVALID_IMG2IMG_PAYLOAD')
+        return
+      }
+
+      if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+        sendError(res, 400, 'Valid prompt is required', 'INVALID_IMG2IMG_PAYLOAD')
+        return
+      }
+
+      // Validate all URLs are strings
+      if (!urls.every((url) => typeof url === 'string')) {
+        sendError(res, 400, 'All image URLs must be strings', 'INVALID_IMG2IMG_PAYLOAD')
+        return
+      }
+
+      // Security: Validate URLs are from safe paths only (uploads or outputs)
+      // Prevent arbitrary file:// access
+      for (const url of urls) {
+        if (url.includes('..') || url.includes('~')) {
+          sendError(res, 400, 'Invalid image URL: path traversal detected', 'INVALID_IMG2IMG_PAYLOAD')
+          return
+        }
+        // Only allow /uploads/ or /outputs/ paths
+        if (!url.startsWith('/uploads/') && !url.startsWith('/outputs/')) {
+          sendError(res, 400, 'Invalid image URL: must be from /uploads/ or /outputs/', 'INVALID_IMG2IMG_PAYLOAD')
+          return
+        }
       }
 
       span = createPipelineSpan({
@@ -298,50 +342,60 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
         userId: req.user?.id,
         metadata: {
           aspectRatio,
-          numberOfOutputs,
+          numberOfOutputs: numOutputs,
           resolution,
           format,
-          imageCount: imageUrls.length,
+          imageCount: urls.length,
         },
       })
 
-      console.log(`[Img2Img] Transforming ${imageUrls.length} images with prompt: "${prompt}"`)
-      console.log(`[Img2Img] Input imageUrls:`, imageUrls)
+      // Sanitized logging (avoid logging full prompts/URLs in production)
+      console.log(`[Img2Img] Transforming ${urls.length} images`)
+      console.log(`[Img2Img] Settings:`, { aspectRatio, numberOfOutputs: numOutputs, resolution, format })
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
       const outputDir = path.join(outputsDir, `img2img_${timestamp}`)
       await fs.mkdir(outputDir, { recursive: true })
 
-      // Resolve all imageUrls to full paths
-      const fullImagePaths = imageUrls.map((imageUrl: string) => {
+      // Resolve all imageUrls to full paths (already validated to be safe paths)
+      const fullImagePaths = urls.map((imageUrl: string) => {
         let fullImagePath: string
         if (imageUrl.startsWith('/uploads/')) {
           fullImagePath = path.join(uploadsDir, path.basename(imageUrl))
-        } else if (imageUrl.startsWith('file://')) {
-          fullImagePath = imageUrl.slice(7)
+        } else if (imageUrl.startsWith('/outputs/')) {
+          fullImagePath = path.join(outputsDir, path.basename(imageUrl))
         } else {
-          fullImagePath = imageUrl
+          // Should never reach here due to validation above
+          throw new Error('Invalid image path')
         }
-        return fullImagePath.startsWith('file://') ? fullImagePath : `file://${fullImagePath}`
+        return `file://${fullImagePath}`
       })
 
-      console.log(`[Img2Img] Resolved paths:`, fullImagePaths)
+      // Normalize format: case-insensitive comparison
+      const formatUpper = format.toUpperCase()
+      const normalizedFormat = formatUpper === 'JPG' || formatUpper === 'JPEG' ? 'jpeg' : format.toLowerCase()
+
+      // FAL API uses all image_urls together as context/reference for generation
+      // num_images is the total number of output variations (max 4)
+      console.log(`[Img2Img] Generating ${numOutputs} outputs using ${fullImagePaths.length} reference images`)
 
       const result = await generateImage(
-        fullImagePaths,
+        fullImagePaths, // All images as context
         prompt,
         {
           resolution,
           aspectRatio,
-          numImages: numberOfOutputs,
-          outputFormat: format.toLowerCase(),
+          numImages: numOutputs, // Already validated to be [1,4]
+          outputFormat: normalizedFormat,
         },
       )
+
+      console.log(`[Img2Img] Generation complete, got ${result.urls.length} outputs`)
 
       // Download images to local storage
       const images = await Promise.all(
         result.urls.map(async (url, index) => {
-          const fileName = `img2img_${timestamp}_${index + 1}.${format.toLowerCase()}`
+          const fileName = `img2img_${timestamp}_output${index + 1}.${normalizedFormat}`
           const localPath = path.join(outputDir, fileName)
 
           try {
@@ -364,7 +418,11 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
 
       sendSuccess(res, { images })
     } catch (error) {
-      console.error('[Img2Img] Error:', error)
+      // Sanitized error logging (avoid logging sensitive data in production)
+      console.error('[Img2Img] Transform failed:', error instanceof Error ? error.message : 'Unknown error')
+      if (process.env.NODE_ENV === 'development' && error instanceof Error) {
+        console.error('[Img2Img] Stack:', error.stack)
+      }
       span?.error(error)
       sendError(
         res,

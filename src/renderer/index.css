@@ -15,6 +15,18 @@
   --color-brand-800: var(--product-800, #5b21b6);
   --color-brand-900: var(--product-900, #4c1d95);
 
+  /* Secondary colors — complimentary to brand (lime/yellow-green) */
+  --color-secondary-50: #f7fee7;
+  --color-secondary-100: #ecfccb;
+  --color-secondary-200: #d9f99d;
+  --color-secondary-300: #bef264;
+  --color-secondary-400: #a3e635;
+  --color-secondary-500: #84cc16;
+  --color-secondary-600: #65a30d;
+  --color-secondary-700: #4d7c0f;
+  --color-secondary-800: #3f6212;
+  --color-secondary-900: #365314;
+
   /* Surface colors — set per theme mode */
   --color-surface-0: var(--surface-0);
   --color-surface-50: var(--surface-50);
@@ -103,4 +115,8 @@ body {
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
 }

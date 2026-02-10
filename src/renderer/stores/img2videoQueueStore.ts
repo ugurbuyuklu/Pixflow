@@ -770,35 +770,58 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
         throw new Error('No images returned from API')
       }
 
-      // Mark first item as completed with all results
-      // Other items will be marked as completed without individual results
-      const firstId = ids[0]
-      const otherIds = ids.slice(1)
+      // All reference images were used together to generate outputs
+      // Keep reference items as draft (so they can be reused), and add new output items
+      set((state) => {
+        const newItems = { ...state.queueItems }
 
-      set((state) => ({
-        queueItems: {
-          ...state.queueItems,
-          [firstId]: {
-            ...state.queueItems[firstId],
+        // Reset reference items back to draft (so they can be transformed again with different prompts)
+        ids.forEach((id) => {
+          if (newItems[id]) {
+            newItems[id] = {
+              ...newItems[id],
+              status: 'draft',
+            }
+          }
+        })
+
+        // Create new items for each generated output
+        const newOutputItems: Record<string, QueueItem> = {}
+        const newOutputIds: string[] = []
+
+        data.images.forEach((image, index) => {
+          const newId = generateId()
+          newOutputIds.push(newId)
+          newOutputItems[newId] = {
+            id: newId,
+            imageUrl: image.localPath || image.url,
+            prompt: prompt,
+            workflowType: 'img2img',
+            img2imgSettings: settings,
+            presets: {},
+            settings: {
+              duration: state.globalSettings.duration,
+              aspectRatio: state.globalSettings.aspectRatio,
+            },
             status: 'completed',
             result: {
-              imageUrl: data.images[0].url,
-              localPath: data.images[0].localPath || data.images[0].url,
+              imageUrl: image.url,
+              localPath: image.localPath || image.url,
             },
+            createdAt: Date.now(),
             completedAt: Date.now(),
+          }
+        })
+
+        return {
+          queueItems: {
+            ...newItems,
+            ...newOutputItems,
           },
-          ...Object.fromEntries(
-            otherIds.map((id) => [
-              id,
-              {
-                ...state.queueItems[id],
-                status: 'completed',
-                completedAt: Date.now(),
-              },
-            ])
-          ),
-        },
-      }))
+          queueOrder: [...state.queueOrder, ...newOutputIds],
+          selectedId: newOutputIds[0] || state.selectedId,
+        }
+      })
     } catch (err) {
       console.error('[transformBatch] Error:', err)
       // Mark all as failed

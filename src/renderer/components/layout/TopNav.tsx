@@ -11,7 +11,7 @@ import { UserMenu } from './UserMenu'
 const TABS: { id: TabId; label: string; icon: typeof Wand2 }[] = [
   { id: 'prompts', label: 'Prompt Factory', icon: Wand2 },
   { id: 'generate', label: 'Asset Monster', icon: Layers },
-  { id: 'img2video', label: 'Image Lab', icon: Film },
+  { id: 'img2video', label: 'Img2 Engine', icon: Film },
   { id: 'avatars', label: 'Avatar Studio', icon: Video },
   { id: 'machine', label: 'The Machine', icon: Zap },
   { id: 'history', label: 'Library', icon: BookOpen },

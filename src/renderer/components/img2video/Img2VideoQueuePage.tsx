@@ -1,4 +1,4 @@
-import { Check, Download, Loader2, Play, Trash2, Upload, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Download, Loader2, Play, ThumbsDown, ThumbsUp, Trash2, Upload, X } from 'lucide-react'
 import React, { useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { assetUrl } from '../../lib/api'
@@ -27,7 +27,7 @@ export default function Img2VideoQueuePage() {
               : 'bg-surface-200 text-surface-600 hover:bg-surface-300'
           }`}
         >
-          Img2Img
+          img2img
         </button>
         <button
           onClick={() => setActiveTab('img2video')}
@@ -37,7 +37,7 @@ export default function Img2VideoQueuePage() {
               : 'bg-surface-200 text-surface-600 hover:bg-surface-300'
           }`}
         >
-          Img2Video
+          img2video
         </button>
       </div>
 
@@ -74,16 +74,25 @@ function Img2ImgContent() {
     resolution: '1K',
     format: 'PNG',
   })
+  const [modalImage, setModalImage] = useState<string | null>(null)
+  const [modalItemId, setModalItemId] = useState<string | null>(null)
+  const [likedItems, setLikedItems] = useState<Set<string>>(new Set())
+  const [dislikedItems, setDislikedItems] = useState<Set<string>>(new Set())
 
   // Filter for img2img items only
   const img2imgItems = queueOrder
     .map((id) => queueItems[id])
     .filter((item) => item.workflowType === 'img2img')
+
+  // Separate reference items (draft/generating) from completed outputs
+  const referenceItems = img2imgItems.filter((item) => item.status === 'draft' || item.status === 'generating')
+  const completedItems = img2imgItems.filter((item) => item.status === 'completed')
+
   const selectedItem = selectedId && queueItems[selectedId]?.workflowType === 'img2img' ? queueItems[selectedId] : null
 
   // Stats
   const totalCount = img2imgItems.length
-  const completedCount = img2imgItems.filter((item) => item.status === 'completed').length
+  const completedCount = completedItems.length
   const failedCount = img2imgItems.filter((item) => item.status === 'failed').length
   const generatingCount = img2imgItems.filter((item) => item.status === 'generating').length
 
@@ -92,9 +101,9 @@ function Img2ImgContent() {
     accept: { 'image/jpeg': [], 'image/png': [], 'image/webp': [] },
     maxSize: 10 * 1024 * 1024,
     maxFiles: 4,
-    disabled: uploading || img2imgItems.length >= 4,
+    disabled: uploading || referenceItems.length >= 4,
     onDrop: async (acceptedFiles) => {
-      const remainingSlots = 4 - img2imgItems.length
+      const remainingSlots = 4 - referenceItems.length
       const filesToUpload = acceptedFiles.slice(0, remainingSlots)
       if (filesToUpload.length > 0) {
         await uploadFiles(filesToUpload, 'img2img')
@@ -147,41 +156,41 @@ function Img2ImgContent() {
             }`}
           >
             <input {...getInputProps()} />
-            {img2imgItems.length > 0 ? (
+            {referenceItems.length > 0 ? (
               <div>
                 <p className="text-xs font-medium text-surface-500 mb-2">SELECTED IMAGES</p>
                 <div className="grid grid-cols-4 gap-2">
-                  {img2imgItems.map((item) => {
-                    const isSelected = selectedId === item.id
-                    return (
-                      <button
-                        type="button"
-                        key={item.id}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          selectItem(item.id)
-                        }}
-                        className={`relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all group ${
-                          isSelected
-                            ? 'border-brand-500 ring-2 ring-brand-500/50'
-                            : 'border-transparent hover:border-surface-200'
-                        }`}
-                      >
-                        <img src={assetUrl(item.imageUrl)} className="w-full h-full object-cover" alt="" />
-                        {isSelected && (
-                          <div
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              removeItem(item.id)
-                            }}
-                            className="absolute top-1 right-1 w-5 h-5 bg-surface-900/80 hover:bg-danger rounded-full flex items-center justify-center transition-colors cursor-pointer"
-                          >
-                            <X className="w-3 h-3 text-white" />
-                          </div>
-                        )}
-                      </button>
-                    )
-                  })}
+                  {referenceItems.map((item) => {
+                      const isSelected = selectedId === item.id
+                      return (
+                        <button
+                          type="button"
+                          key={item.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            selectItem(item.id)
+                          }}
+                          className={`relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all group ${
+                            isSelected
+                              ? 'border-brand-500 ring-2 ring-brand-500/50'
+                              : 'border-transparent hover:border-surface-200'
+                          }`}
+                        >
+                          <img src={assetUrl(item.imageUrl)} className="w-full h-full object-cover" alt="" />
+                          {isSelected && (
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeItem(item.id)
+                              }}
+                              className="absolute top-1 right-1 w-5 h-5 bg-surface-900/80 hover:bg-danger rounded-full flex items-center justify-center transition-colors cursor-pointer"
+                            >
+                              <X className="w-3 h-3 text-white" />
+                            </div>
+                          )}
+                        </button>
+                      )
+                    })}
                 </div>
               </div>
             ) : (
@@ -247,6 +256,9 @@ function Img2ImgContent() {
                 max={4}
                 step={1}
               />
+              <p className="text-xs text-surface-400 mt-1">
+                Using {referenceItems.length} reference {referenceItems.length === 1 ? 'image' : 'images'} to generate {batchSettings.numberOfOutputs} {batchSettings.numberOfOutputs === 1 ? 'output' : 'outputs'}
+              </p>
             </div>
             <Select
               label="Resolution"
@@ -272,23 +284,23 @@ function Img2ImgContent() {
             Actions
           </h2>
           {generatingCount === 0 && (
-            <Button
-              variant="success"
-              icon={<Play className="w-4 h-4" />}
+            <button
               onClick={() => {
-                const ids = img2imgItems.map((item) => item.id)
+                const ids = referenceItems.map((item) => item.id)
                 transformBatch(ids, batchPrompt, batchSettings)
               }}
-              disabled={!batchPrompt.trim() || img2imgItems.length === 0}
-              className="w-full"
+              disabled={!batchPrompt.trim() || referenceItems.length === 0}
+              className="w-full px-4 py-2.5 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:bg-surface-300 disabled:cursor-not-allowed text-white font-medium flex items-center justify-center gap-2 transition-colors"
             >
-              Transform {img2imgItems.length} {img2imgItems.length === 1 ? 'Image' : 'Images'}
-            </Button>
+              <Play className="w-4 h-4" />
+              Transform {referenceItems.length} {referenceItems.length === 1 ? 'Image' : 'Images'}
+            </button>
           )}
           {generatingCount > 0 && (
-            <Button variant="secondary" icon={<Loader2 className="w-4 h-4 animate-spin" />} disabled className="w-full">
+            <button disabled className="w-full px-4 py-2.5 rounded-lg bg-surface-300 cursor-not-allowed text-surface-600 font-medium flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
               Transforming {generatingCount} {generatingCount === 1 ? 'Image' : 'Images'}...
-            </Button>
+            </button>
           )}
         </div>
       </div>
@@ -298,66 +310,119 @@ function Img2ImgContent() {
         {/* Images in Progress */}
         {generatingCount > 0 && (
           <div className="bg-surface-50 rounded-lg p-4">
-            <h3 className="text-sm font-semibold mb-2">Images in Progress</h3>
-            <div className="space-y-2">
+            <h3 className="text-sm font-semibold mb-3">Generating...</h3>
+            <div className="grid grid-cols-2 gap-3">
               {img2imgItems
                 .filter((item) => item.status === 'generating')
-                .slice(0, 3)
                 .map((item) => (
-                  <div key={item.id} className="flex items-center gap-2 p-2 bg-surface-100 rounded">
-                    <Loader2 className="w-4 h-4 animate-spin text-brand" />
-                    <span className="text-xs text-surface-600 truncate flex-1">{item.prompt}</span>
+                  <div key={item.id} className="relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-200">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer"
+                         style={{ backgroundSize: '200% 100%' }} />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Loader2 className="w-8 h-8 animate-spin text-brand" />
+                    </div>
                   </div>
                 ))}
             </div>
           </div>
         )}
 
-        {/* Generated Images */}
+        {/* Step 5: Generated Images */}
         {completedCount > 0 && (
           <div className="bg-surface-50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold">Generated Images</h3>
-              {selectedResults.size > 0 && (
-                <Button
-                  variant="primary"
-                  size="xs"
-                  icon={<Download className="w-3 h-3" />}
-                  onClick={downloadSelected}
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-xs text-white">
+                  5
+                </span>
+                Generated Images
+              </h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    completedItems.forEach((item) => {
+                      if (item?.result?.imageUrl) {
+                        const a = document.createElement('a')
+                        a.href = assetUrl(item.result.localPath)
+                        a.download = item.result.localPath.split('/').pop() || 'transformed.png'
+                        a.click()
+                      }
+                    })
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-secondary-600 hover:bg-secondary-700 text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
                 >
-                  Download {selectedResults.size}
-                </Button>
-              )}
+                  <Download className="w-3 h-3" />
+                  Download All
+                </button>
+                {selectedResults.size > 0 && (
+                  <button
+                    onClick={downloadSelected}
+                    className="px-3 py-1.5 rounded-lg bg-secondary-600 hover:bg-secondary-700 text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
+                  >
+                    <Download className="w-3 h-3" />
+                    Download {selectedResults.size}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-              {img2imgItems
-                .filter((item) => item.status === 'completed')
-                .map((item) => {
+            <div className="grid grid-cols-4 gap-3">
+              {completedItems.map((item) => {
                   const isSelected = selectedResults.has(item.id)
                   return (
                     <div
                       key={item.id}
-                      className={`relative aspect-square rounded-lg overflow-hidden bg-surface-100 cursor-pointer group border-2 transition-colors ${
+                      className={`relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-100 cursor-pointer group border-2 transition-colors ${
                         isSelected ? 'border-brand' : 'border-transparent'
                       }`}
-                      onClick={() => selectItem(item.id)}
+                      onClick={(e) => {
+                        // Don't select when clicking checkbox or action buttons
+                        if ((e.target as HTMLElement).closest('button')) return
+                        selectItem(item.id)
+                      }}
                     >
                       <img
                         src={assetUrl(item.result?.imageUrl || item.imageUrl)}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover hover:opacity-90 transition-opacity"
                         alt=""
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setModalImage(assetUrl(item.result?.imageUrl || item.imageUrl))
+                          setModalItemId(item.id)
+                        }}
                       />
+
+                      {/* Selection checkbox */}
                       <button
                         type="button"
                         onClick={(e) => toggleResultSelection(item.id, e)}
-                        className="absolute top-2 right-2 w-5 h-5 rounded bg-surface-900/80 flex items-center justify-center hover:bg-surface-900 transition-colors z-10"
+                        className={`absolute top-2 right-2 w-6 h-6 rounded flex items-center justify-center transition-colors z-10 ${
+                          isSelected
+                            ? 'bg-brand-600 hover:bg-brand-700'
+                            : 'bg-surface-900/50 hover:bg-surface-900/70'
+                        }`}
                       >
                         {isSelected ? (
-                          <Check className="w-3.5 h-3.5 text-brand" />
+                          <Check className="w-4 h-4 text-white" />
                         ) : (
-                          <div className="w-3 h-3 border-2 border-surface-300 rounded" />
+                          <div className="w-3.5 h-3.5 border-2 border-white/70 rounded" />
                         )}
                       </button>
+
+                      {/* Like/Dislike indicator */}
+                      {(likedItems.has(item.id) || dislikedItems.has(item.id)) && (
+                        <div className="absolute bottom-2 left-2 z-10">
+                          {likedItems.has(item.id) && (
+                            <div className="bg-secondary-600 rounded-full p-1.5">
+                              <ThumbsUp className="w-3.5 h-3.5 text-white" />
+                            </div>
+                          )}
+                          {dislikedItems.has(item.id) && (
+                            <div className="bg-danger rounded-full p-1.5">
+                              <ThumbsDown className="w-3.5 h-3.5 text-white" />
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -365,6 +430,175 @@ function Img2ImgContent() {
           </div>
         )}
       </div>
+
+      {/* Image Modal */}
+      {modalImage && modalItemId && (() => {
+        const completedItems = img2imgItems.filter((item) => item.status === 'completed')
+        const currentIndex = completedItems.findIndex((item) => item.id === modalItemId)
+        const currentItem = completedItems[currentIndex]
+        const hasPrev = currentIndex > 0
+        const hasNext = currentIndex < completedItems.length - 1
+
+        const goToPrev = () => {
+          if (hasPrev) {
+            const prevItem = completedItems[currentIndex - 1]
+            setModalImage(assetUrl(prevItem.result?.imageUrl || prevItem.imageUrl))
+            setModalItemId(prevItem.id)
+          }
+        }
+
+        const goToNext = () => {
+          if (hasNext) {
+            const nextItem = completedItems[currentIndex + 1]
+            setModalImage(assetUrl(nextItem.result?.imageUrl || nextItem.imageUrl))
+            setModalItemId(nextItem.id)
+          }
+        }
+
+        const handleDownload = () => {
+          if (currentItem?.result?.localPath) {
+            const a = document.createElement('a')
+            a.href = assetUrl(currentItem.result.localPath)
+            a.download = currentItem.result.localPath.split('/').pop() || 'image.png'
+            a.click()
+          }
+        }
+
+        return (
+          <div
+            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
+            onClick={() => {
+              setModalImage(null)
+              setModalItemId(null)
+            }}
+          >
+            {/* Close button - top left */}
+            <button
+              type="button"
+              onClick={() => {
+                setModalImage(null)
+                setModalItemId(null)
+              }}
+              className="absolute top-4 left-4 w-10 h-10 rounded-full bg-brand-600/80 hover:bg-brand-700 flex items-center justify-center transition-colors"
+            >
+              <X className="w-6 h-6 text-white" />
+            </button>
+
+            {/* Download button - top right */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleDownload()
+              }}
+              className="absolute top-4 right-4 px-4 py-2 rounded-lg bg-secondary-600 hover:bg-secondary-700 flex items-center gap-2 transition-colors"
+            >
+              <Download className="w-4 h-4 text-white" />
+              <span className="text-white text-sm font-medium">Download</span>
+            </button>
+
+            {/* Prev button */}
+            {hasPrev && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  goToPrev()
+                }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-brand-600/80 hover:bg-brand-700 flex items-center justify-center transition-colors"
+              >
+                <ChevronLeft className="w-8 h-8 text-white" />
+              </button>
+            )}
+
+            {/* Next button */}
+            {hasNext && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  goToNext()
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-brand-600/80 hover:bg-brand-700 flex items-center justify-center transition-colors"
+              >
+                <ChevronRight className="w-8 h-8 text-white" />
+              </button>
+            )}
+
+            {/* Image */}
+            <img
+              src={modalImage}
+              className="max-w-full max-h-full object-contain"
+              alt="Preview"
+              onClick={(e) => e.stopPropagation()}
+            />
+
+            {/* Like/Dislike buttons - bottom center */}
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!currentItem?.id) return
+                  const newLiked = new Set(likedItems)
+                  const newDisliked = new Set(dislikedItems)
+
+                  if (likedItems.has(currentItem.id)) {
+                    // Toggle off like
+                    newLiked.delete(currentItem.id)
+                  } else {
+                    // Add like and remove dislike if exists
+                    newLiked.add(currentItem.id)
+                    newDisliked.delete(currentItem.id)
+                  }
+
+                  setLikedItems(newLiked)
+                  setDislikedItems(newDisliked)
+                }}
+                className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${
+                  currentItem && likedItems.has(currentItem.id)
+                    ? 'bg-secondary-600 hover:bg-secondary-700'
+                    : 'bg-secondary-600/80 hover:bg-secondary-700'
+                }`}
+              >
+                <ThumbsUp className="w-5 h-5 text-white" />
+                <span className="text-white font-medium">
+                  {currentItem && likedItems.has(currentItem.id) ? 'Liked' : 'Like'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!currentItem?.id) return
+                  const newLiked = new Set(likedItems)
+                  const newDisliked = new Set(dislikedItems)
+
+                  if (dislikedItems.has(currentItem.id)) {
+                    // Toggle off dislike
+                    newDisliked.delete(currentItem.id)
+                  } else {
+                    // Add dislike and remove like if exists
+                    newDisliked.add(currentItem.id)
+                    newLiked.delete(currentItem.id)
+                  }
+
+                  setLikedItems(newLiked)
+                  setDislikedItems(newDisliked)
+                }}
+                className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${
+                  currentItem && dislikedItems.has(currentItem.id)
+                    ? 'bg-danger hover:bg-danger'
+                    : 'bg-danger/80 hover:bg-danger'
+                }`}
+              >
+                <ThumbsDown className="w-5 h-5 text-white" />
+                <span className="text-white font-medium">
+                  {currentItem && dislikedItems.has(currentItem.id) ? 'Disliked' : 'Dislike'}
+                </span>
+              </button>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -660,15 +894,22 @@ function Img2VideoContent() {
         {/* Videos in Progress */}
         {generatingCount > 0 && (
           <div className="bg-surface-50 rounded-lg p-4">
-            <h3 className="text-sm font-semibold mb-2">Videos in Progress</h3>
-            <div className="space-y-2">
+            <h3 className="text-sm font-semibold mb-3">Generating...</h3>
+            <div className="grid grid-cols-2 gap-3">
               {img2videoItems
                 .filter((item) => item.status === 'generating')
-                .slice(0, 3)
                 .map((item) => (
-                  <div key={item.id} className="flex items-center gap-2 p-2 bg-surface-100 rounded">
-                    <Loader2 className="w-4 h-4 animate-spin text-brand" />
-                    <span className="text-xs text-surface-600 truncate flex-1">{item.prompt}</span>
+                  <div key={item.id} className="relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-200">
+                    <img
+                      src={assetUrl(item.imageUrl)}
+                      className="w-full h-full object-cover opacity-30"
+                      alt=""
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer"
+                         style={{ backgroundSize: '200% 100%' }} />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Loader2 className="w-8 h-8 animate-spin text-brand" />
+                    </div>
                   </div>
                 ))}
             </div>
