@@ -8,7 +8,12 @@ import { Button } from '../ui/Button'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
 import { Textarea } from '../ui/Textarea'
+import { StepHeader } from '../asset-monster/StepHeader'
 import { CameraPresetCards } from './CameraPresetCards'
+import { DownloadToolbar } from './DownloadToolbar'
+import { LoadingGrid } from './LoadingGrid'
+import { SelectableResultCard } from './SelectableResultCard'
+import { SelectableThumbnail } from './SelectableThumbnail'
 
 type ImageLabTab = 'img2img' | 'img2video'
 
@@ -172,37 +177,16 @@ function Img2ImgContent() {
               <div>
                 <p className="text-xs font-medium text-surface-500 mb-2">SELECTED IMAGES</p>
                 <div className="grid grid-cols-4 gap-2">
-                  {referenceItems.map((item) => {
-                      const isSelected = selectedId === item.id
-                      return (
-                        <button
-                          type="button"
-                          key={item.id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            selectItem(item.id)
-                          }}
-                          className={`relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all group ${
-                            isSelected
-                              ? 'border-brand-500 ring-2 ring-brand-500/50'
-                              : 'border-transparent hover:border-surface-200'
-                          }`}
-                        >
-                          <img src={assetUrl(item.imageUrl)} className="w-full h-full object-cover" alt="" />
-                          {isSelected && (
-                            <div
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                removeItem(item.id)
-                              }}
-                              className="absolute top-1 right-1 w-5 h-5 bg-surface-900/80 hover:bg-danger rounded-full flex items-center justify-center transition-colors cursor-pointer"
-                            >
-                              <X className="w-3 h-3 text-white" />
-                            </div>
-                          )}
-                        </button>
-                      )
-                    })}
+                  {referenceItems.map((item) => (
+                    <SelectableThumbnail
+                      key={item.id}
+                      id={item.id}
+                      imageUrl={item.imageUrl}
+                      isSelected={selectedId === item.id}
+                      onSelect={selectItem}
+                      onRemove={removeItem}
+                    />
+                  ))}
                 </div>
               </div>
             ) : (
@@ -320,24 +304,7 @@ function Img2ImgContent() {
       {/* RIGHT COLUMN: OUTPUTS */}
       <div className="space-y-6">
         {/* Images in Progress */}
-        {generatingCount > 0 && (
-          <div className="bg-surface-50 rounded-lg p-4">
-            <h3 className="text-sm font-semibold mb-3">Generating...</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {img2imgItems
-                .filter((item) => item.status === 'generating')
-                .map((item) => (
-                  <div key={item.id} className="relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-200">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer"
-                         style={{ backgroundSize: '200% 100%' }} />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Loader2 className="w-8 h-8 animate-spin text-brand" />
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
+        <LoadingGrid items={img2imgItems.filter((item) => item.status === 'generating')} />
 
         {/* Step 5: Generated Images */}
         {completedCount > 0 && (
@@ -349,95 +316,39 @@ function Img2ImgContent() {
                 </span>
                 Generated Images
               </h3>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    completedItems.forEach((item) => {
-                      if (item?.result?.imageUrl) {
-                        const a = document.createElement('a')
-                        a.href = assetUrl(item.result.localPath)
-                        a.download = item.result.localPath.split('/').pop() || 'transformed.png'
-                        a.click()
-                      }
-                    })
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-secondary-600 hover:bg-secondary-700 text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
-                >
-                  <Download className="w-3 h-3" />
-                  Download All
-                </button>
-                {selectedResults.size > 0 && (
-                  <button
-                    onClick={downloadSelected}
-                    className="px-3 py-1.5 rounded-lg bg-secondary-600 hover:bg-secondary-700 text-white text-xs font-medium flex items-center gap-1.5 transition-colors"
-                  >
-                    <Download className="w-3 h-3" />
-                    Download {selectedResults.size}
-                  </button>
-                )}
-              </div>
+              <DownloadToolbar
+                onDownloadAll={() => {
+                  completedItems.forEach((item) => {
+                    if (item?.result?.imageUrl) {
+                      const a = document.createElement('a')
+                      a.href = assetUrl(item.result.localPath)
+                      a.download = item.result.localPath.split('/').pop() || 'transformed.png'
+                      a.click()
+                    }
+                  })
+                }}
+                onDownloadSelected={downloadSelected}
+                selectedCount={selectedResults.size}
+              />
             </div>
             <div className="grid grid-cols-4 gap-3">
-              {completedItems.map((item) => {
-                  const isSelected = selectedResults.has(item.id)
-                  return (
-                    <div
-                      key={item.id}
-                      className={`relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-100 cursor-pointer group border-2 transition-colors ${
-                        isSelected ? 'border-brand' : 'border-transparent'
-                      }`}
-                      onClick={(e) => {
-                        // Don't select when clicking checkbox or action buttons
-                        if ((e.target as HTMLElement).closest('button')) return
-                        selectItem(item.id)
-                      }}
-                    >
-                      <img
-                        src={assetUrl(item.result?.imageUrl || item.imageUrl)}
-                        className="w-full h-full object-cover hover:opacity-90 transition-opacity"
-                        alt=""
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setModalImage(assetUrl(item.result?.imageUrl || item.imageUrl))
-                          setModalItemId(item.id)
-                        }}
-                      />
-
-                      {/* Selection checkbox */}
-                      <button
-                        type="button"
-                        onClick={(e) => toggleResultSelection(item.id, e)}
-                        className={`absolute top-2 right-2 w-6 h-6 rounded flex items-center justify-center transition-colors z-10 ${
-                          isSelected
-                            ? 'bg-brand-600 hover:bg-brand-700'
-                            : 'bg-surface-900/50 hover:bg-surface-900/70'
-                        }`}
-                      >
-                        {isSelected ? (
-                          <Check className="w-4 h-4 text-white" />
-                        ) : (
-                          <div className="w-3.5 h-3.5 border-2 border-white/70 rounded" />
-                        )}
-                      </button>
-
-                      {/* Like/Dislike indicator */}
-                      {(likedItems.has(item.id) || dislikedItems.has(item.id)) && (
-                        <div className="absolute bottom-2 left-2 z-10">
-                          {likedItems.has(item.id) && (
-                            <div className="bg-secondary-600 rounded-full p-1.5">
-                              <ThumbsUp className="w-3.5 h-3.5 text-white" />
-                            </div>
-                          )}
-                          {dislikedItems.has(item.id) && (
-                            <div className="bg-danger rounded-full p-1.5">
-                              <ThumbsDown className="w-3.5 h-3.5 text-white" />
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+              {completedItems.map((item) => (
+                <SelectableResultCard
+                  key={item.id}
+                  id={item.id}
+                  imageUrl={item.imageUrl}
+                  resultUrl={item.result?.imageUrl}
+                  isSelected={selectedResults.has(item.id)}
+                  isLiked={likedItems.has(item.id)}
+                  isDisliked={dislikedItems.has(item.id)}
+                  onSelect={selectItem}
+                  onToggleSelection={toggleResultSelection}
+                  onOpenModal={(url, id) => {
+                    setModalImage(url)
+                    setModalItemId(id)
+                  }}
+                />
+              ))}
             </div>
           </div>
         )}
@@ -719,37 +630,16 @@ function Img2VideoContent() {
               <div>
                 <p className="text-xs font-medium text-surface-500 mb-2">SELECTED IMAGES</p>
                 <div className="grid grid-cols-4 gap-2">
-                  {img2videoItems.map((item) => {
-                    const isSelected = selectedId === item.id
-                    return (
-                      <button
-                        type="button"
-                        key={item.id}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          selectItem(item.id)
-                        }}
-                        className={`relative aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all group ${
-                          isSelected
-                            ? 'border-brand-500 ring-2 ring-brand-500/50'
-                            : 'border-transparent hover:border-surface-200'
-                        }`}
-                      >
-                        <img src={assetUrl(item.imageUrl)} className="w-full h-full object-cover" alt="" />
-                        {isSelected && (
-                          <div
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              removeItem(item.id)
-                            }}
-                            className="absolute top-1 right-1 w-5 h-5 bg-surface-900/80 hover:bg-danger rounded-full flex items-center justify-center transition-colors cursor-pointer"
-                          >
-                            <X className="w-3 h-3 text-white" />
-                          </div>
-                        )}
-                      </button>
-                    )
-                  })}
+                  {img2videoItems.map((item) => (
+                    <SelectableThumbnail
+                      key={item.id}
+                      id={item.id}
+                      imageUrl={item.imageUrl}
+                      isSelected={selectedId === item.id}
+                      onSelect={selectItem}
+                      onRemove={removeItem}
+                    />
+                  ))}
                 </div>
               </div>
             ) : (
@@ -904,29 +794,7 @@ function Img2VideoContent() {
       {/* RIGHT COLUMN: OUTPUTS */}
       <div className="space-y-6">
         {/* Videos in Progress */}
-        {generatingCount > 0 && (
-          <div className="bg-surface-50 rounded-lg p-4">
-            <h3 className="text-sm font-semibold mb-3">Generating...</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {img2videoItems
-                .filter((item) => item.status === 'generating')
-                .map((item) => (
-                  <div key={item.id} className="relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-200">
-                    <img
-                      src={assetUrl(item.imageUrl)}
-                      className="w-full h-full object-cover opacity-30"
-                      alt=""
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-shimmer"
-                         style={{ backgroundSize: '200% 100%' }} />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Loader2 className="w-8 h-8 animate-spin text-brand" />
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
+        <LoadingGrid items={img2videoItems.filter((item) => item.status === 'generating')} />
 
         {/* Generated Videos */}
         {completedCount > 0 && (

@@ -5,6 +5,7 @@ import {
   Check,
   CheckCircle,
   CheckSquare,
+  ChevronDown,
   Clock,
   Download,
   FileJson,
@@ -47,6 +48,11 @@ import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
+import { AlertBanner } from './AlertBanner'
+import { ImageGrid } from './ImageGrid'
+import { ModeSelector } from './ModeSelector'
+import { SelectableCardGrid } from './SelectableCardGrid'
+import { StepHeader } from './StepHeader'
 
 function adaptPromptFormat(input: Record<string, unknown>): GeneratedPrompt {
   if (typeof input.style === 'string') {
@@ -300,6 +306,29 @@ export default function AssetMonsterPage() {
     }
   }, [batchProgress?.status, batchProgress?.jobId])
 
+  // Auto-timeout stuck generating images after 5 minutes
+  useEffect(() => {
+    if (!batchProgress) return
+
+    const generatingImages = batchProgress.images.filter((img) => img.status === 'generating')
+    if (generatingImages.length === 0) return
+
+    const TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
+    const timers = generatingImages.map((img) =>
+      setTimeout(() => {
+        console.warn(`[AssetMonster] Image ${img.index} timed out after 5 minutes`)
+        const updatedImages = batchProgress.images.map((i) =>
+          i.index === img.index ? { ...i, status: 'failed' as const, error: 'Generation timeout (5 min)' } : i
+        )
+        useGenerationStore.setState({
+          batchProgress: { ...batchProgress, images: updatedImages },
+        })
+      }, TIMEOUT_MS)
+    )
+
+    return () => timers.forEach(clearTimeout)
+  }, [batchProgress])
+
   const handleRateImage = async (batchIndex: number, rating: 1 | -1) => {
     const imageId = batchImageIds.get(batchIndex)
     if (!imageId) {
@@ -408,42 +437,16 @@ export default function AssetMonsterPage() {
       <div className="space-y-6">
         {/* Step 1: Select Prompts */}
         <div className="bg-surface-50 rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">1</span>
-            Select Prompts
-          </h2>
-          <div className="flex bg-surface-100 rounded-lg p-1 mb-4">
-            <button
-              type="button"
-              onClick={() => setPromptSource('generated')}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-sm transition-colors ${
-                promptSource === 'generated'
-                  ? 'bg-brand-600 text-surface-900'
-                  : 'text-surface-400 hover:text-surface-900'
-              }`}
-            >
-              <List className="w-4 h-4" />
-              Generated Prompts
-            </button>
-            <button
-              type="button"
-              onClick={() => setPromptSource('custom')}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-sm transition-colors ${
-                promptSource === 'custom' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
-              }`}
-            >
-              <FileJson className="w-4 h-4" />
-              Custom Prompt
-            </button>
-            <button
-              type="button"
-              disabled
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-sm text-surface-400 opacity-50 cursor-not-allowed"
-            >
-              <Bookmark className="w-4 h-4" />
-              Library
-            </button>
-          </div>
+          <StepHeader stepNumber={1} title="Select Prompts" />
+          <ModeSelector
+            value={promptSource}
+            options={[
+              { value: 'generated' as const, label: 'Generated Prompts', icon: List },
+              { value: 'custom' as const, label: 'Custom Prompt', icon: FileJson },
+              { value: 'library' as const, label: 'Library', icon: Bookmark, disabled: true },
+            ]}
+            onChange={setPromptSource}
+          />
 
           {promptSource === 'library' ? (
             <div className="text-center py-8 text-surface-400 border-2 border-dashed border-surface-200 rounded-lg">
@@ -540,23 +543,13 @@ export default function AssetMonsterPage() {
                     {selectedPrompts.size}/{prompts.length}
                   </span>
                 </div>
-                <div className="grid grid-cols-5 gap-2 max-h-[400px] overflow-y-auto">
-                  {prompts.map((prompt, index) => (
-                    <button
-                      type="button"
-                      // biome-ignore lint/suspicious/noArrayIndexKey: static list
-                      key={index}
-                      onClick={() => togglePromptSelection(index)}
-                      className={`aspect-[2/1] rounded-lg font-medium text-lg flex items-center justify-center transition-colors ${
-                        selectedPrompts.has(index)
-                          ? 'bg-brand-600 hover:bg-brand-700 text-white'
-                          : 'bg-surface-200 hover:bg-surface-300 text-surface-600'
-                      }`}
-                    >
-                      {index + 1}
-                    </button>
-                  ))}
-                </div>
+                <SelectableCardGrid
+                  items={prompts.map((_, idx) => idx)}
+                  selectedSet={selectedPrompts}
+                  onToggle={togglePromptSelection}
+                  renderContent={(_, index) => index + 1}
+                  getKey={(_, index) => index}
+                />
               </div>
             )
           ) : promptSource === 'custom' ? (
@@ -614,30 +607,21 @@ Examples:
                       Saved Prompts ({savedCustomPrompts.length})
                     </span>
                   </div>
-                  <div className="grid grid-cols-5 gap-3 max-h-[400px] overflow-y-auto">
-                    {savedCustomPrompts.map((sp) => (
-                      <button
-                        key={sp.id}
-                        type="button"
-                        onClick={() => {
-                          const next = new Set(selectedCustomPrompts)
-                          if (next.has(sp.id)) {
-                            next.delete(sp.id)
-                          } else {
-                            next.add(sp.id)
-                          }
-                          setSelectedCustomPrompts(next)
-                        }}
-                        className={`w-full aspect-[2/1] rounded-lg font-medium text-lg flex items-center justify-center transition-colors ${
-                          selectedCustomPrompts.has(sp.id)
-                            ? 'bg-brand-600 hover:bg-brand-700 text-white'
-                            : 'bg-surface-200 hover:bg-surface-300 text-surface-600'
-                        }`}
-                      >
-                        {sp.name}
-                      </button>
-                    ))}
-                  </div>
+                  <SelectableCardGrid
+                    items={savedCustomPrompts.map((sp) => sp.id)}
+                    selectedSet={selectedCustomPrompts}
+                    onToggle={(id) => {
+                      const next = new Set(selectedCustomPrompts)
+                      if (next.has(id)) {
+                        next.delete(id)
+                      } else {
+                        next.add(id)
+                      }
+                      setSelectedCustomPrompts(next)
+                    }}
+                    renderContent={(id) => savedCustomPrompts.find((sp) => sp.id === id)?.name || ''}
+                    getKey={(id) => id}
+                  />
                 </div>
               )}
             </div>
@@ -646,35 +630,22 @@ Examples:
 
         {/* Step 2: Reference Images (Optional) */}
         <div className="bg-surface-50 rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">2</span>
-            Reference Images
-            <span className="text-xs text-surface-400 font-normal">(Optional)</span>
-          </h2>
+          <StepHeader stepNumber={2} title="Reference Images" subtitle="(Optional)" />
           <input {...getInputProps()} />
 
-          <div className="flex bg-surface-100 rounded-lg p-1 mb-4">
-            <button
-              type="button"
-              onClick={() => setImageSource('gallery')}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
-                imageSource === 'gallery' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
-              }`}
-            >
-              <FolderOpen className="w-4 h-4" />
-              Gallery {avatars.length > 0 && `(${avatars.length})`}
-            </button>
-            <button
-              type="button"
-              onClick={() => setImageSource('upload')}
-              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
-                imageSource === 'upload' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
-              }`}
-            >
-              <Upload className="w-4 h-4" />
-              Upload
-            </button>
-          </div>
+          <ModeSelector
+            value={imageSource}
+            options={[
+              {
+                value: 'gallery' as const,
+                label: 'Gallery',
+                icon: FolderOpen,
+                badge: avatars.length > 0 ? `(${avatars.length})` : undefined,
+              },
+              { value: 'upload' as const, label: 'Upload', icon: Upload },
+            ]}
+            onChange={setImageSource}
+          />
 
           {/* Gallery Grid - Conditionally Shown */}
           {imageSource === 'gallery' && (
@@ -736,28 +707,25 @@ Examples:
                 }`}
               >
                 <input {...getInputProps()} />
-                <div className="grid grid-cols-5 gap-3">
-                  {referencePreviews.map((preview, idx) => (
-                    <div
-                      // biome-ignore lint/suspicious/noArrayIndexKey: static list
-                      key={idx}
-                      className="relative aspect-square rounded-lg overflow-hidden border border-surface-200"
+                <ImageGrid
+                  images={referencePreviews}
+                  getImageUrl={(preview) => preview}
+                  getAlt={(_, idx) => `Reference ${idx + 1}`}
+                  aspectRatio="square"
+                  renderOverlay={(_, idx) => (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeReferenceImage(idx)
+                      }}
+                      className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center hover:bg-danger transition-colors"
+                      title="Remove image"
                     >
-                      <img src={preview} alt={`Reference ${idx + 1}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          removeReferenceImage(idx)
-                        }}
-                        className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center hover:bg-danger transition-colors"
-                        title="Remove image"
-                      >
-                        <X className="w-4 h-4 text-white" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                      <X className="w-4 h-4 text-white" />
+                    </button>
+                  )}
+                />
               </div>
             </div>
           )}
@@ -782,10 +750,7 @@ Examples:
 
         {/* Step 3: Settings */}
         <div className="bg-surface-50 rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">3</span>
-            Settings
-          </h2>
+          <StepHeader stepNumber={3} title="Settings" />
           <div className="grid grid-cols-2 gap-4">
             <Select
               label="Aspect Ratio"
@@ -851,69 +816,23 @@ Examples:
         </Button>
 
         {batchError && (
-          <div
-            className={`rounded-lg p-4 flex items-start gap-3 ${
-              batchError.type === 'warning'
-                ? 'bg-warning-muted/50 border border-warning/40'
-                : 'bg-danger-muted/50 border border-danger/40'
-            }`}
-          >
-            {batchError.type === 'warning' ? (
-              <Clock className="w-5 h-5 text-warning shrink-0 mt-0.5" />
-            ) : !navigator.onLine ? (
-              <WifiOff className="w-5 h-5 text-danger shrink-0 mt-0.5" />
-            ) : (
-              <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
-            )}
-            <div className="flex-1">
-              <p className={batchError.type === 'warning' ? 'text-warning' : 'text-danger'}>{batchError.message}</p>
-              {batchError.action && (
-                <button
-                  type="button"
-                  onClick={batchError.action.onClick}
-                  className={`mt-2 text-sm underline ${
-                    batchError.type === 'warning'
-                      ? 'text-warning hover:text-warning-hover'
-                      : 'text-danger hover:text-danger-hover'
-                  }`}
-                >
-                  {batchError.action.label}
-                </button>
-              )}
-            </div>
-            <Button
-              variant="ghost-muted"
-              size="xs"
-              aria-label="Dismiss"
-              icon={<X className="w-4 h-4" />}
-              onClick={() => setBatchError(null)}
-            />
-          </div>
+          <AlertBanner
+            type={batchError.type}
+            message={batchError.message}
+            action={batchError.action}
+            onDismiss={() => setBatchError(null)}
+            offline={!navigator.onLine}
+          />
         )}
 
-        {uploadError && (
-          <div className="bg-danger-muted/50 border border-danger/40 rounded-lg p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
-            <p className="flex-1 text-danger">{uploadError}</p>
-            <Button
-              variant="ghost-muted"
-              size="xs"
-              aria-label="Dismiss"
-              icon={<X className="w-4 h-4" />}
-              onClick={() => setUploadError(null)}
-            />
-          </div>
-        )}
+        {uploadError && <AlertBanner type="error" message={uploadError} onDismiss={() => setUploadError(null)} />}
       </div>
 
       {/* Right Column: Outputs */}
       <div className="space-y-6">
         {/* Step 4: Results */}
         <div className="bg-surface-50 rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">4</span>
-            Results
-          </h2>
+          <StepHeader stepNumber={4} title="Results" />
 
           {batchProgress ? (
             <div>
@@ -985,6 +904,22 @@ Examples:
                           />
                         </div>
                         <Loader2 className="w-6 h-6 animate-spin text-warning" />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const updatedImages = batchProgress.images.map((i) =>
+                              i.index === img.index ? { ...i, status: 'failed' as const, error: 'Cancelled by user' } : i
+                            )
+                            useGenerationStore.setState({
+                              batchProgress: { ...batchProgress, images: updatedImages },
+                            })
+                          }}
+                          className="absolute top-1 right-1 w-6 h-6 bg-danger/90 hover:bg-danger rounded-full flex items-center justify-center transition-colors z-10"
+                          title="Cancel generation"
+                        >
+                          <X className="w-4 h-4 text-white" />
+                        </button>
                       </>
                     ) : img.status === 'failed' ? (
                       <XCircle className="w-6 h-6 text-danger" />
@@ -1083,49 +1018,76 @@ Examples:
                       size="sm"
                       icon={<Download className="w-4 h-4" />}
                       onClick={() => {
-                        selectAllResultImages()
-                        downloadImages(
-                          batchProgress.images.filter((i) => i.status === 'completed' && i.url).map((i) => i.url!),
-                        )
+                        const completedImages = batchProgress.images.filter((i) => i.status === 'completed' && i.url)
+                        const isAllSelected = selectedResultImages.size === completedImages.length
+
+                        if (isAllSelected || selectedResultImages.size === 0) {
+                          // Download all
+                          downloadImages(completedImages.map((i) => i.url!))
+                        } else {
+                          // Download selected
+                          downloadImages(
+                            batchProgress.images
+                              .filter((i) => i.status === 'completed' && i.url && selectedResultImages.has(i.index))
+                              .map((i) => i.url!),
+                          )
+                        }
                       }}
                     >
-                      Download All
+                      {selectedResultImages.size === 0 ||
+                       selectedResultImages.size === batchProgress.images.filter((i) => i.status === 'completed').length
+                        ? 'Download All'
+                        : `Download Selected (${selectedResultImages.size})`}
                     </Button>
                     <Button
                       variant="secondary"
                       size="sm"
-                      icon={<Download className="w-4 h-4" />}
-                      disabled={selectedResultImages.size === 0}
-                      onClick={() =>
-                        downloadImages(
-                          batchProgress.images
-                            .filter((i) => i.status === 'completed' && i.url && selectedResultImages.has(i.index))
-                            .map((i) => i.url!),
-                        )
-                      }
-                    >
-                      Download Selected ({selectedResultImages.size})
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      icon={<Film className="w-4 h-4" />}
-                      disabled={selectedResultImages.size === 0}
+                      icon={<ImagePlus className="w-4 h-4" />}
                       onClick={() => {
-                        const completed =
-                          batchProgress?.images.filter(
-                            (img) => img.status === 'completed' && img.url && selectedResultImages.has(img.index),
-                          ) ?? []
-                        const imageUrls = completed.map((img) => img.url!)
-                        const newIds = useImg2VideoQueueStore.getState().addItems(imageUrls)
-                        // Select first item for immediate editing
+                        const completedImages = batchProgress?.images.filter((img) => img.status === 'completed' && img.url) ?? []
+                        const isAllSelected = selectedResultImages.size === completedImages.length
+
+                        const imagesToSend = isAllSelected || selectedResultImages.size === 0
+                          ? completedImages
+                          : completedImages.filter((img) => selectedResultImages.has(img.index))
+
+                        const imageUrls = imagesToSend.map((img) => img.url!)
+                        const newIds = useImg2VideoQueueStore.getState().addItems(imageUrls, 'img2img')
                         if (newIds.length > 0) {
                           useImg2VideoQueueStore.getState().selectItem(newIds[0])
                         }
                         navigate('img2video')
                       }}
                     >
-                      Send to Img2Video ({selectedResultImages.size})
+                      {selectedResultImages.size === 0 ||
+                       selectedResultImages.size === batchProgress.images.filter((i) => i.status === 'completed').length
+                        ? 'Img2Img'
+                        : `Img2Img (${selectedResultImages.size})`}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<Film className="w-4 h-4" />}
+                      onClick={() => {
+                        const completedImages = batchProgress?.images.filter((img) => img.status === 'completed' && img.url) ?? []
+                        const isAllSelected = selectedResultImages.size === completedImages.length
+
+                        const imagesToSend = isAllSelected || selectedResultImages.size === 0
+                          ? completedImages
+                          : completedImages.filter((img) => selectedResultImages.has(img.index))
+
+                        const imageUrls = imagesToSend.map((img) => img.url!)
+                        const newIds = useImg2VideoQueueStore.getState().addItems(imageUrls, 'img2video')
+                        if (newIds.length > 0) {
+                          useImg2VideoQueueStore.getState().selectItem(newIds[0])
+                        }
+                        navigate('img2video')
+                      }}
+                    >
+                      {selectedResultImages.size === 0 ||
+                       selectedResultImages.size === batchProgress.images.filter((i) => i.status === 'completed').length
+                        ? 'Img2Video'
+                        : `Img2Video (${selectedResultImages.size})`}
                     </Button>
                   </div>
                 </div>
@@ -1168,23 +1130,15 @@ Examples:
                       Download
                     </Button>
                   </div>
-                  <div className="grid grid-cols-5 gap-2">
-                    {completed.map((img) => (
-                      <button
-                        type="button"
-                        key={img.index}
-                        onClick={() => img.url && setPreviewImage(img.url)}
-                        title="Double click to preview"
-                        className={`relative aspect-[9/16] rounded-lg border-2 ${entry.color} cursor-pointer hover:scale-105 transition-all overflow-hidden`}
-                      >
-                        <img
-                          src={assetUrl(img.url!)}
-                          alt={`Batch ${completedBatches.length - batchIdx} #${img.index + 1}`}
-                          className="w-full h-full object-cover rounded-lg"
-                        />
-                      </button>
-                    ))}
-                  </div>
+                  <ImageGrid
+                    images={completed}
+                    getImageUrl={(img) => img.url!}
+                    getAlt={(img) => `Batch ${completedBatches.length - batchIdx} #${img.index + 1}`}
+                    aspectRatio="9/16"
+                    gap={2}
+                    onClick={(img) => img.url && setPreviewImage(img.url)}
+                    itemClassName={`border-2 ${entry.color}`}
+                  />
                 </div>
               )
             })}

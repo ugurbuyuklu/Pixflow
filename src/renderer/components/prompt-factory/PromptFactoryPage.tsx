@@ -623,7 +623,23 @@ export default function PromptFactoryPage() {
 
       {/* 5x2 Numbered Grid */}
       {(prompts.length > 0 || loading) && (
-        <div className="grid grid-cols-5 gap-3">
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-surface-600">Prompts</h3>
+            {prompts.length > 0 && (
+              <Button
+                variant="ghost"
+                size="xs"
+                icon={<Trash2 className="w-3.5 h-3.5" />}
+                onClick={() => {
+                  usePromptStore.setState({ prompts: [], selectedIndex: 0 })
+                }}
+              >
+                Clear All
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-5 gap-3">
           {Array.from({ length: count }).map((_, i) => {
             const prompt = prompts[i]
             const isSelected = selectedIndex === i
@@ -675,6 +691,7 @@ export default function PromptFactoryPage() {
               </button>
             )
           })}
+          </div>
         </div>
       )}
 

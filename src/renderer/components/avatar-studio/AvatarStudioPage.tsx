@@ -1,5 +1,4 @@
 import {
-  AlertCircle,
   AlertTriangle,
   Check,
   CheckCircle,
@@ -9,14 +8,11 @@ import {
   MessageSquare,
   Mic,
   RefreshCw,
-  Redo,
-  Undo,
   Upload,
   Users,
   Video,
   Volume2,
   Wand2,
-  X,
   XCircle,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -30,6 +26,10 @@ import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
 import { Textarea } from '../ui/Textarea'
+import { AvatarGenerationProgress } from './AvatarGenerationProgress'
+import { GeneratedAvatarsGrid } from './GeneratedAvatarsGrid'
+import { ScriptRefinementToolbar } from './ScriptRefinementToolbar'
+import { StudioErrorAlert } from './StudioErrorAlert'
 
 const GENDER_OPTIONS = [
   { value: 'female', label: 'Female' },
@@ -214,49 +214,17 @@ export default function AvatarStudioPage() {
       </div>
 
       {error && (
-        <div
-          className={`rounded-lg p-4 flex items-start gap-3 ${
-            error.type === 'warning'
-              ? 'bg-warning-muted/50 border border-warning/40'
-              : 'bg-danger-muted/50 border border-danger/40'
-          }`}
-        >
-          <AlertCircle
-            className={`w-5 h-5 shrink-0 mt-0.5 ${error.type === 'warning' ? 'text-warning' : 'text-danger'}`}
-          />
-          <p className={`flex-1 ${error.type === 'warning' ? 'text-warning' : 'text-danger'}`}>{error.message}</p>
-          <Button
-            variant="ghost-muted"
-            size="xs"
-            aria-label="Dismiss"
-            icon={<X className="w-4 h-4" />}
-            onClick={() => useAvatarStore.setState({ error: null })}
-          />
-        </div>
+        <StudioErrorAlert
+          error={error}
+          onDismiss={() => useAvatarStore.setState({ error: null })}
+        />
       )}
 
       {reactionError && (
-        <div
-          className={`rounded-lg p-4 flex items-start gap-3 ${
-            reactionError.type === 'warning'
-              ? 'bg-warning-muted/50 border border-warning/40'
-              : 'bg-danger-muted/50 border border-danger/40'
-          }`}
-        >
-          <AlertCircle
-            className={`w-5 h-5 shrink-0 mt-0.5 ${reactionError.type === 'warning' ? 'text-warning' : 'text-danger'}`}
-          />
-          <p className={`flex-1 ${reactionError.type === 'warning' ? 'text-warning' : 'text-danger'}`}>
-            {reactionError.message}
-          </p>
-          <Button
-            variant="ghost-muted"
-            size="xs"
-            aria-label="Dismiss"
-            icon={<X className="w-4 h-4" />}
-            onClick={() => useAvatarStore.setState({ reactionError: null })}
-          />
-        </div>
+        <StudioErrorAlert
+          error={reactionError}
+          onDismiss={() => useAvatarStore.setState({ reactionError: null })}
+        />
       )}
 
       {studioMode === 'talking' ? (
@@ -407,84 +375,18 @@ export default function AvatarStudioPage() {
                     ? `Generating ${generationProgress}/${avatarCount}...`
                     : `Generate ${avatarCount > 1 ? `${avatarCount} Avatars` : 'Avatar'}`}
                 </Button>
-                {generating && (
-                  <div className="p-3 bg-surface-100 border border-surface-300 rounded-lg space-y-3">
-                    <p className="text-surface-400 text-sm flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating {generationProgress}/{avatarCount}...
-                    </p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {Array.from({ length: avatarCount }).map((_, index) => (
-                        <div
-                          // biome-ignore lint/suspicious/noArrayIndexKey: static list
-                          key={index}
-                          className="relative rounded-lg overflow-hidden bg-surface-200 aspect-[9/16] flex items-center justify-center"
-                        >
-                          {index < generationProgress ? (
-                            generatedUrls[index] ? (
-                              <img
-                                src={assetUrl(generatedUrls[index])}
-                                alt={`Generated avatar ${index + 1}`}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <CheckCircle className="w-8 h-8 text-success" />
-                            )
-                          ) : index === generationProgress ? (
-                            <>
-                              <div className="absolute inset-0 overflow-hidden rounded-lg">
-                                <div
-                                  className="absolute inset-0 bg-gradient-to-r from-transparent via-brand/20 to-transparent"
-                                  style={{ animation: 'shimmer 1.5s infinite' }}
-                                />
-                              </div>
-                              <Loader2 className="w-8 h-8 text-brand animate-spin" />
-                            </>
-                          ) : (
-                            <div className="w-8 h-8 rounded-full border-2 border-surface-300" />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {generatedUrls.length > 0 && !generating && (
-                  <div className="p-3 bg-success-muted/30 border border-success/40 rounded-lg space-y-3">
-                    <p className="text-success text-sm flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4" />
-                      {generatedUrls.length} avatar{generatedUrls.length > 1 ? 's' : ''} generated and saved to gallery!
-                    </p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {generatedUrls.map((url, index) => (
-                        <button
-                          type="button"
-                          // biome-ignore lint/suspicious/noArrayIndexKey: static list
-                          key={index}
-                          className={`cursor-pointer transition-all relative rounded-lg overflow-hidden border-2 ${
-                            selectedGeneratedIndex === index
-                              ? 'border-brand-500 ring-2 ring-brand-500/50'
-                              : 'border-transparent hover:border-surface-200'
-                          }`}
-                          onClick={() => setSelectedGeneratedIndex(index)}
-                        >
-                          <img
-                            src={assetUrl(url)}
-                            alt={`Generated avatar ${index + 1}`}
-                            className="w-full aspect-[9/16] object-cover"
-                          />
-                          {selectedGeneratedIndex === index && (
-                            <div className="absolute top-1 right-1 bg-brand-500 rounded-full p-0.5">
-                              <Check className="w-3 h-3" />
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-surface-400 text-center">
-                      Click to select, double-click to view full size
-                    </p>
-                  </div>
-                )}
+                <AvatarGenerationProgress
+                  generating={generating}
+                  generationProgress={generationProgress}
+                  avatarCount={avatarCount}
+                  generatedUrls={generatedUrls}
+                />
+                <GeneratedAvatarsGrid
+                  generatedUrls={generatedUrls}
+                  generating={generating}
+                  selectedIndex={selectedGeneratedIndex}
+                  onSelect={setSelectedGeneratedIndex}
+                />
               </div>
             )}
           </div>
@@ -553,74 +455,19 @@ export default function AvatarStudioPage() {
                   )}
                 </div>
                 {showVariationOptions && generatedScript && (
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleRefineScript('improved')}
-                        disabled={scriptGenerating}
-                        className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                      >
-                        Improved
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRefineScript('shorter')}
-                        disabled={scriptGenerating}
-                        className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                      >
-                        Shorter
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleRefineScript('longer')}
-                        disabled={scriptGenerating}
-                        className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                      >
-                        Longer
-                      </button>
-                      <div className="w-px h-4 bg-surface-300" />
-                      <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-surface-200 text-surface-900">
-                        <input
-                          type="number"
-                          value={targetDuration}
-                          onChange={(e) => setTargetDuration(Number(e.target.value))}
-                          min={5}
-                          max={120}
-                          className="w-8 bg-transparent text-surface-900 outline-none"
-                        />
-                        <span>sec.</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => refineScript(`Adjust this script to be exactly ${targetDuration} seconds long (approximately ${Math.round(targetDuration * 2.5)} words). If too long, remove unnecessary words/phrases. If too short, add relevant details between existing sentences. Keep the original structure and flow - only add or remove minimal content to reach the target duration.`, targetDuration)}
-                        disabled={scriptGenerating}
-                        className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                      >
-                        Duration
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={undoScript}
-                        disabled={scriptHistoryIndex <= 0}
-                        className="p-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-600 hover:text-surface-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        title="Undo"
-                      >
-                        <Undo className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={redoScript}
-                        disabled={scriptHistoryIndex >= scriptHistory.length - 1}
-                        className="p-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-600 hover:text-surface-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        title="Redo"
-                      >
-                        <Redo className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                  <ScriptRefinementToolbar
+                    onImprove={() => handleRefineScript('improved')}
+                    onShorter={() => handleRefineScript('shorter')}
+                    onLonger={() => handleRefineScript('longer')}
+                    onDuration={(duration) => refineScript(`Adjust this script to be exactly ${duration} seconds long (approximately ${Math.round(duration * 2.5)} words). If too long, remove unnecessary words/phrases. If too short, add relevant details between existing sentences. Keep the original structure and flow - only add or remove minimal content to reach the target duration.`, duration)}
+                    onUndo={undoScript}
+                    onRedo={redoScript}
+                    isGenerating={scriptGenerating}
+                    canUndo={scriptHistoryIndex > 0}
+                    canRedo={scriptHistoryIndex < scriptHistory.length - 1}
+                    targetDuration={targetDuration}
+                    onTargetDurationChange={setTargetDuration}
+                  />
                 )}
                 <Textarea
                   value={generatedScript}
@@ -807,74 +654,19 @@ export default function AvatarStudioPage() {
                       </div>
                     </div>
                     {showVariationOptions && (
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleRefineScript('improved')}
-                            disabled={scriptGenerating}
-                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                          >
-                            Improved
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRefineScript('shorter')}
-                            disabled={scriptGenerating}
-                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                          >
-                            Shorter
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRefineScript('longer')}
-                            disabled={scriptGenerating}
-                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                          >
-                            Longer
-                          </button>
-                          <div className="w-px h-4 bg-surface-300" />
-                          <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-surface-200 text-surface-900">
-                            <input
-                              type="number"
-                              value={targetDuration}
-                              onChange={(e) => setTargetDuration(Number(e.target.value))}
-                              min={5}
-                              max={120}
-                              className="w-8 bg-transparent text-surface-900 outline-none"
-                            />
-                            <span>sec.</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => refineScript(`Adjust this script to be exactly ${targetDuration} seconds long (approximately ${Math.round(targetDuration * 2.5)} words). If too long, remove unnecessary words/phrases. If too short, add relevant details between existing sentences. Keep the original structure and flow - only add or remove minimal content to reach the target duration.`, targetDuration)}
-                            disabled={scriptGenerating}
-                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                          >
-                            Duration
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={undoScript}
-                            disabled={scriptHistoryIndex <= 0}
-                            className="text-surface-400 hover:text-surface-300 disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Undo"
-                          >
-                            <Undo className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={redoScript}
-                            disabled={scriptHistoryIndex >= scriptHistory.length - 1}
-                            className="text-surface-400 hover:text-surface-300 disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Redo"
-                          >
-                            <Redo className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
+                      <ScriptRefinementToolbar
+                        onImprove={() => handleRefineScript('improved')}
+                        onShorter={() => handleRefineScript('shorter')}
+                        onLonger={() => handleRefineScript('longer')}
+                        onDuration={(duration) => refineScript(`Adjust this script to be exactly ${duration} seconds long (approximately ${Math.round(duration * 2.5)} words). If too long, remove unnecessary words/phrases. If too short, add relevant details between existing sentences. Keep the original structure and flow - only add or remove minimal content to reach the target duration.`, duration)}
+                        onUndo={undoScript}
+                        onRedo={redoScript}
+                        isGenerating={scriptGenerating}
+                        canUndo={scriptHistoryIndex > 0}
+                        canRedo={scriptHistoryIndex < scriptHistory.length - 1}
+                        targetDuration={targetDuration}
+                        onTargetDurationChange={setTargetDuration}
+                      />
                     )}
                     <Textarea
                       value={generatedScript}
@@ -1033,74 +825,19 @@ export default function AvatarStudioPage() {
                       </div>
                     </div>
                     {showVariationOptions && (
-                      <div className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleRefineScript('improved')}
-                            disabled={scriptGenerating}
-                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                          >
-                            Improved
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRefineScript('shorter')}
-                            disabled={scriptGenerating}
-                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                          >
-                            Shorter
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRefineScript('longer')}
-                            disabled={scriptGenerating}
-                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                          >
-                            Longer
-                          </button>
-                          <div className="w-px h-4 bg-surface-300" />
-                          <div className="flex items-center gap-1 px-3 py-1.5 rounded bg-surface-200 text-surface-900">
-                            <input
-                              type="number"
-                              value={targetDuration}
-                              onChange={(e) => setTargetDuration(Number(e.target.value))}
-                              min={5}
-                              max={120}
-                              className="w-8 bg-transparent text-surface-900 outline-none"
-                            />
-                            <span>sec.</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => refineScript(`Adjust this script to be exactly ${targetDuration} seconds long (approximately ${Math.round(targetDuration * 2.5)} words). If too long, remove unnecessary words/phrases. If too short, add relevant details between existing sentences. Keep the original structure and flow - only add or remove minimal content to reach the target duration.`, targetDuration)}
-                            disabled={scriptGenerating}
-                            className="px-3 py-1.5 rounded bg-surface-200 hover:bg-surface-300 text-surface-900 disabled:opacity-50"
-                          >
-                            Duration
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={undoScript}
-                            disabled={scriptHistoryIndex <= 0}
-                            className="text-surface-400 hover:text-surface-300 disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Undo"
-                          >
-                            <Undo className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={redoScript}
-                            disabled={scriptHistoryIndex >= scriptHistory.length - 1}
-                            className="text-surface-400 hover:text-surface-300 disabled:opacity-30 disabled:cursor-not-allowed"
-                            title="Redo"
-                          >
-                            <Redo className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
+                      <ScriptRefinementToolbar
+                        onImprove={() => handleRefineScript('improved')}
+                        onShorter={() => handleRefineScript('shorter')}
+                        onLonger={() => handleRefineScript('longer')}
+                        onDuration={(duration) => refineScript(`Adjust this script to be exactly ${duration} seconds long (approximately ${Math.round(duration * 2.5)} words). If too long, remove unnecessary words/phrases. If too short, add relevant details between existing sentences. Keep the original structure and flow - only add or remove minimal content to reach the target duration.`, duration)}
+                        onUndo={undoScript}
+                        onRedo={redoScript}
+                        isGenerating={scriptGenerating}
+                        canUndo={scriptHistoryIndex > 0}
+                        canRedo={scriptHistoryIndex < scriptHistory.length - 1}
+                        targetDuration={targetDuration}
+                        onTargetDurationChange={setTargetDuration}
+                      />
                     )}
                     <Textarea
                       value={generatedScript}
@@ -1472,84 +1209,18 @@ export default function AvatarStudioPage() {
                       ? `Generating ${generationProgress}/${avatarCount}...`
                       : `Generate ${avatarCount > 1 ? `${avatarCount} Avatars` : 'Avatar'}`}
                   </Button>
-                  {generating && (
-                    <div className="p-3 bg-surface-100 border border-surface-300 rounded-lg space-y-3">
-                      <p className="text-surface-400 text-sm flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Generating {generationProgress}/{avatarCount}...
-                      </p>
-                      <div className="grid grid-cols-4 gap-2">
-                        {Array.from({ length: avatarCount }).map((_, index) => (
-                          <div
-                            // biome-ignore lint/suspicious/noArrayIndexKey: static list
-                            key={index}
-                            className="relative rounded-lg overflow-hidden bg-surface-200 aspect-[9/16] flex items-center justify-center"
-                          >
-                            {index < generationProgress ? (
-                              generatedUrls[index] ? (
-                                <img
-                                  src={assetUrl(generatedUrls[index])}
-                                  alt={`Generated avatar ${index + 1}`}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <CheckCircle className="w-8 h-8 text-success" />
-                              )
-                            ) : index === generationProgress ? (
-                              <>
-                                <div className="absolute inset-0 overflow-hidden rounded-lg">
-                                  <div
-                                    className="absolute inset-0 bg-gradient-to-r from-transparent via-brand/20 to-transparent"
-                                    style={{ animation: 'shimmer 1.5s infinite' }}
-                                  />
-                                </div>
-                                <Loader2 className="w-8 h-8 text-brand animate-spin" />
-                              </>
-                            ) : (
-                              <div className="w-8 h-8 rounded-full border-2 border-surface-300" />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {generatedUrls.length > 0 && !generating && (
-                    <div className="p-3 bg-success-muted/30 border border-success/40 rounded-lg space-y-3">
-                      <p className="text-success text-sm flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4" />
-                        {generatedUrls.length} avatar{generatedUrls.length > 1 ? 's' : ''} generated and saved to gallery!
-                      </p>
-                      <div className="grid grid-cols-4 gap-2">
-                        {generatedUrls.map((url, index) => (
-                          <button
-                            type="button"
-                            // biome-ignore lint/suspicious/noArrayIndexKey: static list
-                            key={index}
-                            className={`cursor-pointer transition-all relative rounded-lg overflow-hidden border-2 ${
-                              selectedGeneratedIndex === index
-                                ? 'border-brand-500 ring-2 ring-brand-500/50'
-                                : 'border-transparent hover:border-surface-200'
-                            }`}
-                            onClick={() => setSelectedGeneratedIndex(index)}
-                          >
-                            <img
-                              src={assetUrl(url)}
-                              alt={`Generated avatar ${index + 1}`}
-                              className="w-full aspect-[9/16] object-cover"
-                            />
-                            {selectedGeneratedIndex === index && (
-                              <div className="absolute top-1 right-1 bg-brand-500 rounded-full p-0.5">
-                                <Check className="w-3 h-3" />
-                              </div>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-xs text-surface-400 text-center">
-                        Click to select, double-click to view full size
-                      </p>
-                    </div>
-                  )}
+                  <AvatarGenerationProgress
+                    generating={generating}
+                    generationProgress={generationProgress}
+                    avatarCount={avatarCount}
+                    generatedUrls={generatedUrls}
+                  />
+                  <GeneratedAvatarsGrid
+                    generatedUrls={generatedUrls}
+                    generating={generating}
+                    selectedIndex={selectedGeneratedIndex}
+                    onSelect={setSelectedGeneratedIndex}
+                  />
                 </div>
               )}
 
