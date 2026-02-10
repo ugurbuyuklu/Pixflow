@@ -597,34 +597,79 @@ export default function AssetMonsterPage() {
                           <p className="text-surface-900 mt-0.5">{previewPrompt.style}</p>
                         </div>
                       )}
-                      {previewPrompt.camera_movement && (
+                      {previewPrompt.camera && (
                         <div>
-                          <label className="text-xs font-medium text-surface-500">Camera Movement</label>
-                          <p className="text-surface-900 mt-0.5">{previewPrompt.camera_movement}</p>
+                          <label className="text-xs font-medium text-surface-500">Camera</label>
+                          <p className="text-surface-900 mt-0.5">
+                            {[
+                              previewPrompt.camera.lens,
+                              previewPrompt.camera.aperture,
+                              previewPrompt.camera.angle,
+                              previewPrompt.camera.focus,
+                            ]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </p>
                         </div>
                       )}
                       {previewPrompt.lighting && (
                         <div>
                           <label className="text-xs font-medium text-surface-500">Lighting</label>
-                          <p className="text-surface-900 mt-0.5">{previewPrompt.lighting}</p>
+                          <p className="text-surface-900 mt-0.5">
+                            {[
+                              previewPrompt.lighting.setup,
+                              previewPrompt.lighting.key_light,
+                              previewPrompt.lighting.fill_light,
+                              previewPrompt.lighting.shadows,
+                              previewPrompt.lighting.mood,
+                            ]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </p>
                         </div>
                       )}
-                      {previewPrompt.scene_description && (
+                      {previewPrompt.pose && (
                         <div>
-                          <label className="text-xs font-medium text-surface-500">Scene Description</label>
-                          <p className="text-surface-900 mt-0.5">{previewPrompt.scene_description}</p>
+                          <label className="text-xs font-medium text-surface-500">Pose</label>
+                          <p className="text-surface-900 mt-0.5">
+                            {[
+                              previewPrompt.pose.framing,
+                              previewPrompt.pose.body_position,
+                              previewPrompt.pose.arms,
+                              previewPrompt.pose.posture,
+                            ]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </p>
                         </div>
                       )}
-                      {previewPrompt.mood && (
+                      {previewPrompt.set_design && (
                         <div>
-                          <label className="text-xs font-medium text-surface-500">Mood</label>
-                          <p className="text-surface-900 mt-0.5">{previewPrompt.mood}</p>
+                          <label className="text-xs font-medium text-surface-500">Set Design</label>
+                          <p className="text-surface-900 mt-0.5">
+                            {[
+                              previewPrompt.set_design.backdrop,
+                              previewPrompt.set_design.surface,
+                              previewPrompt.set_design.atmosphere,
+                            ]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </p>
                         </div>
                       )}
-                      {previewPrompt.color_grading && (
+                      {previewPrompt.effects && (
                         <div>
-                          <label className="text-xs font-medium text-surface-500">Color Grading</label>
-                          <p className="text-surface-900 mt-0.5">{previewPrompt.color_grading}</p>
+                          <label className="text-xs font-medium text-surface-500">Effects</label>
+                          <p className="text-surface-900 mt-0.5">
+                            {[
+                              previewPrompt.effects.color_grade,
+                              previewPrompt.effects.vignette,
+                              previewPrompt.effects.contrast,
+                              previewPrompt.effects.grain,
+                            ]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </p>
                         </div>
                       )}
                     </div>
