@@ -1,5 +1,5 @@
 import { Check, ChevronLeft, ChevronRight, Download, Loader2, Play, ThumbsDown, ThumbsUp, Trash2, Upload, X } from 'lucide-react'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { assetUrl } from '../../lib/api'
 import { ASPECT_RATIOS, DURATIONS, IMG2IMG_ASPECT_RATIOS, IMG2IMG_RESOLUTIONS, IMG2IMG_FORMATS, useImg2VideoQueueStore, type WorkflowType } from '../../stores/img2videoQueueStore'
@@ -13,7 +13,19 @@ import { CameraPresetCards } from './CameraPresetCards'
 type ImageLabTab = 'img2img' | 'img2video'
 
 export default function Img2VideoQueuePage() {
+  const { queueItems, queueOrder } = useImg2VideoQueueStore()
   const [activeTab, setActiveTab] = useState<ImageLabTab>('img2img')
+
+  // Auto-switch to img2video tab if items exist there and none in img2img
+  useEffect(() => {
+    const img2imgCount = queueOrder.filter(id => queueItems[id]?.workflowType === 'img2img').length
+    const img2videoCount = queueOrder.filter(id => queueItems[id]?.workflowType === 'img2video').length
+
+    // If no img2img items but we have img2video items, switch to img2video tab
+    if (img2imgCount === 0 && img2videoCount > 0) {
+      setActiveTab('img2video')
+    }
+  }, [queueItems, queueOrder])
 
   return (
     <div className="space-y-6">
