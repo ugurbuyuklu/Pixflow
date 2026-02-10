@@ -16,8 +16,8 @@ import {
   Pencil,
   Play,
   Sparkles,
-  ThumbsUp,
   ThumbsDown,
+  ThumbsUp,
   Upload,
   Users,
   WifiOff,
@@ -34,11 +34,11 @@ import {
   RESOLUTIONS,
   useGenerationStore,
 } from '../../stores/generationStore'
-import { useImg2VideoQueueStore } from '../../stores/img2videoQueueStore'
 import { useImageRatingsStore } from '../../stores/imageRatingsStore'
+import { useImg2VideoQueueStore } from '../../stores/img2videoQueueStore'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { usePromptStore } from '../../stores/promptStore'
-import type { GeneratedPrompt, GeneratedImageRecord } from '../../types'
+import type { GeneratedImageRecord, GeneratedPrompt } from '../../types'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
 import { Select } from '../ui/Select'
@@ -193,6 +193,7 @@ export default function AssetMonsterPage() {
     numImagesPerPrompt,
     outputFormat,
     resolution,
+    previewImage,
     togglePromptSelection,
     selectAllPrompts,
     deselectAllPrompts,
@@ -225,7 +226,7 @@ export default function AssetMonsterPage() {
   const { prompts, concepts } = usePromptStore()
   const concept = concepts.find((c) => c.value.trim())?.value || ''
   const { navigate } = useNavigationStore()
-  const { rateImage: rateImageInStore, removeRating } = useImageRatingsStore()
+  const { rateImage: rateImageInStore } = useImageRatingsStore()
 
   const [batchImageIds, setBatchImageIds] = useState<Map<number, number>>(new Map())
 
@@ -361,179 +362,182 @@ export default function AssetMonsterPage() {
   const remainingSeconds = completedCount > 0 ? Math.ceil(avgPerImage * (totalCount - completedCount)) : 0
 
   return (
-    <div className="grid grid-cols-3 gap-6">
-      {/* Left: Prompt Selection */}
-      <div className="col-span-1 bg-surface-50 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Prompts</h2>
-          <div className="flex bg-surface-100 rounded-lg p-1">
+    <div className="grid grid-cols-2 gap-6">
+      {/* Left Column: Inputs */}
+      <div className="space-y-6">
+        {/* Step 1: Select Prompts */}
+        <div className="bg-surface-50 rounded-lg p-4">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">1</span>
+            Select Prompts
+          </h2>
+          <div className="flex bg-surface-100 rounded-lg p-1 mb-4">
             <button
               type="button"
               onClick={() => setPromptSource('generated')}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-sm transition-colors ${
                 promptSource === 'generated'
                   ? 'bg-brand-600 text-surface-900'
                   : 'text-surface-400 hover:text-surface-900'
               }`}
             >
-              <List className="w-3 h-3" />
-              Generated
+              <List className="w-4 h-4" />
+              Generated Prompts
             </button>
             <button
               type="button"
               onClick={() => setPromptSource('custom')}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs transition-colors ${
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded text-sm transition-colors ${
                 promptSource === 'custom' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
               }`}
             >
-              <FileJson className="w-3 h-3" />
-              Custom
+              <FileJson className="w-4 h-4" />
+              Custom Prompt
             </button>
           </div>
-        </div>
 
-        {promptSource === 'generated' ? (
-          prompts.length === 0 ? (
-            <div className="text-center py-8 text-surface-400">
-              <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p>No prompts yet</p>
-              <button
-                type="button"
-                onClick={() => navigate('prompts')}
-                className="mt-2 text-brand-400 hover:text-brand-300 text-sm"
-              >
-                Generate prompts first →
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex gap-2">
-                  <Button variant="secondary" size="sm" onClick={() => selectAllPrompts(prompts.length)}>
-                    Select All
-                  </Button>
-                  <Button variant="secondary" size="sm" onClick={deselectAllPrompts}>
-                    Deselect All
-                  </Button>
-                </div>
-                <span className="text-sm text-surface-400">
-                  {selectedPrompts.size}/{prompts.length}
-                </span>
+          {promptSource === 'generated' ? (
+            prompts.length === 0 ? (
+              <div className="text-center py-8 text-surface-400">
+                <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p>No prompts yet</p>
+                <button
+                  type="button"
+                  onClick={() => navigate('prompts')}
+                  className="mt-2 text-brand-400 hover:text-brand-300 text-sm"
+                >
+                  Generate prompts first →
+                </button>
               </div>
-              <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                {prompts.map((prompt, index) => (
-                  <button
-                    type="button"
-                    // biome-ignore lint/suspicious/noArrayIndexKey: static list
-                    key={index}
-                    onClick={() => togglePromptSelection(index)}
-                    className={`w-full text-left p-3 rounded-lg transition-colors flex items-start gap-3 ${
-                      selectedPrompts.has(index)
-                        ? 'bg-brand-600/30 border border-brand-500'
-                        : 'bg-surface-100 hover:bg-surface-200 border border-transparent'
-                    }`}
-                  >
-                    <div
-                      className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
-                        selectedPrompts.has(index) ? 'bg-brand-500 border-brand-500' : 'border-surface-200'
-                      }`}
-                    >
-                      {selectedPrompts.has(index) && <Check className="w-3 h-3" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="font-mono text-xs text-surface-400">#{index + 1}</span>
-                      <p className="text-sm break-words">{prompt.style}</p>
-                    </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => selectAllPrompts(prompts.length)}>
+                      Select All
+                    </Button>
+                    <Button variant="secondary" size="sm" onClick={deselectAllPrompts}>
+                      Deselect All
+                    </Button>
+                  </div>
+                  <span className="text-sm text-surface-400">
+                    {selectedPrompts.size}/{prompts.length}
+                  </span>
+                </div>
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {prompts.map((prompt, index) => (
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setCustomPromptJson(JSON.stringify(prompt, null, 2))
-                        setPromptSource('custom')
-                      }}
-                      className="shrink-0 p-1 rounded text-surface-400 hover:text-brand-400 hover:bg-surface-200 transition-colors"
-                      title="Edit as custom prompt"
+                      // biome-ignore lint/suspicious/noArrayIndexKey: static list
+                      key={index}
+                      onClick={() => togglePromptSelection(index)}
+                      className={`w-full text-left p-3 rounded-lg transition-colors flex items-start gap-3 ${
+                        selectedPrompts.has(index)
+                          ? 'bg-brand-600/30 border border-brand-500'
+                          : 'bg-surface-100 hover:bg-surface-200 border border-transparent'
+                      }`}
                     >
-                      <Pencil className="w-3.5 h-3.5" />
+                      <div
+                        className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                          selectedPrompts.has(index) ? 'bg-brand-500 border-brand-500' : 'border-surface-200'
+                        }`}
+                      >
+                        {selectedPrompts.has(index) && <Check className="w-3 h-3" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="font-mono text-xs text-surface-400">#{index + 1}</span>
+                        <p className="text-sm break-words">{prompt.style}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setCustomPromptJson(JSON.stringify(prompt, null, 2))
+                          setPromptSource('custom')
+                        }}
+                        className="shrink-0 p-1 rounded text-surface-400 hover:text-brand-400 hover:bg-surface-200 transition-colors"
+                        title="Edit as custom prompt"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                     </button>
-                  </button>
-                ))}
-              </div>
-            </>
-          )
-        ) : (
-          <div className="space-y-4">
-            <div>
-              <span className="block text-sm text-surface-400 mb-2">
-                Custom Prompt
-                <span className="text-surface-400 ml-2 font-normal">(JSON or plain text)</span>
-              </span>
-              <textarea
-                value={customPromptJson}
-                onChange={(e) => {
-                  setCustomPromptJson(e.target.value)
-                  setCustomPromptError(null)
-                }}
-                placeholder={`Describe the scene or paste JSON...
+                  ))}
+                </div>
+              </>
+            )
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <span className="block text-sm text-surface-400 mb-2">
+                  Custom Prompt
+                  <span className="text-surface-400 ml-2 font-normal">(JSON or plain text)</span>
+                </span>
+                <textarea
+                  value={customPromptJson}
+                  onChange={(e) => {
+                    setCustomPromptJson(e.target.value)
+                    setCustomPromptError(null)
+                  }}
+                  placeholder={`Describe the scene or paste JSON...
 
 Examples:
 • Black & white editorial photoshoot with dramatic lighting
 • {"style": "Romantic portrait...", "lighting": {...}}`}
-                className={`w-full h-64 bg-surface-100 rounded-lg p-3 text-sm resize-none border ${
-                  customPromptError ? 'border-danger focus:border-danger' : 'border-transparent focus:border-brand-500'
-                } focus:outline-none`}
+                  className={`w-full h-64 bg-surface-100 rounded-lg p-3 text-sm resize-none border ${
+                    customPromptError
+                      ? 'border-danger focus:border-danger'
+                      : 'border-transparent focus:border-brand-500'
+                  } focus:outline-none`}
+                />
+                {customPromptError && (
+                  <p className="text-danger text-xs mt-1 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    {customPromptError}
+                  </p>
+                )}
+              </div>
+              <Slider
+                label="Number of Images"
+                displayValue={customPromptCount}
+                min={1}
+                max={4}
+                value={customPromptCount}
+                onChange={(e) => setCustomPromptCount(Number(e.currentTarget.value))}
               />
-              {customPromptError && (
-                <p className="text-danger text-xs mt-1 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  {customPromptError}
-                </p>
-              )}
             </div>
-            <Slider
-              label="Number of Images"
-              displayValue={customPromptCount}
-              min={1}
-              max={4}
-              value={customPromptCount}
-              onChange={(e) => setCustomPromptCount(Number(e.currentTarget.value))}
-            />
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Right: Upload & Generate */}
-      <div className="col-span-2 space-y-6">
-        {/* Reference Image Section */}
+        {/* Step 2: Reference Images (Optional) */}
         <div className="bg-surface-50 rounded-lg p-4">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">2</span>
+            Reference Images
+            <span className="text-xs text-surface-400 font-normal">(Optional)</span>
+          </h2>
           <input {...getInputProps()} />
 
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Reference Image</h2>
-            <div className="flex bg-surface-100 rounded-lg p-1">
-              <button
-                type="button"
-                onClick={() => setImageSource('upload')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
-                  imageSource === 'upload' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
-                }`}
-              >
-                <ImagePlus className="w-4 h-4" />
-                Upload
-              </button>
-              <button
-                type="button"
-                onClick={() => setImageSource('gallery')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm transition-colors ${
-                  imageSource === 'gallery'
-                    ? 'bg-brand-600 text-surface-900'
-                    : 'text-surface-400 hover:text-surface-900'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                Gallery {avatars.length > 0 && `(${avatars.length})`}
-              </button>
-            </div>
+          <div className="flex bg-surface-100 rounded-lg p-1 mb-4">
+            <button
+              type="button"
+              onClick={() => setImageSource('upload')}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
+                imageSource === 'upload' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
+              }`}
+            >
+              <Upload className="w-4 h-4" />
+              Upload
+            </button>
+            <button
+              type="button"
+              onClick={() => setImageSource('gallery')}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
+                imageSource === 'gallery' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
+              }`}
+            >
+              <FolderOpen className="w-4 h-4" />
+              From Gallery {avatars.length > 0 && `(${avatars.length})`}
+            </button>
           </div>
 
           {referencePreviews.length > 0 && (
@@ -638,10 +642,13 @@ Examples:
           )}
         </div>
 
-        {/* Generation Settings */}
+        {/* Step 3: Settings */}
         <div className="bg-surface-50 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-surface-400 mb-3">Generation Settings</h3>
-          <div className="grid grid-cols-4 gap-4">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">3</span>
+            Settings
+          </h2>
+          <div className="grid grid-cols-2 gap-4">
             <Select
               label="Aspect Ratio"
               value={aspectRatio}
@@ -755,253 +762,271 @@ Examples:
             />
           </div>
         )}
+      </div>
 
-        {batchProgress && (
-          <div className="bg-surface-50 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Generation Progress</h2>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant={
-                    batchProgress.status === 'completed'
-                      ? 'success'
-                      : batchProgress.status === 'failed'
-                        ? 'danger'
-                        : 'warning'
-                  }
-                >
-                  {batchProgress.status.toUpperCase()}
-                </Badge>
-                <span className="text-sm text-surface-400">{batchProgress.progress}%</span>
-              </div>
-            </div>
+      {/* Right Column: Outputs */}
+      <div className="space-y-6">
+        {/* Step 4: Results */}
+        <div className="bg-surface-50 rounded-lg p-4">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm">4</span>
+            Results
+          </h2>
 
-            <div className="grid grid-cols-6 gap-3">
-              {batchProgress.images.map((img) => (
-                <button
-                  type="button"
-                  key={img.index}
-                  onClick={() => {
-                    if (batchProgress.status === 'completed' && img.status === 'completed') {
-                      toggleResultImage(img.index)
-                    } else if (img.status === 'completed' && img.url) {
-                      setPreviewImage(img.url)
+          {batchProgress ? (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={
+                      batchProgress.status === 'completed'
+                        ? 'success'
+                        : batchProgress.status === 'failed'
+                          ? 'danger'
+                          : 'warning'
                     }
-                  }}
-                  onDoubleClick={() => img.status === 'completed' && img.url && setPreviewImage(img.url)}
-                  title={
-                    img.status === 'completed'
-                      ? 'Double click to preview'
-                      : img.status === 'generating'
-                        ? 'Generating...'
-                        : img.status === 'failed'
-                          ? 'Generation failed'
-                          : batchLoading
-                            ? 'Queued'
-                            : undefined
-                  }
-                  className={`relative aspect-[9/16] rounded-lg border-2 flex items-center justify-center ${
-                    img.status === 'completed' && selectedResultImages.has(img.index)
-                      ? 'border-brand-400 bg-brand-600/10 ring-2 ring-brand-400/30 cursor-pointer hover:scale-105 transition-all'
-                      : img.status === 'completed'
-                        ? 'border-success bg-success/10 cursor-pointer hover:border-success-hover hover:scale-105 transition-all'
-                        : img.status === 'generating'
-                          ? 'border-warning bg-warning/10'
-                          : img.status === 'failed'
-                            ? 'border-danger bg-danger/10'
-                            : 'border-surface-200 bg-surface-100'
-                  }`}
-                >
-                  {img.status === 'completed' && img.url ? (
-                    <img
-                      src={assetUrl(img.url!)}
-                      alt={`Generated ${img.index + 1}`}
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                  ) : img.status === 'generating' ? (
-                    <>
-                      <div className="absolute inset-0 overflow-hidden rounded-lg">
-                        <div
-                          className="absolute inset-0 bg-gradient-to-r from-transparent via-warning/10 to-transparent"
-                          style={{ animation: 'shimmer 1.5s infinite' }}
-                        />
-                      </div>
-                      <Loader2 className="w-6 h-6 animate-spin text-warning" />
-                    </>
-                  ) : img.status === 'failed' ? (
-                    <XCircle className="w-6 h-6 text-danger" />
-                  ) : batchLoading ? (
-                    <>
-                      <div className="absolute inset-0 overflow-hidden rounded-lg">
-                        <div
-                          className="absolute inset-0 bg-gradient-to-r from-transparent via-surface-300/10 to-transparent"
-                          style={{ animation: 'shimmer 2s infinite' }}
-                        />
-                      </div>
-                      <Loader2 className="w-5 h-5 animate-spin text-surface-300" />
-                    </>
-                  ) : (
-                    <Image className="w-6 h-6 text-surface-400" />
-                  )}
-                  {batchProgress.status === 'completed' && img.status === 'completed' && (
-                    <div
-                      className={`absolute top-1.5 left-1.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                        selectedResultImages.has(img.index)
-                          ? 'bg-brand-500 border-brand-500'
-                          : 'bg-black/40 border-white/50'
-                      }`}
-                    >
-                      {selectedResultImages.has(img.index) && <Check className="w-3 h-3 text-white" />}
-                    </div>
-                  )}
-                  {img.status === 'completed' && img.url && batchProgress.status === 'completed' && (
-                    <div className="absolute bottom-2 right-2 flex gap-1">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (!batchImageIds.has(img.index)) {
-                            console.warn('[AssetMonster] Image not in DB yet, cannot rate')
-                            return
-                          }
-                          handleRateImage(img.index, 1)
-                        }}
-                        disabled={!batchImageIds.has(img.index)}
-                        className="w-7 h-7 rounded-full bg-black/60 hover:bg-success/80 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        title={batchImageIds.has(img.index) ? 'Like' : 'Loading...'}
-                      >
-                        <ThumbsUp className="w-3.5 h-3.5 text-white" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (!batchImageIds.has(img.index)) {
-                            console.warn('[AssetMonster] Image not in DB yet, cannot rate')
-                            return
-                          }
-                          handleRateImage(img.index, -1)
-                        }}
-                        disabled={!batchImageIds.has(img.index)}
-                        className="w-7 h-7 rounded-full bg-black/60 hover:bg-danger/80 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        title={batchImageIds.has(img.index) ? 'Dislike' : 'Loading...'}
-                      >
-                        <ThumbsDown className="w-3.5 h-3.5 text-white" />
-                      </button>
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {batchProgress.status === 'completed' && (
-              <div className="mt-4 pt-4 border-t border-surface-100 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      icon={<CheckSquare className="w-3.5 h-3.5" />}
-                      onClick={() =>
-                        selectedResultImages.size ===
-                        batchProgress.images.filter((i) => i.status === 'completed').length
-                          ? deselectAllResultImages()
-                          : selectAllResultImages()
-                      }
-                    >
-                      {selectedResultImages.size === batchProgress.images.filter((i) => i.status === 'completed').length
-                        ? 'Deselect All'
-                        : 'Select All'}
-                    </Button>
-                    {selectedResultImages.size > 0 && (
-                      <span className="text-xs text-surface-400">{selectedResultImages.size} selected</span>
-                    )}
-                  </div>
+                  >
+                    {batchProgress.status.toUpperCase()}
+                  </Badge>
+                  <span className="text-sm text-surface-400">{batchProgress.progress}%</span>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<Download className="w-4 h-4" />}
+              </div>
+
+              <div className="grid grid-cols-6 gap-3">
+                {batchProgress.images.map((img) => (
+                  <button
+                    type="button"
+                    key={img.index}
                     onClick={() => {
-                      selectAllResultImages()
-                      downloadImages(
-                        batchProgress.images.filter((i) => i.status === 'completed' && i.url).map((i) => i.url!),
-                      )
-                    }}
-                  >
-                    Download All
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<Download className="w-4 h-4" />}
-                    disabled={selectedResultImages.size === 0}
-                    onClick={() =>
-                      downloadImages(
-                        batchProgress.images
-                          .filter((i) => i.status === 'completed' && i.url && selectedResultImages.has(i.index))
-                          .map((i) => i.url!),
-                      )
-                    }
-                  >
-                    Download Selected ({selectedResultImages.size})
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={<Film className="w-4 h-4" />}
-                    disabled={selectedResultImages.size === 0}
-                    onClick={() => {
-                      const completed =
-                        batchProgress?.images.filter(
-                          (img) => img.status === 'completed' && img.url && selectedResultImages.has(img.index),
-                        ) ?? []
-                      const imageUrls = completed.map((img) => img.url!)
-                      const newIds = useImg2VideoQueueStore.getState().addItems(imageUrls)
-                      // Select first item for immediate editing
-                      if (newIds.length > 0) {
-                        useImg2VideoQueueStore.getState().selectItem(newIds[0])
+                      if (batchProgress.status === 'completed' && img.status === 'completed') {
+                        toggleResultImage(img.index)
+                      } else if (img.status === 'completed' && img.url) {
+                        setPreviewImage(img.url)
                       }
-                      navigate('img2video')
                     }}
+                    onDoubleClick={() => img.status === 'completed' && img.url && setPreviewImage(img.url)}
+                    title={
+                      img.status === 'completed'
+                        ? 'Double click to preview'
+                        : img.status === 'generating'
+                          ? 'Generating...'
+                          : img.status === 'failed'
+                            ? 'Generation failed'
+                            : batchLoading
+                              ? 'Queued'
+                              : undefined
+                    }
+                    className={`relative aspect-[9/16] rounded-lg border-2 flex items-center justify-center ${
+                      img.status === 'completed' && selectedResultImages.has(img.index)
+                        ? 'border-brand-400 bg-brand-600/10 ring-2 ring-brand-400/30 cursor-pointer hover:scale-105 transition-all'
+                        : img.status === 'completed'
+                          ? 'border-success bg-success/10 cursor-pointer hover:border-success-hover hover:scale-105 transition-all'
+                          : img.status === 'generating'
+                            ? 'border-warning bg-warning/10'
+                            : img.status === 'failed'
+                              ? 'border-danger bg-danger/10'
+                              : 'border-surface-200 bg-surface-100'
+                    }`}
                   >
-                    Send to Img2Video ({selectedResultImages.size})
-                  </Button>
-                  <div className="ml-auto">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<FolderOpen className="w-4 h-4" />}
-                      onClick={async () => {
-                        try {
-                          const response = await authFetch(apiUrl('/api/generate/open-folder'), {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ folderPath: batchProgress.outputDir }),
-                          })
-                          if (!response.ok) {
-                            const raw = await response.json().catch(() => ({}))
-                            setBatchError({ message: getApiError(raw, 'Failed to open folder'), type: 'error' })
-                          }
-                        } catch {
-                          setBatchError({ message: 'Failed to open folder', type: 'error' })
+                    {img.status === 'completed' && img.url ? (
+                      <img
+                        src={assetUrl(img.url!)}
+                        alt={`Generated ${img.index + 1}`}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                    ) : img.status === 'generating' ? (
+                      <>
+                        <div className="absolute inset-0 overflow-hidden rounded-lg">
+                          <div
+                            className="absolute inset-0 bg-gradient-to-r from-transparent via-warning/10 to-transparent"
+                            style={{ animation: 'shimmer 1.5s infinite' }}
+                          />
+                        </div>
+                        <Loader2 className="w-6 h-6 animate-spin text-warning" />
+                      </>
+                    ) : img.status === 'failed' ? (
+                      <XCircle className="w-6 h-6 text-danger" />
+                    ) : batchLoading ? (
+                      <>
+                        <div className="absolute inset-0 overflow-hidden rounded-lg">
+                          <div
+                            className="absolute inset-0 bg-gradient-to-r from-transparent via-surface-300/10 to-transparent"
+                            style={{ animation: 'shimmer 2s infinite' }}
+                          />
+                        </div>
+                        <Loader2 className="w-5 h-5 animate-spin text-surface-300" />
+                      </>
+                    ) : (
+                      <Image className="w-6 h-6 text-surface-400" />
+                    )}
+                    {batchProgress.status === 'completed' && img.status === 'completed' && (
+                      <div
+                        className={`absolute top-1.5 left-1.5 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                          selectedResultImages.has(img.index)
+                            ? 'bg-brand-500 border-brand-500'
+                            : 'bg-black/40 border-white/50'
+                        }`}
+                      >
+                        {selectedResultImages.has(img.index) && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                    )}
+                    {img.status === 'completed' && img.url && batchProgress.status === 'completed' && (
+                      <div className="absolute bottom-2 right-2 flex gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (!batchImageIds.has(img.index)) {
+                              console.warn('[AssetMonster] Image not in DB yet, cannot rate')
+                              return
+                            }
+                            handleRateImage(img.index, 1)
+                          }}
+                          disabled={!batchImageIds.has(img.index)}
+                          className="w-7 h-7 rounded-full bg-black/60 hover:bg-success/80 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={batchImageIds.has(img.index) ? 'Like' : 'Loading...'}
+                        >
+                          <ThumbsUp className="w-3.5 h-3.5 text-white" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (!batchImageIds.has(img.index)) {
+                              console.warn('[AssetMonster] Image not in DB yet, cannot rate')
+                              return
+                            }
+                            handleRateImage(img.index, -1)
+                          }}
+                          disabled={!batchImageIds.has(img.index)}
+                          className="w-7 h-7 rounded-full bg-black/60 hover:bg-danger/80 flex items-center justify-center transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={batchImageIds.has(img.index) ? 'Dislike' : 'Loading...'}
+                        >
+                          <ThumbsDown className="w-3.5 h-3.5 text-white" />
+                        </button>
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {batchProgress.status === 'completed' && (
+                <div className="mt-4 pt-4 border-t border-surface-100 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        icon={<CheckSquare className="w-3.5 h-3.5" />}
+                        onClick={() =>
+                          selectedResultImages.size ===
+                          batchProgress.images.filter((i) => i.status === 'completed').length
+                            ? deselectAllResultImages()
+                            : selectAllResultImages()
                         }
+                      >
+                        {selectedResultImages.size ===
+                        batchProgress.images.filter((i) => i.status === 'completed').length
+                          ? 'Deselect All'
+                          : 'Select All'}
+                      </Button>
+                      {selectedResultImages.size > 0 && (
+                        <span className="text-xs text-surface-400">{selectedResultImages.size} selected</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<Download className="w-4 h-4" />}
+                      onClick={() => {
+                        selectAllResultImages()
+                        downloadImages(
+                          batchProgress.images.filter((i) => i.status === 'completed' && i.url).map((i) => i.url!),
+                        )
                       }}
                     >
-                      Open Folder
+                      Download All
                     </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<Download className="w-4 h-4" />}
+                      disabled={selectedResultImages.size === 0}
+                      onClick={() =>
+                        downloadImages(
+                          batchProgress.images
+                            .filter((i) => i.status === 'completed' && i.url && selectedResultImages.has(i.index))
+                            .map((i) => i.url!),
+                        )
+                      }
+                    >
+                      Download Selected ({selectedResultImages.size})
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={<Film className="w-4 h-4" />}
+                      disabled={selectedResultImages.size === 0}
+                      onClick={() => {
+                        const completed =
+                          batchProgress?.images.filter(
+                            (img) => img.status === 'completed' && img.url && selectedResultImages.has(img.index),
+                          ) ?? []
+                        const imageUrls = completed.map((img) => img.url!)
+                        const newIds = useImg2VideoQueueStore.getState().addItems(imageUrls)
+                        // Select first item for immediate editing
+                        if (newIds.length > 0) {
+                          useImg2VideoQueueStore.getState().selectItem(newIds[0])
+                        }
+                        navigate('img2video')
+                      }}
+                    >
+                      Send to Img2Video ({selectedResultImages.size})
+                    </Button>
+                    <div className="ml-auto">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<FolderOpen className="w-4 h-4" />}
+                        onClick={async () => {
+                          try {
+                            const response = await authFetch(apiUrl('/api/generate/open-folder'), {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ folderPath: batchProgress.outputDir }),
+                            })
+                            if (!response.ok) {
+                              const raw = await response.json().catch(() => ({}))
+                              setBatchError({ message: getApiError(raw, 'Failed to open folder'), type: 'error' })
+                            }
+                          } catch {
+                            setBatchError({ message: 'Failed to open folder', type: 'error' })
+                          }
+                        }}
+                      >
+                        Open Folder
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-surface-400">
+              <Image className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p className="text-sm">Configure generation and click Generate</p>
+              <p className="text-xs mt-1">Results will appear here</p>
+            </div>
+          )}
+        </div>
 
+        {/* Previous Batches */}
         {completedBatches.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-surface-400 uppercase tracking-wider">Previous Generations</h2>
+          <div className="bg-surface-50 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-surface-400 uppercase tracking-wider">Previous Batches</h3>
               <Button variant="ghost-muted" size="xs" onClick={clearCompletedBatches}>
                 Clear History
               </Button>
@@ -1048,6 +1073,17 @@ Examples:
           </div>
         )}
       </div>
+
+      {previewImage && (
+        <button
+          type="button"
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50"
+          onClick={() => setPreviewImage(null)}
+          onKeyDown={(e) => e.key === 'Escape' && setPreviewImage(null)}
+        >
+          <img src={assetUrl(previewImage)} alt="Preview" className="max-w-[90vw] max-h-[90vh] object-contain" />
+        </button>
+      )}
     </div>
   )
 }
