@@ -102,6 +102,7 @@ export default function PromptFactoryPage() {
   const [editingEntry, setEditingEntry] = useState<number | null>(null)
   const [editingText, setEditingText] = useState('')
   const [editSaving, setEditSaving] = useState(false)
+  const [editSaved, setEditSaved] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
   const progressStartedAt = generationProgress?.startedAt ?? 0
@@ -342,14 +343,15 @@ export default function PromptFactoryPage() {
                           </p>
                         )}
                         <Button
-                          variant="lime"
+                          variant={editSaved ? 'primary' : 'lime'}
                           size="xs"
-                          icon={editSaving ? undefined : <Save className="w-3 h-3" />}
+                          icon={editSaving ? undefined : editSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
                           loading={editSaving}
-                          disabled={editSaving}
+                          disabled={editSaving || editSaved}
                           onClick={async () => {
                             setEditSaving(true)
                             setEditError(null)
+                            setEditSaved(false)
                             try {
                               let parsed: GeneratedPrompt
                               try {
@@ -369,6 +371,8 @@ export default function PromptFactoryPage() {
                               }
                               updateAnalyzeEntryPrompt(i, parsed)
                               setEditingEntry(null)
+                              setEditSaved(true)
+                              setTimeout(() => setEditSaved(false), 2000)
                             } catch (err) {
                               setEditError(err instanceof Error ? err.message : 'Save failed')
                             } finally {
@@ -376,7 +380,7 @@ export default function PromptFactoryPage() {
                             }
                           }}
                         >
-                          Save Changes
+                          {editSaved ? 'Saved!' : 'Save Changes'}
                         </Button>
                       </div>
                     )}
