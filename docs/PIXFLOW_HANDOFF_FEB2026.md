@@ -1453,7 +1453,189 @@ src/renderer/components/ui/Button.tsx                          # Lime variant
 
 ---
 
-**Last Updated:** February 11, 2026 - Session 14
+### Session 15: OpenAI API Migration + Prompt Preservation 🔧
+**Date:** February 11, 2026 (continued)
+**Critical Fixes:** OpenAI API compatibility, prompt conversion system, UI state refresh
+
+**Problem 1 - OpenAI API Parameter Error:**
+- **Issue:** "Failed to convert text to prompt" with long prompts
+- **Error:** `Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.`
+- **Root Cause:** OpenAI deprecated `max_tokens` parameter in newer GPT models
+- **Impact:** All text-to-JSON conversions failing, voice script generation broken
+
+**Solution:**
+Global migration from `max_tokens` to `max_completion_tokens` across entire codebase:
+
+1. **promptGenerator.ts** (3 occurrences):
+   - Line 577: `textToPrompt()` - 4000 tokens
+   - Line 779: `conceptToPrompts()` - 2000 tokens
+   - Line 929: `refinePrompts()` - 2000 tokens
+
+2. **vision.ts** (1 occurrence):
+   - Line 245: `analyzeImages()` - 4000 tokens
+
+3. **voiceover.ts** (2 occurrences):
+   - Line 95: `generateNarration()` - 500 tokens
+   - Line 160: `generateVideoNarration()` - 500 tokens
+
+4. **Text limit increase:**
+   - Changed from 1000 → 2000 characters in `/api/prompts/text-to-json` endpoint
+
+**Problem 2 - Prompt Conversion Producing Wrong Results:**
+- **Issue:** User provided detailed prompt but generated image was completely different
+- **User Feedback:** "beklediğimden alakasız bir image generate etti" (unexpected result)
+- **Root Cause:** GPT-5.2 was interpreting and rewriting prompts using Creative Director knowledge
+- **Impact:** User's carefully crafted prompts were being "improved" without consent
+
+**Solution - preserveOriginal Mode:**
+Added bypass flag to skip AI interpretation entirely:
+
+```typescript
+// promptGenerator.ts
+export async function textToPrompt(textDescription: string, preserveOriginal = false): Promise<PromptOutput> {
+  if (preserveOriginal) {
+    console.log(`[TextToPrompt] Using as-is (preserveOriginal=true)`)
+    return {
+      style: textDescription.trim(),
+      pose: { framing: '', body_position: '', arms: '', posture: '', expression: { facial: '', eyes: '', mouth: '' } },
+      lighting: { setup: '', key_light: '', fill_light: '', shadows: '', mood: '' },
+      set_design: { backdrop: '', surface: '', props: [], atmosphere: '' },
+      outfit: { main: '', accessories: '', styling: '' },
+      camera: { lens: '', aperture: '', angle: '', focus: '' },
+      hairstyle: { style: '', parting: '', details: '', finish: '' },
+      makeup: { style: '', skin: '', eyes: '', lips: '' },
+      effects: { color_grade: '', grain: '' },
+    }
+  }
+  // ... rest of AI conversion logic
+}
+```
+
+**Integration:**
+```typescript
+// createApp.ts - API endpoint
+app.post('/api/prompts/text-to-json', requireAuth, apiLimiter, async (req, res) => {
+  const text = req.body.text
+  const preserveOriginal = req.body.preserveOriginal === true
+  const prompt = await textToPrompt(text.trim(), preserveOriginal)
+  sendSuccess(res, { prompt })
+})
+
+// promptStore.ts - Always preserve user text
+saveEdit: async (text) => {
+  // ... try JSON.parse first
+  const res = await authFetch(apiUrl('/api/prompts/text-to-json'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, preserveOriginal: true }),  // ← Always true
+  })
+  // ...
+}
+```
+
+**Problem 3 - Custom Prompt Selection:**
+- **User Request:** "custom prompt save edildiği zaman numara kartı active gelsin"
+- **Issue:** When adding custom prompts from analyze mode, first prompt was selected instead of last
+- **Expected:** Newly added custom prompt should be active (selected)
+
+**Solution:**
+Changed selection index from first (0) to last (length - 1):
+
+```tsx
+// PromptFactoryPage.tsx - "Use in Factory" button
+onClick={() => {
+  const analyzed = analyzeEntries.filter((e) => e.prompt).map((e) => e.prompt!)
+  setPrompts(analyzed, analyzed.length - 1)  // ← Select last
+  setPromptMode('concept')
+}}
+
+// "Asset Monster" button
+onClick={() => {
+  const analyzed = analyzeEntries.filter((e) => e.prompt).map((e) => e.prompt!)
+  setPrompts(analyzed, analyzed.length - 1)  // ← Select last
+  generationStore.selectAllPrompts(analyzed.length)
+  generationStore.setImageSource('upload')
+  navigate('generate')
+}}
+```
+
+**Problem 4 - Numbered Cards Not Showing Active State:**
+- **User Feedback:** "promptlar save edildikten sonra kartları aktive gelmeli demiştim. pasif sttatede geliyorlar şu an"
+- **Issue:** After editing and saving a prompt, numbered card stayed in inactive (gray) state
+- **Root Cause:** React wasn't re-rendering because `selectedIndex` wasn't being re-set
+- **Expected:** Active card should show purple background with ring-2
+
+**Solution:**
+Added explicit state refresh in `saveEdit()`:
+
+```typescript
+// promptStore.ts
+saveEdit: async (text) => {
+  const { selectedIndex, prompts } = get()
+  if (selectedIndex === null) return
+
+  set({ promptSaving: true })
+  try {
+    // ... parse or convert text to JSON
+    const updated = [...prompts]
+    updated[selectedIndex] = parsed
+    set({ prompts: updated, editingPromptText: JSON.stringify(parsed, null, 2) })
+
+    // Re-select to force UI refresh and card activation
+    get().setSelectedIndex(selectedIndex)  // ← Critical fix
+  } catch (err) {
+    set({ error: parseError(err) })
+  } finally {
+    set({ promptSaving: false })
+  }
+}
+```
+
+**Files Modified:**
+```
+src/server/services/promptGenerator.ts    # preserveOriginal parameter, max_completion_tokens
+src/server/services/vision.ts             # max_completion_tokens
+src/server/services/voiceover.ts          # max_completion_tokens
+src/server/createApp.ts                   # preserveOriginal endpoint, 2000 char limit
+src/renderer/stores/promptStore.ts        # preserveOriginal=true, card refresh
+src/renderer/components/prompt-factory/PromptFactoryPage.tsx  # Select last prompt
+```
+
+**Testing:**
+- ✅ Long prompts (2000 chars) convert successfully
+- ✅ Text is preserved as-is when saved (no AI rewriting)
+- ✅ Custom prompts from analyze mode select last prompt
+- ✅ Numbered cards show active state after save
+- ✅ Type check: `npx tsc --noEmit` (0 errors)
+- ✅ Build: `npm run build` (successful)
+
+**Commits:**
+1. `f4a4936` - "fix: replace max_tokens with max_completion_tokens for OpenAI API"
+2. `eabfe82` - "feat: select last prompt when saving custom prompts"
+3. `ee9fecf` - "feat: add preserveOriginal mode for text-to-JSON conversion"
+4. `0ed42fb` - "fix: refresh selected prompt card after save"
+
+**Impact:**
+- ✅ OpenAI API fully compatible with latest models
+- ✅ User prompts preserved exactly as written
+- ✅ Better UX for custom prompt workflow
+- ✅ Consistent UI state across all actions
+
+**Technical Notes:**
+- `preserveOriginal` mode bypasses entire GPT-5.2 interpretation pipeline
+- Early return in `textToPrompt()` avoids unnecessary API calls
+- Text goes directly into `style` field with empty structure for other fields
+- This is now the default behavior in Prompt Factory for all text edits
+- UI refresh pattern: `get().setSelectedIndex(selectedIndex)` ensures React re-render
+
+**Future Enhancements:**
+- [ ] Add toggle to enable/disable AI interpretation per prompt
+- [ ] Show visual indicator when prompt was AI-interpreted vs preserved
+- [ ] Batch preserve mode for importing multiple text prompts
+
+---
+
+**Last Updated:** February 11, 2026 - Session 15
 **Active Agent:** Claude Sonnet 4.5
-**Status:** Code compaction complete, all generation controls added, lime button system established
+**Status:** OpenAI API migration complete, prompt preservation system active, UI refresh issues resolved
 **Next Session:** Continue with next feature or enhancements
