@@ -360,7 +360,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
         const res = await authFetch(apiUrl('/api/prompts/text-to-json'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, preserveOriginal: true }),
         })
         if (!res.ok) {
           const raw = await res.json().catch(() => ({}))

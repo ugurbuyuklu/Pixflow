@@ -661,20 +661,21 @@ export function createApp(config: ServerConfig): express.Express {
 
   app.post('/api/prompts/text-to-json', requireAuth, apiLimiter, async (req, res) => {
     const text = req.body.text
+    const preserveOriginal = req.body.preserveOriginal === true
 
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
       sendError(res, 400, 'Text description is required', 'INVALID_TEXT')
       return
     }
 
-    if (text.length > 1000) {
-      sendError(res, 400, 'Text too long (max 1000 characters)', 'INVALID_TEXT')
+    if (text.length > 2000) {
+      sendError(res, 400, 'Text too long (max 2000 characters)', 'INVALID_TEXT')
       return
     }
 
     try {
-      console.log(`[TextToPrompt] Converting text prompt...`)
-      const prompt = await textToPrompt(text.trim())
+      console.log(`[TextToPrompt] Converting text prompt (preserveOriginal=${preserveOriginal})...`)
+      const prompt = await textToPrompt(text.trim(), preserveOriginal)
       sendSuccess(res, { prompt })
     } catch (error) {
       console.error('[Error] Text to prompt conversion failed:', error)

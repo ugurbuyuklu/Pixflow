@@ -863,10 +863,26 @@ export function validateAllPrompts(prompts: PromptOutput[]): {
   }
 }
 
-export async function textToPrompt(textDescription: string): Promise<PromptOutput> {
+export async function textToPrompt(textDescription: string, preserveOriginal = false): Promise<PromptOutput> {
+  // If preserveOriginal, use text as-is in style field with minimal structure
+  if (preserveOriginal) {
+    console.log(`[TextToPrompt] Using as-is (preserveOriginal=true)`)
+    return {
+      style: textDescription.trim(),
+      pose: { framing: '', body_position: '', arms: '', posture: '', expression: { facial: '', eyes: '', mouth: '' } },
+      lighting: { setup: '', key_light: '', fill_light: '', shadows: '', mood: '' },
+      set_design: { backdrop: '', surface: '', props: [], atmosphere: '' },
+      outfit: { main: '', accessories: '', styling: '' },
+      camera: { lens: '', aperture: '', angle: '', focus: '' },
+      hairstyle: { style: '', parting: '', details: '', finish: '' },
+      makeup: { style: '', skin: '', eyes: '', lips: '' },
+      effects: { color_grade: '', grain: '' },
+    }
+  }
+
   const client = await getOpenAI()
 
-  console.log(`[TextToPrompt] Converting: "${textDescription.substring(0, 50)}..."`)
+  console.log(`[TextToPrompt] Converting with AI: "${textDescription.substring(0, 50)}..."`)
 
   const systemPrompt = `You are a Creative Director converting descriptions into technical image prompts.
 
