@@ -21,6 +21,7 @@ import { createPresetsRouter } from './routes/presets.js'
 import { createProductsRouter } from './routes/products.js'
 import { createVideosRouter } from './routes/videos.js'
 import { ensureBootstrapAdminIfConfigured } from './services/auth.js'
+import { scheduleAutoExport } from './services/feedbackExport.js'
 import { addToHistory } from './services/history.js'
 import {
   generatePrompts,
@@ -58,6 +59,10 @@ export function createApp(config: ServerConfig): express.Express {
   initDatabase(dataDir)
   migrateJsonToSqlite(getDb(), dataDir)
   ensureBootstrapAdminIfConfigured()
+
+  // Schedule daily feedback exports
+  const exportDir = path.join(projectRoot, 'exports')
+  scheduleAutoExport(exportDir)
 
   const app = express()
 
@@ -699,7 +704,7 @@ export function createApp(config: ServerConfig): express.Express {
   app.use('/api/avatars', requireAuth, createAvatarsRouter({ projectRoot }))
   app.use('/api/videos', requireAuth, createVideosRouter({ projectRoot }))
   app.use('/api/presets', requireAuth, createPresetsRouter())
-  app.use('/api/feedback', requireAuth, createFeedbackRouter())
+  app.use('/api/feedback', requireAuth, createFeedbackRouter({ projectRoot }))
   app.use('/api/notifications', requireAuth, createNotificationsRouter())
   app.use('/api/images', requireAuth, createImageRatingsRouter())
 

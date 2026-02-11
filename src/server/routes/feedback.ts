@@ -1,13 +1,19 @@
+import path from 'node:path'
 import { Router } from 'express'
 import { getDb } from '../db/index.js'
 import type { AuthRequest } from '../middleware/auth.js'
 import { createFeedback, deleteFeedback, getFeedback } from '../services/feedback.js'
+import { exportFeedbackToJson, getLatestExport } from '../services/feedbackExport.js'
 import { sendError, sendSuccess } from '../utils/http.js'
 
 const MAX_CONTENT_LENGTH = 2000
 const VALID_CATEGORIES = ['bug', 'feature', 'improvement', 'other']
 
-export function createFeedbackRouter(): Router {
+interface FeedbackRouterConfig {
+  projectRoot: string
+}
+
+export function createFeedbackRouter(config?: FeedbackRouterConfig): Router {
   const router = Router()
 
   router.get('/', (req: AuthRequest, res) => {
@@ -55,6 +61,34 @@ export function createFeedbackRouter(): Router {
       return
     }
     sendSuccess(res, {})
+  })
+
+  router.post('/export', async (req: AuthRequest, res) => {
+    try {
+      const projectRoot = config?.projectRoot || process.cwd()
+      const exportDir = path.join(projectRoot, 'exports')
+      const filepath = await exportFeedbackToJson(exportDir)
+      sendSuccess(res, { filepath, filename: path.basename(filepath) })
+    } catch (error) {
+      sendError(res, 500, 'Failed to export feedback', 'EXPORT_FAILED')
+    }
+  })
+
+  router.get('/export/latest', async (req: AuthRequest, res) => {
+    try {
+      const projectRoot = config?.projectRoot || process.cwd()
+      const exportDir = path.join(projectRoot, 'exports')
+      const filepath = await getLatestExport(exportDir)
+
+      if (!filepath) {
+        sendError(res, 404, 'No export files found', 'NO_EXPORTS')
+        return
+      }
+
+      sendSuccess(res, { filepath, filename: path.basename(filepath) })
+    } catch (error) {
+      sendError(res, 500, 'Failed to get latest export', 'EXPORT_FAILED')
+    }
   })
 
   return router

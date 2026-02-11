@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pixflow Feedback Viewer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .header h1 {
+      color: #667eea;
+      margin-bottom: 0.5rem;
+      font-size: 2rem;
+    }
+
+    .header .meta {
+      color: #64748b;
+      font-size: 0.875rem;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .stat-card .label {
+      color: #64748b;
+      font-size: 0.875rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-card .value {
+      color: #1e293b;
+      font-size: 2rem;
+      font-weight: bold;
+    }
+
+    .filters {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 12px;
+      margin-bottom: 2rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 0.5rem 1rem;
+      border: 2px solid #e2e8f0;
+      background: white;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .filter-btn:hover {
+      border-color: #667eea;
+      color: #667eea;
+    }
+
+    .filter-btn.active {
+      background: #667eea;
+      border-color: #667eea;
+      color: white;
+    }
+
+    .feedback-list {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .feedback-item {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .feedback-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .feedback-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .feedback-meta {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge.bug {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .badge.feature {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .badge.improvement {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .badge.other {
+      background: #e5e7eb;
+      color: #374151;
+    }
+
+    .feedback-date {
+      color: #64748b;
+      font-size: 0.875rem;
+    }
+
+    .feedback-user {
+      color: #667eea;
+      font-weight: 500;
+      font-size: 0.875rem;
+    }
+
+    .feedback-product {
+      color: #8b5cf6;
+      font-weight: 500;
+      font-size: 0.875rem;
+    }
+
+    .feedback-content {
+      color: #1e293b;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .empty-state {
+      background: white;
+      padding: 3rem;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .empty-state h2 {
+      color: #64748b;
+      margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+      color: #94a3b8;
+    }
+
+    .load-btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    .load-btn:hover {
+      background: #5568d3;
+    }
+
+    .file-input {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📊 Pixflow Feedback Viewer</h1>
+      <div class="meta" id="meta">No feedback loaded</div>
+      <div style="margin-top: 1rem;">
+        <label for="fileInput" class="load-btn">Load JSON File</label>
+        <input type="file" id="fileInput" class="file-input" accept=".json">
+      </div>
+    </div>
+
+    <div class="stats" id="stats" style="display: none;">
+      <div class="stat-card">
+        <div class="label">Total Feedback</div>
+        <div class="value" id="totalCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Bug Reports</div>
+        <div class="value" id="bugCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Feature Requests</div>
+        <div class="value" id="featureCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Improvements</div>
+        <div class="value" id="improvementCount">0</div>
+      </div>
+    </div>
+
+    <div class="filters" id="filters" style="display: none;">
+      <button class="filter-btn active" data-category="all">All</button>
+      <button class="filter-btn" data-category="bug">Bug Reports</button>
+      <button class="filter-btn" data-category="feature">Feature Requests</button>
+      <button class="filter-btn" data-category="improvement">Improvements</button>
+      <button class="filter-btn" data-category="other">Other</button>
+    </div>
+
+    <div class="feedback-list" id="feedbackList">
+      <div class="empty-state">
+        <h2>No Feedback Loaded</h2>
+        <p>Click "Load JSON File" above to view feedback exports</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allFeedback = [];
+    let currentFilter = 'all';
+
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        allFeedback = data.feedback || [];
+
+        // Update meta
+        const exportDate = new Date(data.exportedAt).toLocaleString();
+        document.getElementById('meta').textContent = `Exported: ${exportDate} • ${data.totalCount} entries`;
+
+        // Update stats
+        const bugCount = allFeedback.filter(f => f.category === 'bug').length;
+        const featureCount = allFeedback.filter(f => f.category === 'feature').length;
+        const improvementCount = allFeedback.filter(f => f.category === 'improvement').length;
+
+        document.getElementById('totalCount').textContent = data.totalCount;
+        document.getElementById('bugCount').textContent = bugCount;
+        document.getElementById('featureCount').textContent = featureCount;
+        document.getElementById('improvementCount').textContent = improvementCount;
+
+        document.getElementById('stats').style.display = 'grid';
+        document.getElementById('filters').style.display = 'flex';
+
+        renderFeedback();
+      } catch (error) {
+        alert('Failed to load feedback file: ' + error.message);
+      }
+    });
+
+    document.getElementById('filters').addEventListener('click', (e) => {
+      if (e.target.classList.contains('filter-btn')) {
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        e.target.classList.add('active');
+        currentFilter = e.target.dataset.category;
+        renderFeedback();
+      }
+    });
+
+    function renderFeedback() {
+      const filtered = currentFilter === 'all'
+        ? allFeedback
+        : allFeedback.filter(f => f.category === currentFilter);
+
+      const listEl = document.getElementById('feedbackList');
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <h2>No ${currentFilter === 'all' ? '' : currentFilter} feedback found</h2>
+            <p>Try selecting a different filter</p>
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = filtered.map(item => {
+        const date = new Date(item.created_at).toLocaleString();
+        return `
+          <div class="feedback-item">
+            <div class="feedback-header">
+              <div class="feedback-meta">
+                <span class="badge ${item.category}">${item.category}</span>
+                <span class="feedback-user">👤 ${item.user_name || 'Unknown User'}</span>
+                ${item.product_name ? `<span class="feedback-product">📦 ${item.product_name}</span>` : ''}
+              </div>
+              <span class="feedback-date">🕒 ${date}</span>
+            </div>
+            <div class="feedback-content">${escapeHtml(item.content)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
