@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   AlertTriangle,
   Check,
   CheckCircle,
@@ -13,6 +14,7 @@ import {
   Video,
   Volume2,
   Wand2,
+  X,
   XCircle,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
