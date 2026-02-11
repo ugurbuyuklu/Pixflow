@@ -92,7 +92,7 @@ ${options.examples && options.examples.length > 0 ? `\nReference examples for st
           { role: 'user', content: userPrompt },
         ],
         temperature: 0.8,
-        max_tokens: 500,
+        max_completion_tokens: 500,
       }),
     {
       pipeline: 'avatars.script.provider',
@@ -157,7 +157,7 @@ Target word count: ${targetWords} words.`,
           },
         ],
         temperature: 0.7,
-        max_tokens: 500,
+        max_completion_tokens: 500,
       }),
     {
       pipeline: 'avatars.script.refine.provider',

@@ -574,7 +574,7 @@ Return as JSON with the exact structure specified in the system prompt.`
         },
       ],
       temperature: 0.6,
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
       response_format: { type: 'json_object' },
     })
     console.log(`[generateSinglePrompt] OpenAI response received for prompt ${index + 1}`)
@@ -776,7 +776,7 @@ Create variations blending this reference style with the concept. Do NOT copy th
         },
       ],
       temperature: 0.6,
-      max_tokens: 7000,
+      max_completion_tokens: 7000,
       response_format: { type: 'json_object' },
     })
     console.log(`[generatePromptBatch] OpenAI response received`)
@@ -926,7 +926,7 @@ Return only the JSON object.`,
       },
     ],
     temperature: 0.65,
-    max_tokens: 3500,
+    max_completion_tokens: 3500,
     response_format: { type: 'json_object' },
   })
 
