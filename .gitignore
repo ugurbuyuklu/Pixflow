@@ -21,8 +21,8 @@ data/*.db
 data/*.db-shm
 data/*.db-wal
 
-# Feedback exports (keep viewer, ignore JSON exports)
-exports/feedback-export-*.json
+# Feedback exports (keep viewer and README, ignore data file)
+exports/feedback.json
 
 # Local tooling state
 .playwright-mcp/

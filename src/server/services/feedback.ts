@@ -1,4 +1,6 @@
+import path from 'node:path'
 import { getDb } from '../db/index.js'
+import { exportFeedbackToJson } from './feedbackExport.js'
 
 export interface FeedbackEntry {
   id: number
@@ -62,6 +64,12 @@ export function createFeedback(userId: number, content: string, category: string
     WHERE f.id = ?
   `)
     .get(result.lastInsertRowid) as FeedbackRow
+
+  // Auto-export after creating feedback
+  const exportDir = path.join(process.cwd(), 'exports')
+  exportFeedbackToJson(exportDir).catch((err) => {
+    console.error('[Feedback] Auto-export failed:', err)
+  })
 
   return row
 }

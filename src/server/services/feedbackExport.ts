@@ -9,8 +9,10 @@ export interface FeedbackExport {
   feedback: FeedbackEntry[]
 }
 
+const FEEDBACK_FILE = 'feedback.json'
+
 /**
- * Export all feedback to a JSON file
+ * Export all feedback to a single JSON file (overwrites existing)
  */
 export async function exportFeedbackToJson(outputDir: string): Promise<string> {
   const db = getDb()
@@ -33,36 +35,30 @@ export async function exportFeedbackToJson(outputDir: string): Promise<string> {
 
   await fs.mkdir(outputDir, { recursive: true })
 
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-  const filename = `feedback-export-${timestamp}.json`
-  const filepath = path.join(outputDir, filename)
+  const filepath = path.join(outputDir, FEEDBACK_FILE)
 
   await fs.writeFile(filepath, JSON.stringify(exportData, null, 2), 'utf-8')
 
-  console.log(`[FeedbackExport] Exported ${rows.length} feedback entries to ${filename}`)
+  console.log(`[FeedbackExport] Exported ${rows.length} feedback entries to ${FEEDBACK_FILE}`)
 
   return filepath
 }
 
 /**
- * Get the latest export file path
+ * Get the feedback file path
  */
 export async function getLatestExport(outputDir: string): Promise<string | null> {
   try {
-    const files = await fs.readdir(outputDir)
-    const exportFiles = files.filter((f) => f.startsWith('feedback-export-') && f.endsWith('.json'))
-
-    if (exportFiles.length === 0) return null
-
-    exportFiles.sort().reverse()
-    return path.join(outputDir, exportFiles[0])
+    const filepath = path.join(outputDir, FEEDBACK_FILE)
+    await fs.access(filepath)
+    return filepath
   } catch {
     return null
   }
 }
 
 /**
- * Auto-export feedback on a schedule (daily)
+ * Auto-export feedback on every feedback submission
  */
 export function scheduleAutoExport(outputDir: string): NodeJS.Timeout {
   const DAILY_MS = 24 * 60 * 60 * 1000
@@ -78,6 +74,6 @@ export function scheduleAutoExport(outputDir: string): NodeJS.Timeout {
   // Export immediately on startup
   doExport()
 
-  // Then export daily
+  // Then export daily (backup schedule)
   return setInterval(doExport, DAILY_MS)
 }
