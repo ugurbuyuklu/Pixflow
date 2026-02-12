@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from 'framer-motion'
 import { MessageSquare, X } from 'lucide-react'
 import { useState } from 'react'
 import { notify } from '../../lib/toast'
@@ -33,63 +32,49 @@ export function FeedbackWidget() {
 
   return (
     <div className="fixed bottom-6 right-6 z-40">
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.95 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute bottom-14 right-0 w-80 bg-surface-50 border border-surface-100 rounded-xl shadow-xl"
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-surface-100">
-              <span className="text-sm font-semibold text-surface-900">Send Feedback</span>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="text-surface-400 hover:text-surface-600 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
+      {open && (
+        <div className="absolute bottom-14 right-0 w-80 bg-surface-50 border border-surface-100 rounded-xl shadow-xl">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-surface-100">
+            <span className="text-sm font-semibold text-surface-900">Send Feedback</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-surface-400 hover:text-surface-600 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="flex gap-1.5 flex-wrap">
+              {CATEGORIES.map((c) => (
+                <button
+                  type="button"
+                  key={c.value}
+                  onClick={() => setCategory(c.value)}
+                  className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
+                    category === c.value
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-surface-100 text-surface-500 hover:text-surface-700'
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
             </div>
-            <div className="p-4 space-y-3">
-              <div className="flex gap-1.5 flex-wrap">
-                {CATEGORIES.map((c) => (
-                  <button
-                    type="button"
-                    key={c.value}
-                    onClick={() => setCategory(c.value)}
-                    className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                      category === c.value
-                        ? 'bg-brand-600 text-white'
-                        : 'bg-surface-100 text-surface-500 hover:text-surface-700'
-                    }`}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Tell us what you think..."
-                rows={3}
-                maxLength={2000}
-                className="w-full rounded-lg bg-surface-0 border border-surface-200 px-3 py-2 text-sm text-surface-900 placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-none"
-              />
-              <Button
-                onClick={handleSubmit}
-                loading={submitting}
-                disabled={!content.trim()}
-                size="sm"
-                className="w-full"
-              >
-                Submit
-              </Button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Tell us what you think..."
+              rows={3}
+              maxLength={2000}
+              className="w-full rounded-lg bg-surface-0 border border-surface-200 px-3 py-2 text-sm text-surface-900 placeholder-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-none"
+            />
+            <Button onClick={handleSubmit} loading={submitting} disabled={!content.trim()} size="sm" className="w-full">
+              Submit
+            </Button>
+          </div>
+        </div>
+      )}
 
       <button
         type="button"

@@ -4,6 +4,11 @@ function hasValue(value: string | undefined): boolean {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function isTruthy(value: string | undefined): boolean {
+  if (!hasValue(value)) return false
+  return ['1', 'true', 'yes', 'on'].includes((value as string).trim().toLowerCase())
+}
+
 export function validateServerEnv(): void {
   const jwtSecret = process.env.JWT_SECRET
   if (!hasValue(jwtSecret)) {
@@ -12,6 +17,10 @@ export function validateServerEnv(): void {
 
   if ((jwtSecret as string).trim().length < MIN_JWT_SECRET_LENGTH) {
     throw new Error(`JWT_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters long`)
+  }
+
+  if (process.env.NODE_ENV === 'production' && isTruthy(process.env.PIXFLOW_AUTH_BYPASS)) {
+    throw new Error('PIXFLOW_AUTH_BYPASS must be disabled in production.')
   }
 
   const bootstrapEnabled = process.env.PIXFLOW_BOOTSTRAP_ADMIN_ON_STARTUP

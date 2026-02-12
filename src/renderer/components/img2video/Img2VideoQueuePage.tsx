@@ -1,14 +1,33 @@
-import { Check, ChevronLeft, ChevronRight, Download, Loader2, Play, ThumbsDown, ThumbsUp, Trash2, Upload, X } from 'lucide-react'
-import React, { useEffect, useState } from 'react'
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Loader2,
+  Play,
+  ThumbsDown,
+  ThumbsUp,
+  Upload,
+  X,
+} from 'lucide-react'
+import type React from 'react'
+import { useEffect, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { assetUrl } from '../../lib/api'
-import { ASPECT_RATIOS, DURATIONS, IMG2IMG_ASPECT_RATIOS, IMG2IMG_RESOLUTIONS, IMG2IMG_FORMATS, useImg2VideoQueueStore, type WorkflowType } from '../../stores/img2videoQueueStore'
-import { Badge } from '../ui/Badge'
+import {
+  ASPECT_RATIOS,
+  DURATIONS,
+  IMG2IMG_ASPECT_RATIOS,
+  IMG2IMG_FORMATS,
+  IMG2IMG_RESOLUTIONS,
+  useImg2VideoQueueStore,
+} from '../../stores/img2videoQueueStore'
 import { Button } from '../ui/Button'
+import { SegmentedTabs } from '../ui/navigation/SegmentedTabs'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
+import { StatusPill } from '../ui/StatusPill'
 import { Textarea } from '../ui/Textarea'
-import { StepHeader } from '../asset-monster/StepHeader'
 import { CameraPresetCards } from './CameraPresetCards'
 import { DownloadToolbar } from './DownloadToolbar'
 import { LoadingGrid } from './LoadingGrid'
@@ -23,8 +42,8 @@ export default function Img2VideoQueuePage() {
 
   // Auto-switch to img2video tab if items exist there and none in img2img
   useEffect(() => {
-    const img2imgCount = queueOrder.filter(id => queueItems[id]?.workflowType === 'img2img').length
-    const img2videoCount = queueOrder.filter(id => queueItems[id]?.workflowType === 'img2video').length
+    const img2imgCount = queueOrder.filter((id) => queueItems[id]?.workflowType === 'img2img').length
+    const img2videoCount = queueOrder.filter((id) => queueItems[id]?.workflowType === 'img2video').length
 
     // If no img2img items but we have img2video items, switch to img2video tab
     if (img2imgCount === 0 && img2videoCount > 0) {
@@ -35,28 +54,16 @@ export default function Img2VideoQueuePage() {
   return (
     <div className="space-y-6">
       {/* Tab Buttons */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setActiveTab('img2img')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            activeTab === 'img2img'
-              ? 'bg-brand-600 text-white'
-              : 'bg-surface-200 text-surface-600 hover:bg-surface-300'
-          }`}
-        >
-          img2img
-        </button>
-        <button
-          onClick={() => setActiveTab('img2video')}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-            activeTab === 'img2video'
-              ? 'bg-brand-600 text-white'
-              : 'bg-surface-200 text-surface-600 hover:bg-surface-300'
-          }`}
-        >
-          img2video
-        </button>
-      </div>
+      <SegmentedTabs
+        ariaLabel="Image Lab workflow"
+        value={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { id: 'img2img', label: 'img2img' },
+          { id: 'img2video', label: 'img2video' },
+        ]}
+        className="max-w-sm"
+      />
 
       {/* Tab Content */}
       {activeTab === 'img2img' ? <Img2ImgContent /> : <Img2VideoContent />}
@@ -69,19 +76,8 @@ export default function Img2VideoQueuePage() {
 // ============================================================================
 
 function Img2ImgContent() {
-  const {
-    queueItems,
-    queueOrder,
-    selectedId,
-    uploading,
-    selectItem,
-    setItemPrompt,
-    setImg2ImgSettings,
-    transformImage,
-    transformBatch,
-    removeItem,
-    uploadFiles,
-  } = useImg2VideoQueueStore()
+  const { queueItems, queueOrder, selectedId, uploading, selectItem, transformBatch, removeItem, uploadFiles } =
+    useImg2VideoQueueStore()
 
   const [selectedResults, setSelectedResults] = useState<Set<string>>(new Set())
   const [batchPrompt, setBatchPrompt] = useState('')
@@ -97,15 +93,13 @@ function Img2ImgContent() {
   const [dislikedItems, setDislikedItems] = useState<Set<string>>(new Set())
 
   // Filter for img2img items only
-  const img2imgItems = queueOrder
-    .map((id) => queueItems[id])
-    .filter((item) => item.workflowType === 'img2img')
+  const img2imgItems = queueOrder.map((id) => queueItems[id]).filter((item) => item.workflowType === 'img2img')
 
   // Separate reference items (draft/generating) from completed outputs
   const referenceItems = img2imgItems.filter((item) => item.status === 'draft' || item.status === 'generating')
   const completedItems = img2imgItems.filter((item) => item.status === 'completed')
 
-  const selectedItem = selectedId && queueItems[selectedId]?.workflowType === 'img2img' ? queueItems[selectedId] : null
+  const _selectedItem = selectedId && queueItems[selectedId]?.workflowType === 'img2img' ? queueItems[selectedId] : null
 
   // Stats
   const totalCount = img2imgItems.length
@@ -153,7 +147,7 @@ function Img2ImgContent() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* LEFT COLUMN: INPUTS */}
       <div className="space-y-6">
         {/* Step 1: Select Images */}
@@ -167,9 +161,7 @@ function Img2ImgContent() {
           <div
             {...getRootProps()}
             className={`min-h-[200px] border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
-              isDragActive
-                ? 'border-brand-500 bg-brand-500/10'
-                : 'border-surface-200 hover:border-surface-300'
+              isDragActive ? 'border-brand-500 bg-brand-500/10' : 'border-surface-200 hover:border-surface-300'
             }`}
           >
             <input {...getInputProps()} />
@@ -202,15 +194,17 @@ function Img2ImgContent() {
           {/* Queue stats */}
           {img2imgItems.length > 0 && (
             <div className="flex gap-2 mt-3 text-xs">
-              <Badge variant="primary">{totalCount} Total</Badge>
-              {completedCount > 0 && <Badge variant="success">{completedCount} Completed</Badge>}
-              {failedCount > 0 && <Badge variant="danger">{failedCount} Failed</Badge>}
+              <StatusPill status="neutral" size="xs" label={`${totalCount} Total`} />
+              {completedCount > 0 && <StatusPill status="completed" size="xs" label={`${completedCount} Completed`} />}
+              {failedCount > 0 && <StatusPill status="failed" size="xs" label={`${failedCount} Failed`} />}
             </div>
           )}
         </div>
 
         {/* Step 2: Prompt */}
-        <div className={`bg-surface-50 rounded-lg p-4 ${img2imgItems.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div
+          className={`bg-surface-50 rounded-lg p-4 ${img2imgItems.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}
+        >
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
               2
@@ -227,14 +221,16 @@ function Img2ImgContent() {
         </div>
 
         {/* Step 3: Settings */}
-        <div className={`bg-surface-50 rounded-lg p-4 ${img2imgItems.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div
+          className={`bg-surface-50 rounded-lg p-4 ${img2imgItems.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}
+        >
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
               3
             </span>
             Settings
           </h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select
               label="Aspect Ratio"
               value={batchSettings.aspectRatio}
@@ -242,9 +238,9 @@ function Img2ImgContent() {
               options={IMG2IMG_ASPECT_RATIOS.map((ar) => ({ value: ar, label: ar }))}
             />
             <div>
-              <label className="text-sm font-medium mb-1 block">
+              <span className="text-sm font-medium mb-1 block">
                 Number of Outputs <span className="text-surface-400">{batchSettings.numberOfOutputs}</span>
-              </label>
+              </span>
               <Slider
                 value={batchSettings.numberOfOutputs}
                 onChange={(e) => setBatchSettings({ ...batchSettings, numberOfOutputs: Number(e.target.value) })}
@@ -253,7 +249,8 @@ function Img2ImgContent() {
                 step={1}
               />
               <p className="text-xs text-surface-400 mt-1">
-                Using {referenceItems.length} reference {referenceItems.length === 1 ? 'image' : 'images'} to generate {batchSettings.numberOfOutputs} {batchSettings.numberOfOutputs === 1 ? 'output' : 'outputs'}
+                Using {referenceItems.length} reference {referenceItems.length === 1 ? 'image' : 'images'} to generate{' '}
+                {batchSettings.numberOfOutputs} {batchSettings.numberOfOutputs === 1 ? 'output' : 'outputs'}
               </p>
             </div>
             <Select
@@ -272,7 +269,9 @@ function Img2ImgContent() {
         </div>
 
         {/* Step 4: Generate Actions */}
-        <div className={`bg-surface-50 rounded-lg p-4 ${img2imgItems.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}>
+        <div
+          className={`bg-surface-50 rounded-lg p-4 ${img2imgItems.length === 0 ? 'opacity-50 pointer-events-none' : ''}`}
+        >
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
               4
@@ -281,6 +280,7 @@ function Img2ImgContent() {
           </h2>
           {generatingCount === 0 && (
             <button
+              type="button"
               onClick={() => {
                 const ids = referenceItems.map((item) => item.id)
                 transformBatch(ids, batchPrompt, batchSettings)
@@ -293,7 +293,11 @@ function Img2ImgContent() {
             </button>
           )}
           {generatingCount > 0 && (
-            <button disabled className="w-full px-4 py-2.5 rounded-lg bg-surface-300 cursor-not-allowed text-surface-600 font-medium flex items-center justify-center gap-2">
+            <button
+              type="button"
+              disabled
+              className="w-full px-4 py-2.5 rounded-lg bg-surface-300 cursor-not-allowed text-surface-600 font-medium flex items-center justify-center gap-2"
+            >
               <Loader2 className="w-4 h-4 animate-spin" />
               Transforming {generatingCount} {generatingCount === 1 ? 'Image' : 'Images'}...
             </button>
@@ -331,7 +335,7 @@ function Img2ImgContent() {
                 selectedCount={selectedResults.size}
               />
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {completedItems.map((item) => (
                 <SelectableResultCard
                   key={item.id}
@@ -355,173 +359,173 @@ function Img2ImgContent() {
       </div>
 
       {/* Image Modal */}
-      {modalImage && modalItemId && (() => {
-        const completedItems = img2imgItems.filter((item) => item.status === 'completed')
-        const currentIndex = completedItems.findIndex((item) => item.id === modalItemId)
-        const currentItem = completedItems[currentIndex]
-        const hasPrev = currentIndex > 0
-        const hasNext = currentIndex < completedItems.length - 1
+      {modalImage &&
+        modalItemId &&
+        (() => {
+          const completedItems = img2imgItems.filter((item) => item.status === 'completed')
+          const currentIndex = completedItems.findIndex((item) => item.id === modalItemId)
+          const currentItem = completedItems[currentIndex]
+          const hasPrev = currentIndex > 0
+          const hasNext = currentIndex < completedItems.length - 1
 
-        const goToPrev = () => {
-          if (hasPrev) {
-            const prevItem = completedItems[currentIndex - 1]
-            setModalImage(assetUrl(prevItem.result?.imageUrl || prevItem.imageUrl))
-            setModalItemId(prevItem.id)
+          const goToPrev = () => {
+            if (hasPrev) {
+              const prevItem = completedItems[currentIndex - 1]
+              setModalImage(assetUrl(prevItem.result?.imageUrl || prevItem.imageUrl))
+              setModalItemId(prevItem.id)
+            }
           }
-        }
 
-        const goToNext = () => {
-          if (hasNext) {
-            const nextItem = completedItems[currentIndex + 1]
-            setModalImage(assetUrl(nextItem.result?.imageUrl || nextItem.imageUrl))
-            setModalItemId(nextItem.id)
+          const goToNext = () => {
+            if (hasNext) {
+              const nextItem = completedItems[currentIndex + 1]
+              setModalImage(assetUrl(nextItem.result?.imageUrl || nextItem.imageUrl))
+              setModalItemId(nextItem.id)
+            }
           }
-        }
 
-        const handleDownload = () => {
-          if (currentItem?.result?.localPath) {
-            const a = document.createElement('a')
-            a.href = assetUrl(currentItem.result.localPath)
-            a.download = currentItem.result.localPath.split('/').pop() || 'image.png'
-            a.click()
+          const handleDownload = () => {
+            if (currentItem?.result?.localPath) {
+              const a = document.createElement('a')
+              a.href = assetUrl(currentItem.result.localPath)
+              a.download = currentItem.result.localPath.split('/').pop() || 'image.png'
+              a.click()
+            }
           }
-        }
 
-        return (
-          <div
-            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
-            onClick={() => {
-              setModalImage(null)
-              setModalItemId(null)
-            }}
-          >
-            {/* Close button - top left */}
-            <button
-              type="button"
-              onClick={() => {
-                setModalImage(null)
-                setModalItemId(null)
-              }}
-              className="absolute top-4 left-4 w-10 h-10 rounded-full bg-brand-600/80 hover:bg-brand-700 flex items-center justify-center transition-colors"
-            >
-              <X className="w-6 h-6 text-white" />
-            </button>
+          return (
+            <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+              <button
+                type="button"
+                aria-label="Close preview"
+                className="absolute inset-0"
+                onClick={() => {
+                  setModalImage(null)
+                  setModalItemId(null)
+                }}
+              />
+              {/* Close button - top left */}
+              <button
+                type="button"
+                onClick={() => {
+                  setModalImage(null)
+                  setModalItemId(null)
+                }}
+                className="absolute top-4 left-4 w-10 h-10 rounded-full bg-brand-600/80 hover:bg-brand-700 flex items-center justify-center transition-colors"
+              >
+                <X className="w-6 h-6 text-white" />
+              </button>
 
-            {/* Download button - top right */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleDownload()
-              }}
-              className="absolute top-4 right-4 px-4 py-2 rounded-lg bg-secondary-600 hover:bg-secondary-700 flex items-center gap-2 transition-colors"
-            >
-              <Download className="w-4 h-4 text-white" />
-              <span className="text-white text-sm font-medium">Download</span>
-            </button>
-
-            {/* Prev button */}
-            {hasPrev && (
+              {/* Download button - top right */}
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  goToPrev()
+                  handleDownload()
                 }}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-brand-600/80 hover:bg-brand-700 flex items-center justify-center transition-colors"
+                className="absolute top-4 right-4 px-4 py-2 rounded-lg bg-secondary-600 hover:bg-secondary-700 flex items-center gap-2 transition-colors"
               >
-                <ChevronLeft className="w-8 h-8 text-white" />
+                <Download className="w-4 h-4 text-white" />
+                <span className="text-white text-sm font-medium">Download</span>
               </button>
-            )}
 
-            {/* Next button */}
-            {hasNext && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  goToNext()
-                }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-brand-600/80 hover:bg-brand-700 flex items-center justify-center transition-colors"
-              >
-                <ChevronRight className="w-8 h-8 text-white" />
-              </button>
-            )}
+              {/* Prev button */}
+              {hasPrev && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    goToPrev()
+                  }}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-brand-600/80 hover:bg-brand-700 flex items-center justify-center transition-colors"
+                >
+                  <ChevronLeft className="w-8 h-8 text-white" />
+                </button>
+              )}
 
-            {/* Image */}
-            <img
-              src={modalImage}
-              className="max-w-full max-h-full object-contain"
-              alt="Preview"
-              onClick={(e) => e.stopPropagation()}
-            />
+              {/* Next button */}
+              {hasNext && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    goToNext()
+                  }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-brand-600/80 hover:bg-brand-700 flex items-center justify-center transition-colors"
+                >
+                  <ChevronRight className="w-8 h-8 text-white" />
+                </button>
+              )}
 
-            {/* Like/Dislike buttons - bottom center */}
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!currentItem?.id) return
-                  const newLiked = new Set(likedItems)
-                  const newDisliked = new Set(dislikedItems)
+              {/* Image */}
+              <img src={modalImage} className="max-w-full max-h-full object-contain" alt="Preview" />
 
-                  if (likedItems.has(currentItem.id)) {
-                    // Toggle off like
-                    newLiked.delete(currentItem.id)
-                  } else {
-                    // Add like and remove dislike if exists
-                    newLiked.add(currentItem.id)
-                    newDisliked.delete(currentItem.id)
-                  }
+              {/* Like/Dislike buttons - bottom center */}
+              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!currentItem?.id) return
+                    const newLiked = new Set(likedItems)
+                    const newDisliked = new Set(dislikedItems)
 
-                  setLikedItems(newLiked)
-                  setDislikedItems(newDisliked)
-                }}
-                className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${
-                  currentItem && likedItems.has(currentItem.id)
-                    ? 'bg-secondary-600 hover:bg-secondary-700'
-                    : 'bg-secondary-600/80 hover:bg-secondary-700'
-                }`}
-              >
-                <ThumbsUp className="w-5 h-5 text-white" />
-                <span className="text-white font-medium">
-                  {currentItem && likedItems.has(currentItem.id) ? 'Liked' : 'Like'}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!currentItem?.id) return
-                  const newLiked = new Set(likedItems)
-                  const newDisliked = new Set(dislikedItems)
+                    if (likedItems.has(currentItem.id)) {
+                      // Toggle off like
+                      newLiked.delete(currentItem.id)
+                    } else {
+                      // Add like and remove dislike if exists
+                      newLiked.add(currentItem.id)
+                      newDisliked.delete(currentItem.id)
+                    }
 
-                  if (dislikedItems.has(currentItem.id)) {
-                    // Toggle off dislike
-                    newDisliked.delete(currentItem.id)
-                  } else {
-                    // Add dislike and remove like if exists
-                    newDisliked.add(currentItem.id)
-                    newLiked.delete(currentItem.id)
-                  }
+                    setLikedItems(newLiked)
+                    setDislikedItems(newDisliked)
+                  }}
+                  className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${
+                    currentItem && likedItems.has(currentItem.id)
+                      ? 'bg-secondary-600 hover:bg-secondary-700'
+                      : 'bg-secondary-600/80 hover:bg-secondary-700'
+                  }`}
+                >
+                  <ThumbsUp className="w-5 h-5 text-white" />
+                  <span className="text-white font-medium">
+                    {currentItem && likedItems.has(currentItem.id) ? 'Liked' : 'Like'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!currentItem?.id) return
+                    const newLiked = new Set(likedItems)
+                    const newDisliked = new Set(dislikedItems)
 
-                  setLikedItems(newLiked)
-                  setDislikedItems(newDisliked)
-                }}
-                className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${
-                  currentItem && dislikedItems.has(currentItem.id)
-                    ? 'bg-danger hover:bg-danger'
-                    : 'bg-danger/80 hover:bg-danger'
-                }`}
-              >
-                <ThumbsDown className="w-5 h-5 text-white" />
-                <span className="text-white font-medium">
-                  {currentItem && dislikedItems.has(currentItem.id) ? 'Disliked' : 'Dislike'}
-                </span>
-              </button>
+                    if (dislikedItems.has(currentItem.id)) {
+                      // Toggle off dislike
+                      newDisliked.delete(currentItem.id)
+                    } else {
+                      // Add dislike and remove like if exists
+                      newDisliked.add(currentItem.id)
+                      newLiked.delete(currentItem.id)
+                    }
+
+                    setLikedItems(newLiked)
+                    setDislikedItems(newDisliked)
+                  }}
+                  className={`px-6 py-3 rounded-lg flex items-center gap-2 transition-colors ${
+                    currentItem && dislikedItems.has(currentItem.id)
+                      ? 'bg-danger hover:bg-danger'
+                      : 'bg-danger/80 hover:bg-danger'
+                  }`}
+                >
+                  <ThumbsDown className="w-5 h-5 text-white" />
+                  <span className="text-white font-medium">
+                    {currentItem && dislikedItems.has(currentItem.id) ? 'Disliked' : 'Dislike'}
+                  </span>
+                </button>
+              </div>
             </div>
-          </div>
-        )
-      })()}
+          )
+        })()}
     </div>
   )
 }
@@ -553,9 +557,7 @@ function Img2VideoContent() {
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set())
 
   // Filter for img2video items only
-  const img2videoItems = queueOrder
-    .map((id) => queueItems[id])
-    .filter((item) => item.workflowType === 'img2video')
+  const img2videoItems = queueOrder.map((id) => queueItems[id]).filter((item) => item.workflowType === 'img2video')
   const selectedItem =
     selectedId && queueItems[selectedId]?.workflowType === 'img2video' ? queueItems[selectedId] : null
 
@@ -564,7 +566,7 @@ function Img2VideoContent() {
   const queuedCount = img2videoItems.filter((item) => item.status === 'queued').length
   const completedCount = img2videoItems.filter((item) => item.status === 'completed').length
   const failedCount = img2videoItems.filter((item) => item.status === 'failed').length
-  const generatingCount = img2videoItems.filter((item) => item.status === 'generating').length
+  const _generatingCount = img2videoItems.filter((item) => item.status === 'generating').length
 
   // Dropzone for img2video uploads
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -581,8 +583,7 @@ function Img2VideoContent() {
     },
   })
 
-  const toggleVideoSelection = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation()
+  const toggleVideoSelection = (id: string) => {
     const newSet = new Set(selectedVideos)
     if (newSet.has(id)) {
       newSet.delete(id)
@@ -606,7 +607,7 @@ function Img2VideoContent() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* LEFT COLUMN: INPUTS */}
       <div className="space-y-6">
         {/* Step 1: Select Images */}
@@ -620,9 +621,7 @@ function Img2VideoContent() {
           <div
             {...getRootProps()}
             className={`min-h-[200px] border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
-              isDragActive
-                ? 'border-brand-500 bg-brand-500/10'
-                : 'border-surface-200 hover:border-surface-300'
+              isDragActive ? 'border-brand-500 bg-brand-500/10' : 'border-surface-200 hover:border-surface-300'
             }`}
           >
             <input {...getInputProps()} />
@@ -656,9 +655,9 @@ function Img2VideoContent() {
           {img2videoItems.length > 0 && (
             <>
               <div className="flex gap-2 mt-3 text-xs">
-                <Badge variant="primary">{totalCount} Total</Badge>
-                {completedCount > 0 && <Badge variant="success">{completedCount} Completed</Badge>}
-                {failedCount > 0 && <Badge variant="danger">{failedCount} Failed</Badge>}
+                <StatusPill status="neutral" size="xs" label={`${totalCount} Total`} />
+                {completedCount > 0 && <StatusPill status="completed" size="xs" label={`${completedCount} Completed`} />}
+                {failedCount > 0 && <StatusPill status="failed" size="xs" label={`${failedCount} Failed`} />}
               </div>
               <div className="flex gap-2 mt-3">
                 <Button
@@ -686,9 +685,7 @@ function Img2VideoContent() {
         </div>
 
         {/* Step 2: Prompt */}
-        <div
-          className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}
-        >
+        <div className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}>
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
               2
@@ -704,16 +701,14 @@ function Img2VideoContent() {
         </div>
 
         {/* Step 3: Settings */}
-        <div
-          className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}
-        >
+        <div className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}>
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
               3
             </span>
             Settings
           </h2>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select
               label="Aspect Ratio"
               value={selectedItem?.settings.aspectRatio || '9:16'}
@@ -730,9 +725,7 @@ function Img2VideoContent() {
         </div>
 
         {/* Step 4: Camera Controls */}
-        <div
-          className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}
-        >
+        <div className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}>
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
               4
@@ -751,9 +744,7 @@ function Img2VideoContent() {
         </div>
 
         {/* Step 5: Generate Actions */}
-        <div
-          className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}
-        >
+        <div className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}>
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
               5
@@ -802,12 +793,7 @@ function Img2VideoContent() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold">Generated Videos</h3>
               {selectedVideos.size > 0 && (
-                <Button
-                  variant="primary"
-                  size="xs"
-                  icon={<Download className="w-3 h-3" />}
-                  onClick={downloadSelected}
-                >
+                <Button variant="primary" size="xs" icon={<Download className="w-3 h-3" />} onClick={downloadSelected}>
                   Download {selectedVideos.size}
                 </Button>
               )}
@@ -818,12 +804,16 @@ function Img2VideoContent() {
                 .map((item) => {
                   const isSelected = selectedVideos.has(item.id)
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={item.id}
                       className={`relative aspect-video rounded-lg overflow-hidden bg-surface-100 cursor-pointer group border-2 transition-colors ${
                         isSelected ? 'border-brand' : 'border-transparent'
                       }`}
-                      onClick={() => selectItem(item.id)}
+                      onClick={() => {
+                        selectItem(item.id)
+                        toggleVideoSelection(item.id)
+                      }}
                     >
                       <video
                         src={assetUrl(item.result?.videoUrl || '')}
@@ -840,18 +830,14 @@ function Img2VideoContent() {
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
                         <Play className="w-6 h-6 text-white" />
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => toggleVideoSelection(item.id, e)}
-                        className="absolute top-2 right-2 w-5 h-5 rounded bg-surface-900/80 flex items-center justify-center hover:bg-surface-900 transition-colors z-10"
-                      >
+                      <div className="absolute top-2 right-2 w-5 h-5 rounded bg-surface-900/80 flex items-center justify-center z-10">
                         {isSelected ? (
                           <Check className="w-3.5 h-3.5 text-brand" />
                         ) : (
                           <div className="w-3 h-3 border-2 border-surface-300 rounded" />
                         )}
-                      </button>
-                    </div>
+                      </div>
+                    </button>
                   )
                 })}
             </div>

@@ -1,5 +1,5 @@
-import { useRef, useState, useEffect } from 'react'
-import { Play, Pause, Download } from 'lucide-react'
+import { Download, Pause, Play } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 
 interface AudioPlayerProps {
   src: string
@@ -29,7 +29,7 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
       audio.removeEventListener('loadedmetadata', updateDuration)
       audio.removeEventListener('ended', handleEnded)
     }
-  }, [src])
+  }, [])
 
   const togglePlay = () => {
     const audio = audioRef.current
@@ -43,7 +43,7 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
     setIsPlaying(!isPlaying)
   }
 
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleSeek = (e: React.MouseEvent<HTMLElement>) => {
     const audio = audioRef.current
     if (!audio || !duration) return
 
@@ -80,17 +80,17 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
       </button>
 
       {/* Time */}
-      <span className="text-xs text-surface-400 font-mono min-w-[35px]">
-        {formatTime(currentTime)}
-      </span>
+      <span className="text-xs text-surface-400 font-mono min-w-[35px]">{formatTime(currentTime)}</span>
 
       {/* Progress Bar */}
-      <div
+      <button
+        type="button"
+        aria-label="Seek audio playback"
         className="flex-1 h-1.5 bg-surface-200 rounded-full cursor-pointer relative group"
         onClick={handleSeek}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
-            handleSeek(e as unknown as React.MouseEvent<HTMLDivElement>)
+            handleSeek(e as unknown as React.MouseEvent<HTMLElement>)
           }
         }}
       >
@@ -101,12 +101,10 @@ export function AudioPlayer({ src, className = '' }: AudioPlayerProps) {
         />
         {/* Hover Effect */}
         <div className="absolute inset-0 rounded-full group-hover:bg-surface-300/30 transition-colors" />
-      </div>
+      </button>
 
       {/* Duration */}
-      <span className="text-xs text-surface-400 font-mono min-w-[35px]">
-        {formatTime(duration)}
-      </span>
+      <span className="text-xs text-surface-400 font-mono min-w-[35px]">{formatTime(duration)}</span>
 
       {/* Download Button */}
       <button

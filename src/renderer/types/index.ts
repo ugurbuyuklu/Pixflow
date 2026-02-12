@@ -172,7 +172,17 @@ export type MachineStep = 'idle' | 'prompts' | 'images' | 'script' | 'tts' | 'li
 
 // Avatar Studio - Reaction Video types
 export type AvatarStudioMode = 'talking' | 'reaction'
-export type ReactionType = 'sad' | 'upset' | 'angry' | 'disappointed' | 'sob' | 'excited' | 'surprised' | 'confused' | 'worried' | 'happy'
+export type ReactionType =
+  | 'sad'
+  | 'upset'
+  | 'angry'
+  | 'disappointed'
+  | 'sob'
+  | 'excited'
+  | 'surprised'
+  | 'confused'
+  | 'worried'
+  | 'happy'
 export type ReactionDuration = '5' | '10'
 export type ReactionAspectRatio = '9:16' | '16:9' | '1:1'
 

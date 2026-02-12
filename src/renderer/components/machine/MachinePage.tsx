@@ -1,24 +1,16 @@
-import {
-  AlertCircle,
-  Check,
-  CheckCircle,
-  Download,
-  ImagePlus,
-  Loader2,
-  RefreshCw,
-  Users,
-  X,
-  XCircle,
-  Zap,
-} from 'lucide-react'
+import { Check, CheckCircle, Download, ImagePlus, Loader2, RefreshCw, Users, X, XCircle, Zap } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { assetUrl } from '../../lib/api'
 import { useAvatarStore } from '../../stores/avatarStore'
 import { useMachineStore } from '../../stores/machineStore'
+import { StepHeader } from '../asset-monster/StepHeader'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
+import { LoadingState } from '../ui/LoadingState'
+import { ProgressBar } from '../ui/ProgressBar'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
+import { StatusBanner } from '../ui/StatusBanner'
 
 const STEP_LABELS = {
   prompts: 'Generate Prompts',
@@ -106,26 +98,11 @@ export default function MachinePage() {
   return (
     <div className="space-y-6">
       {error && (
-        <div
-          className={`rounded-lg p-4 flex items-start gap-3 ${
-            error.type === 'warning'
-              ? 'bg-warning-muted/50 border border-warning/40'
-              : 'bg-danger-muted/50 border border-danger/40'
-          }`}
-        >
-          <AlertCircle
-            className={`w-5 h-5 shrink-0 mt-0.5 ${error.type === 'warning' ? 'text-warning' : 'text-danger'}`}
-          />
-          <p className={`flex-1 ${error.type === 'warning' ? 'text-warning' : 'text-danger'}`}>{error.message}</p>
-          <Button
-            variant="ghost-muted"
-            size="xs"
-            aria-label="Dismiss"
-            onClick={() => useMachineStore.setState({ error: null })}
-          >
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
+        <StatusBanner
+          type={error.type}
+          message={error.message}
+          onDismiss={() => useMachineStore.setState({ error: null })}
+        />
       )}
 
       {step === 'error' && (
@@ -183,13 +160,10 @@ export default function MachinePage() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <div className="space-y-6">
               <div className="bg-surface-50 rounded-lg p-4">
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <span className="bg-brand-600 rounded-full w-5 h-5 flex items-center justify-center text-xs">1</span>
-                  Prompt Generation
-                </h3>
+                <StepHeader stepNumber={1} title="Prompt Generation" />
                 <Slider
                   label="Number of Prompts"
                   displayValue={promptCount}
@@ -206,13 +180,7 @@ export default function MachinePage() {
               </div>
 
               <div className="bg-surface-50 rounded-lg p-4">
-                <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
-                  <span className="bg-surface-200 rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                    +
-                  </span>
-                  Additional People
-                  <span className="text-xs text-surface-400 font-normal">(Optional)</span>
-                </h3>
+                <StepHeader stepNumber={2} title="Additional People" subtitle="(Optional)" />
                 <p className="text-xs text-surface-400 mb-3">
                   Selected avatar is used as the main reference. Add extra people for couple/family concepts.
                 </p>
@@ -270,14 +238,9 @@ export default function MachinePage() {
 
             <div className="space-y-6">
               <div className="bg-surface-50 rounded-lg p-4">
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <span className="bg-brand-600 rounded-full w-5 h-5 flex items-center justify-center text-xs">3</span>
-                  Avatar for Video
-                </h3>
+                <StepHeader stepNumber={3} title="Avatar for Video" />
                 {avatarsLoading ? (
-                  <div className="flex items-center justify-center py-6">
-                    <Loader2 className="w-5 h-5 animate-spin text-surface-400" />
-                  </div>
+                  <LoadingState title="Loading avatars..." size="sm" />
                 ) : avatars.length === 0 ? (
                   <p className="text-sm text-surface-400 py-4 text-center">
                     No avatars. Go to the Avatars tab to generate or upload some.
@@ -308,11 +271,8 @@ export default function MachinePage() {
               </div>
 
               <div className="bg-surface-50 rounded-lg p-4">
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <span className="bg-brand-600 rounded-full w-5 h-5 flex items-center justify-center text-xs">4</span>
-                  Voiceover
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
+                <StepHeader stepNumber={4} title="Voiceover" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Select
                     label="Duration"
                     value={String(scriptDuration)}
@@ -328,9 +288,7 @@ export default function MachinePage() {
                 </div>
                 <div className="mt-3">
                   {voicesLoading ? (
-                    <div className="flex items-center gap-2 text-sm text-surface-400">
-                      <Loader2 className="w-4 h-4 animate-spin" /> Loading voices...
-                    </div>
+                    <LoadingState title="Loading voices..." size="sm" />
                   ) : (
                     <Select
                       label="Voice"
@@ -400,15 +358,14 @@ export default function MachinePage() {
                         <p className="text-xs text-surface-400">{prompts.length} prompts generated</p>
                       )}
                       {s === 'images' && isActive && batchProgress && (
-                        <div className="mt-1">
-                          <div className="w-full bg-surface-200 rounded-full h-2">
-                            <div
-                              className="bg-warning h-2 rounded-full transition-all"
-                              style={{
-                                width: `${batchProgress.totalImages > 0 ? (batchProgress.completedImages / batchProgress.totalImages) * 100 : 0}%`,
-                              }}
-                            />
-                          </div>
+                        <div className="mt-2">
+                          <ProgressBar
+                            value={
+                              batchProgress.totalImages > 0
+                                ? (batchProgress.completedImages / batchProgress.totalImages) * 100
+                                : 0
+                            }
+                          />
                           <p className="text-xs text-surface-400 mt-1">
                             {batchProgress.completedImages}/{batchProgress.totalImages} images
                           </p>

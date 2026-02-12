@@ -12,14 +12,23 @@ export function ScriptDiffView({ oldText, newText, className = '' }: ScriptDiffV
     const dmp = new DiffMatchPatch()
     const diffs = dmp.diff_main(oldText, newText)
     dmp.diff_cleanupSemantic(diffs)
+    const keyCounts = new Map<string, number>()
 
-    return diffs.map((diff, index) => {
+    const nextKey = (operation: number, text: string) => {
+      const baseKey = `${operation}:${text}`
+      const count = (keyCounts.get(baseKey) ?? 0) + 1
+      keyCounts.set(baseKey, count)
+      return count === 1 ? baseKey : `${baseKey}:${count}`
+    }
+
+    return diffs.map((diff) => {
       const [operation, text] = diff
+      const key = nextKey(operation, text)
 
       if (operation === 0) {
         // No change
         return (
-          <span key={index} className="text-surface-900">
+          <span key={key} className="text-surface-900">
             {text}
           </span>
         )
@@ -29,7 +38,7 @@ export function ScriptDiffView({ oldText, newText, className = '' }: ScriptDiffV
         // Addition
         return (
           <span
-            key={index}
+            key={key}
             className="bg-success-muted/40 text-surface-900 underline decoration-success decoration-2 relative group"
             title="Added text"
           >
@@ -45,7 +54,7 @@ export function ScriptDiffView({ oldText, newText, className = '' }: ScriptDiffV
         // Deletion
         return (
           <span
-            key={index}
+            key={key}
             className="bg-danger-muted/40 text-surface-600 line-through decoration-danger decoration-2 relative group"
             title="Removed text"
           >
@@ -62,7 +71,9 @@ export function ScriptDiffView({ oldText, newText, className = '' }: ScriptDiffV
   }, [oldText, newText])
 
   return (
-    <div className={`p-3 rounded-lg bg-surface-100 border border-surface-300 whitespace-pre-wrap break-words text-sm leading-relaxed ${className}`}>
+    <div
+      className={`p-3 rounded-lg bg-surface-100 border border-surface-300 whitespace-pre-wrap break-words text-sm leading-relaxed ${className}`}
+    >
       {diffElements}
     </div>
   )

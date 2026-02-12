@@ -5,31 +5,40 @@ type TelemetryStatus = 'start' | 'success' | 'error'
 
 interface TelemetryEvent {
   timestamp: string
+  pipeline?: string
   status: TelemetryStatus
   durationMs?: number
   metadata?: Record<string, unknown>
+}
+
+interface PipelineWindowMetrics {
+  attempts: number
+  successRate: number
+  failRate: number
+  p95Ms: number
+}
+
+interface TrendWindowSummary {
+  windowEvents: number
+  overallSuccessRate: number
+  overallP95Ms: number
+  providerFailRate: Record<string, number>
+  pipelineMetrics: Record<string, PipelineWindowMetrics>
 }
 
 interface TrendSnapshot {
   generatedAt: string
   sourceFile: string
   windowSize: number
-  current: {
-    windowEvents: number
-    overallSuccessRate: number
-    overallP95Ms: number
-    providerFailRate: Record<string, number>
-  }
-  previous: {
-    windowEvents: number
-    overallSuccessRate: number
-    overallP95Ms: number
-    providerFailRate: Record<string, number>
-  }
+  current: TrendWindowSummary
+  previous: TrendWindowSummary
   delta: {
     successRate: number
     p95Ms: number
     providerFailRate: Record<string, number>
+    pipelineSuccessRate: Record<string, number>
+    pipelineP95Ms: Record<string, number>
+    pipelineFailRate: Record<string, number>
   }
 }
 
@@ -66,19 +75,30 @@ function ratio(part: number, total: number): number {
   return part / total
 }
 
-function summarizeWindow(events: TelemetryEvent[]): {
-  windowEvents: number
-  overallSuccessRate: number
-  overallP95Ms: number
-  providerFailRate: Record<string, number>
-} {
+function summarizeWindow(events: TelemetryEvent[]): TrendWindowSummary {
   const successEvents = events.filter((e) => e.status === 'success')
   const errorEvents = events.filter((e) => e.status === 'error')
   const attempts = successEvents.length + errorEvents.length
   const durations = successEvents.map((e) => toNumber(e.durationMs)).filter((v): v is number => v !== null)
 
   const providerCounters = new Map<string, { success: number; error: number }>()
+  const pipelineCounters = new Map<string, { success: number; error: number; durations: number[] }>()
   for (const event of events) {
+    const pipeline = toStringValue(event.pipeline)
+    if (pipeline) {
+      let pipelineRow = pipelineCounters.get(pipeline)
+      if (!pipelineRow) {
+        pipelineRow = { success: 0, error: 0, durations: [] }
+        pipelineCounters.set(pipeline, pipelineRow)
+      }
+      if (event.status === 'success') {
+        pipelineRow.success++
+        const duration = toNumber(event.durationMs)
+        if (duration !== null) pipelineRow.durations.push(duration)
+      }
+      if (event.status === 'error') pipelineRow.error++
+    }
+
     const provider = toStringValue(event.metadata?.provider)
     if (!provider) continue
     let row = providerCounters.get(provider)
@@ -96,11 +116,23 @@ function summarizeWindow(events: TelemetryEvent[]): {
     providerFailRate[provider] = providerAttempts > 0 ? ratio(row.error, providerAttempts) : 0
   }
 
+  const pipelineMetrics: Record<string, PipelineWindowMetrics> = {}
+  for (const [pipeline, row] of pipelineCounters.entries()) {
+    const pipelineAttempts = row.success + row.error
+    pipelineMetrics[pipeline] = {
+      attempts: pipelineAttempts,
+      successRate: ratio(row.success, pipelineAttempts),
+      failRate: ratio(row.error, pipelineAttempts),
+      p95Ms: percentile(row.durations, 95),
+    }
+  }
+
   return {
     windowEvents: events.length,
     overallSuccessRate: ratio(successEvents.length, attempts),
     overallP95Ms: percentile(durations, 95),
     providerFailRate,
+    pipelineMetrics,
   }
 }
 
@@ -142,6 +174,18 @@ async function run(): Promise<void> {
       (current.providerFailRate[provider] || 0) - (previous.providerFailRate[provider] || 0)
   }
 
+  const pipelines = new Set<string>([...Object.keys(current.pipelineMetrics), ...Object.keys(previous.pipelineMetrics)])
+  const pipelineSuccessRateDelta: Record<string, number> = {}
+  const pipelineP95MsDelta: Record<string, number> = {}
+  const pipelineFailRateDelta: Record<string, number> = {}
+  for (const pipeline of pipelines) {
+    const currentRow = current.pipelineMetrics[pipeline]
+    const previousRow = previous.pipelineMetrics[pipeline]
+    pipelineSuccessRateDelta[pipeline] = (currentRow?.successRate || 0) - (previousRow?.successRate || 0)
+    pipelineP95MsDelta[pipeline] = (currentRow?.p95Ms || 0) - (previousRow?.p95Ms || 0)
+    pipelineFailRateDelta[pipeline] = (currentRow?.failRate || 0) - (previousRow?.failRate || 0)
+  }
+
   const snapshot: TrendSnapshot = {
     generatedAt: new Date().toISOString(),
     sourceFile,
@@ -152,6 +196,9 @@ async function run(): Promise<void> {
       successRate: current.overallSuccessRate - previous.overallSuccessRate,
       p95Ms: current.overallP95Ms - previous.overallP95Ms,
       providerFailRate: providerFailRateDelta,
+      pipelineSuccessRate: pipelineSuccessRateDelta,
+      pipelineP95Ms: pipelineP95MsDelta,
+      pipelineFailRate: pipelineFailRateDelta,
     },
   }
 

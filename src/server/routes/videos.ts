@@ -1,14 +1,14 @@
-import express from 'express'
 import fs from 'node:fs/promises'
+import http from 'node:http'
+import https from 'node:https'
 import path from 'node:path'
+import express from 'express'
 import rateLimit from 'express-rate-limit'
 import multer from 'multer'
-import https from 'node:https'
-import http from 'node:http'
 import type { AuthRequest } from '../middleware/auth.js'
-import { sendError, sendSuccess } from '../utils/http.js'
 import { transcribeVideo } from '../services/wizper.js'
-import { downloadVideoWithYtDlp, detectPlatform, isFacebookAdsLibraryUrl, extractFacebookAdsVideoUrl } from '../services/ytdlp.js'
+import { detectPlatform, downloadVideoWithYtDlp, isFacebookAdsLibraryUrl } from '../services/ytdlp.js'
+import { sendError, sendSuccess } from '../utils/http.js'
 
 interface VideosRouterConfig {
   projectRoot: string
@@ -167,7 +167,13 @@ export function createVideosRouter(config: VideosRouterConfig) {
       })
     } catch (error) {
       console.error('[Videos] Upload failed:', error)
-      sendError(res, 500, 'Video upload failed', 'VIDEO_UPLOAD_FAILED', error instanceof Error ? error.message : undefined)
+      sendError(
+        res,
+        500,
+        'Video upload failed',
+        'VIDEO_UPLOAD_FAILED',
+        error instanceof Error ? error.message : undefined,
+      )
     }
   })
 
@@ -185,6 +191,7 @@ export function createVideosRouter(config: VideosRouterConfig) {
 
     try {
       const { videoUrl: rawVideoUrl } = req.body
+      const clientRequestId = req.header('x-client-request-id')?.trim() || `server_${Date.now()}`
 
       // Validation
       if (!rawVideoUrl || typeof rawVideoUrl !== 'string') {
@@ -200,6 +207,8 @@ export function createVideosRouter(config: VideosRouterConfig) {
         return
       }
 
+      console.log('[Videos] Transcribe request:', { clientRequestId, videoUrl })
+
       let videoPath: string
 
       // Check if it's an external URL or local path
@@ -208,18 +217,23 @@ export function createVideosRouter(config: VideosRouterConfig) {
       if (isExternalUrl) {
         // Special handling for Facebook Ads Library
         if (isFacebookAdsLibraryUrl(videoUrl)) {
-          console.log('[Videos] Detected Facebook Ads Library URL, extracting video URL from page...')
+          console.log('[Videos] Detected Facebook Ads Library URL, downloading with yt-dlp...', { clientRequestId })
           try {
-            const directVideoUrl = await extractFacebookAdsVideoUrl(videoUrl)
-            console.log('[Videos] Extracted direct video URL:', directVideoUrl)
-
-            // Download the direct video URL
-            tempDownloadPath = await downloadVideoFromUrl(directVideoUrl)
-            videoPath = tempDownloadPath
-            console.log('[Videos] Facebook Ads video downloaded successfully')
+            const result = await downloadVideoWithYtDlp(videoUrl, outputsDir)
+            videoPath = result.videoPath
+            tempDownloadPath = videoPath
+            console.log('[Videos] Facebook Ads yt-dlp download complete:', {
+              clientRequestId,
+              title: result.title,
+              platform: result.platform,
+              duration: result.duration,
+              videoPath,
+            })
           } catch (error) {
-            console.error('[Videos] Facebook Ads extraction failed:', error)
-            throw new Error(`Failed to extract video from Facebook Ads Library: ${error instanceof Error ? error.message : 'Unknown error'}`)
+            console.error('[Videos] Facebook Ads yt-dlp download failed:', error)
+            throw new Error(
+              `Failed to download Facebook Ads video: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            )
           }
         }
         // Check if it's a platform video (Facebook, Instagram, TikTok, etc.)
@@ -236,7 +250,9 @@ export function createVideosRouter(config: VideosRouterConfig) {
               console.log(`[Videos] yt-dlp download complete: ${result.title} (${result.platform})`)
             } catch (error) {
               console.error('[Videos] yt-dlp download failed:', error)
-              throw new Error(`Failed to download ${platform} video: ${error instanceof Error ? error.message : 'Unknown error'}`)
+              throw new Error(
+                `Failed to download ${platform} video: ${error instanceof Error ? error.message : 'Unknown error'}`,
+              )
             }
           } else {
             // Direct URL download for non-platform videos
@@ -256,7 +272,13 @@ export function createVideosRouter(config: VideosRouterConfig) {
         try {
           videoPath = sanitizePath(videoUrl)
         } catch (err) {
-          sendError(res, 400, 'Invalid video path', 'INVALID_VIDEO_PATH', err instanceof Error ? err.message : undefined)
+          sendError(
+            res,
+            400,
+            'Invalid video path',
+            'INVALID_VIDEO_PATH',
+            err instanceof Error ? err.message : undefined,
+          )
           return
         }
 
@@ -274,12 +296,17 @@ export function createVideosRouter(config: VideosRouterConfig) {
       // Transcribe video
       const result = await transcribeVideo(videoPath)
 
-      console.log(`[Videos] Transcription complete: ${result.transcript.length} characters`)
+      console.log('[Videos] Transcription complete:', {
+        transcriptChars: result.transcript.length,
+        language: result.language,
+        duration: result.duration,
+      })
 
       sendSuccess(res, {
         transcript: result.transcript,
         duration: result.duration,
         language: result.language,
+        clientRequestId,
       })
     } catch (error) {
       console.error('[Videos] Transcription failed:', error)

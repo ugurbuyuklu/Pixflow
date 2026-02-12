@@ -5,6 +5,7 @@ import { type TabId, useNavigationStore } from '../../stores/navigationStore'
 import { usePromptStore } from '../../stores/promptStore'
 import { useThemeStore } from '../../stores/themeStore'
 import { Badge } from '../ui/Badge'
+import { PrimaryTabBar } from '../ui/navigation/PrimaryTabBar'
 import { NotificationBell } from './NotificationBell'
 import { UserMenu } from './UserMenu'
 
@@ -23,6 +24,26 @@ export function TopNav() {
   const machineStep = useMachineStore((s) => s.step)
   const favoritesCount = useHistoryStore((s) => s.favorites.length)
   const { mode, toggleMode } = useThemeStore()
+  const tabsWithBadges = TABS.map((tab) => {
+    if (tab.id === 'generate' && promptCount > 0) {
+      return { ...tab, badge: <Badge>{promptCount}</Badge> }
+    }
+    if (tab.id === 'machine' && machineStep !== 'idle' && machineStep !== 'done' && machineStep !== 'error') {
+      return { ...tab, badge: <Loader2 className="w-3 h-3 animate-spin text-warning" /> }
+    }
+    if (tab.id === 'history' && favoritesCount > 0) {
+      return {
+        ...tab,
+        badge: (
+          <Badge variant="brand">
+            <Star className="w-3 h-3 mr-0.5" />
+            {favoritesCount}
+          </Badge>
+        ),
+      }
+    }
+    return tab
+  })
 
   return (
     <>
@@ -49,32 +70,17 @@ export function TopNav() {
 
       <div className="border-b border-surface-100">
         <div className="max-w-6xl mx-auto px-8">
-          <div className="flex gap-1">
-            {TABS.map(({ id, label, icon: Icon }) => (
-              <button
-                type="button"
-                key={id}
-                onClick={() => navigate(id)}
-                className={`px-6 py-3 font-medium transition-colors relative flex items-center gap-2 ${
-                  activeTab === id ? 'text-brand-400' : 'text-surface-400 hover:text-surface-900'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {label}
-                {id === 'generate' && promptCount > 0 && <Badge>{promptCount}</Badge>}
-                {id === 'machine' && machineStep !== 'idle' && machineStep !== 'done' && machineStep !== 'error' && (
-                  <Loader2 className="w-3 h-3 animate-spin text-warning" />
-                )}
-                {id === 'history' && favoritesCount > 0 && (
-                  <Badge variant="brand">
-                    <Star className="w-3 h-3 mr-0.5" />
-                    {favoritesCount}
-                  </Badge>
-                )}
-                {activeTab === id && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-400" />}
-              </button>
-            ))}
-          </div>
+          <PrimaryTabBar
+            ariaLabel="Primary category navigation"
+            value={activeTab}
+            onChange={navigate}
+            items={tabsWithBadges.map((tab) => ({
+              id: tab.id,
+              label: tab.label,
+              icon: <tab.icon className="w-4 h-4" />,
+              badge: tab.badge,
+            }))}
+          />
         </div>
       </div>
     </>

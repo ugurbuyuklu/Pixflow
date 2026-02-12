@@ -15,6 +15,19 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: resolve('src/renderer/index.html'),
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined
+            if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/zustand/')) {
+              return 'vendor-react'
+            }
+            if (id.includes('/react-hot-toast/')) return 'vendor-toast'
+            if (id.includes('/react-dropzone/')) return 'vendor-dropzone'
+            if (id.includes('/diff-match-patch/')) return 'vendor-diff'
+            if (id.includes('/jszip/')) return 'vendor-jszip'
+            return undefined
+          },
+        },
       },
     },
     plugins: [react(), tailwindcss()],

@@ -111,6 +111,9 @@ export async function transcribeAudio(audioPath: string): Promise<TranscriptionR
       fal.subscribe(WIZPER_MODEL, {
         input: {
           audio_url: audioUrl,
+          task: 'transcribe',
+          // Wizper defaults to English when language is omitted; null enables auto-detect.
+          language: null as unknown as string,
         },
         logs: true,
         onQueueUpdate: (update) => {
@@ -137,7 +140,7 @@ export async function transcribeAudio(audioPath: string): Promise<TranscriptionR
   return {
     transcript,
     duration: result.data?.duration || 0,
-    language: result.data?.language,
+    language: result.data?.languages?.[0] || result.data?.language,
   }
 }
 

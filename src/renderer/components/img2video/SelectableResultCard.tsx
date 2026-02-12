@@ -33,20 +33,14 @@ export function SelectableResultCard({
       className={`relative aspect-[9/16] rounded-lg overflow-hidden bg-surface-100 cursor-pointer group border-2 transition-colors ${
         isSelected ? 'border-brand' : 'border-transparent'
       }`}
-      onClick={(e) => {
-        if ((e.target as HTMLElement).closest('button')) return
-        onSelect(id)
-      }}
     >
       <img
         src={assetUrl(displayUrl)}
         className="w-full h-full object-cover hover:opacity-90 transition-opacity"
         alt=""
-        onClick={(e) => {
-          e.stopPropagation()
-          onOpenModal(assetUrl(displayUrl), id)
-        }}
       />
+
+      <button type="button" aria-label="Select result" className="absolute inset-0 z-0" onClick={() => onSelect(id)} />
 
       {/* Video play icon */}
       {isVideo && (
@@ -57,15 +51,27 @@ export function SelectableResultCard({
         </div>
       )}
 
+      <button
+        type="button"
+        onClick={() => onOpenModal(assetUrl(displayUrl), id)}
+        className="absolute bottom-2 right-2 px-2 py-1 rounded bg-surface-900/70 hover:bg-surface-900 text-white text-xs z-20"
+      >
+        View
+      </button>
+
       {/* Selection checkbox */}
       <button
         type="button"
         onClick={(e) => onToggleSelection(id, e)}
-        className={`absolute top-2 right-2 w-6 h-6 rounded flex items-center justify-center transition-colors z-10 ${
+        className={`absolute top-2 right-2 w-6 h-6 rounded flex items-center justify-center transition-colors z-20 ${
           isSelected ? 'bg-brand-600 hover:bg-brand-700' : 'bg-surface-900/50 hover:bg-surface-900/70'
         }`}
       >
-        {isSelected ? <Check className="w-4 h-4 text-white" /> : <div className="w-3.5 h-3.5 border-2 border-white/70 rounded" />}
+        {isSelected ? (
+          <Check className="w-4 h-4 text-white" />
+        ) : (
+          <div className="w-3.5 h-3.5 border-2 border-white/70 rounded" />
+        )}
       </button>
 
       {/* Like/Dislike indicator */}

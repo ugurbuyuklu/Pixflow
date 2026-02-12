@@ -16,6 +16,7 @@ logs/
 backups/
 outputs/
 uploads/
+pixflow.db
 data/
 data/*.db
 data/*.db-shm

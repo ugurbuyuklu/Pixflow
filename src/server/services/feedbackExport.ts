@@ -75,5 +75,7 @@ export function scheduleAutoExport(outputDir: string): NodeJS.Timeout {
   doExport()
 
   // Then export daily (backup schedule)
-  return setInterval(doExport, DAILY_MS)
+  const interval = setInterval(doExport, DAILY_MS)
+  interval.unref?.()
+  return interval
 }

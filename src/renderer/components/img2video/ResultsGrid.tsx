@@ -1,9 +1,10 @@
-import { Download, Play } from 'lucide-react'
-import React, { useState } from 'react'
+import { Play } from 'lucide-react'
+import { useState } from 'react'
 import { assetUrl } from '../../lib/api'
 import type { QueueItem } from '../../stores/img2videoQueueStore'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
+import { StatusPill } from '../ui/StatusPill'
 
 interface ResultsGridProps {
   items: QueueItem[]
@@ -42,8 +43,8 @@ export function ResultsGrid({ items, onSelectItem, onDownloadAll }: ResultsGridP
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <h3 className="text-lg font-semibold text-surface-900">Results</h3>
-          <Badge variant="success">{completedItems.length} completed</Badge>
-          {failedItems.length > 0 && <Badge variant="danger">{failedItems.length} failed</Badge>}
+          <StatusPill status="completed" size="sm" label={`${completedItems.length} completed`} />
+          {failedItems.length > 0 && <StatusPill status="failed" size="sm" label={`${failedItems.length} failed`} />}
         </div>
         <div className="flex gap-2">
           {completedItems.length >= 2 && (
@@ -71,16 +72,17 @@ export function ResultsGrid({ items, onSelectItem, onDownloadAll }: ResultsGridP
       {/* Comparison View */}
       {comparisonMode && selectedForComparison.size > 0 && (
         <div className="mb-4 p-4 bg-surface-100 rounded-lg">
-          <p className="text-sm text-surface-600 mb-3">
-            Selected {selectedForComparison.size}/4 videos for comparison
-          </p>
-          <div className={`grid gap-4 ${selectedForComparison.size === 2 ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}>
+          <p className="text-sm text-surface-600 mb-3">Selected {selectedForComparison.size}/4 videos for comparison</p>
+          <div
+            className={`grid gap-4 ${selectedForComparison.size === 2 ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2'}`}
+          >
             {Array.from(selectedForComparison).map((itemId) => {
               const item = items.find((i) => i.id === itemId)
               if (!item?.result) return null
 
               return (
                 <div key={item.id} className="space-y-2">
+                  {/* biome-ignore lint/a11y/useMediaCaption: generated preview videos do not have caption tracks */}
                   <video
                     controls
                     loop
@@ -116,7 +118,8 @@ export function ResultsGrid({ items, onSelectItem, onDownloadAll }: ResultsGridP
           const isSelected = selectedForComparison.has(item.id)
 
           return (
-            <div
+            <button
+              type="button"
               key={item.id}
               className={`
                 group relative rounded-lg overflow-hidden border-2 transition-all cursor-pointer
@@ -166,9 +169,7 @@ export function ResultsGrid({ items, onSelectItem, onDownloadAll }: ResultsGridP
 
               {/* Metadata */}
               <div className="p-2 bg-surface-100 space-y-1">
-                <p className="text-xs text-surface-600 line-clamp-2 min-h-[2rem]">
-                  {item.prompt || 'No prompt'}
-                </p>
+                <p className="text-xs text-surface-600 line-clamp-2 min-h-[2rem]">{item.prompt || 'No prompt'}</p>
                 <div className="flex gap-1 flex-wrap">
                   <Badge variant="secondary" size="sm">
                     {item.settings.duration}s
@@ -183,24 +184,25 @@ export function ResultsGrid({ items, onSelectItem, onDownloadAll }: ResultsGridP
                   )}
                 </div>
               </div>
-            </div>
+            </button>
           )
         })}
 
         {/* Failed Items */}
         {failedItems.map((item) => (
-          <div
+          <button
+            type="button"
             key={item.id}
             className="relative rounded-lg overflow-hidden border-2 border-danger/30 bg-danger/5 cursor-pointer"
             onClick={() => onSelectItem(item.id)}
           >
             <div className="aspect-video bg-danger/10 flex items-center justify-center">
-              <p className="text-danger text-sm font-medium">Failed</p>
+              <StatusPill status="failed" size="sm" />
             </div>
             <div className="p-2 bg-surface-100">
               <p className="text-xs text-danger line-clamp-2">{item.error}</p>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>

@@ -42,6 +42,10 @@ function metricOrNA(hasBaseline, formatter, value) {
   return formatter(value)
 }
 
+function valueOrNA(hasBaseline, value) {
+  return hasBaseline ? String(value) : 'n/a'
+}
+
 function relPathFromCwd(filePath) {
   return path.relative(process.cwd(), filePath) || '.'
 }
@@ -52,7 +56,25 @@ async function readJson(filePath) {
 }
 
 function normalizeTrends(trends) {
-  if (trends && typeof trends === 'object' && trends.current && trends.delta && trends.previous) return trends
+  if (trends && typeof trends === 'object' && trends.current && trends.delta && trends.previous) {
+    return {
+      ...trends,
+      current: {
+        ...trends.current,
+        pipelineMetrics: trends.current.pipelineMetrics || {},
+      },
+      previous: {
+        ...trends.previous,
+        pipelineMetrics: trends.previous.pipelineMetrics || {},
+      },
+      delta: {
+        ...trends.delta,
+        pipelineSuccessRate: trends.delta.pipelineSuccessRate || {},
+        pipelineP95Ms: trends.delta.pipelineP95Ms || {},
+        pipelineFailRate: trends.delta.pipelineFailRate || {},
+      },
+    }
+  }
   return {
     ...trends,
     windowSize: trends.windowEvents ?? 0,
@@ -61,19 +83,70 @@ function normalizeTrends(trends) {
       overallSuccessRate: trends.overallSuccessRate ?? 0,
       overallP95Ms: trends.overallP95Ms ?? 0,
       providerFailRate: trends.providerFailRate || {},
+      pipelineMetrics: {},
     },
     previous: {
       windowEvents: 0,
       overallSuccessRate: 0,
       overallP95Ms: 0,
       providerFailRate: {},
+      pipelineMetrics: {},
     },
     delta: {
       successRate: 0,
       p95Ms: 0,
       providerFailRate: {},
+      pipelineSuccessRate: {},
+      pipelineP95Ms: {},
+      pipelineFailRate: {},
     },
   }
+}
+
+function pipelineTrendStatus(successDelta, p95Delta, failDelta) {
+  const regressed = successDelta < 0 || p95Delta > 0 || failDelta > 0
+  const improved = successDelta > 0 || p95Delta < 0 || failDelta < 0
+  if (regressed) return 'regressed'
+  if (improved) return 'improved'
+  return 'stable'
+}
+
+function sectionPipelineRegression(trends, hasPreviousWindow, pipelineFilter) {
+  const currentRows = trends.current?.pipelineMetrics || {}
+  const previousRows = trends.previous?.pipelineMetrics || {}
+  const deltaSuccessRows = trends.delta?.pipelineSuccessRate || {}
+  const deltaP95Rows = trends.delta?.pipelineP95Ms || {}
+  const deltaFailRows = trends.delta?.pipelineFailRate || {}
+  const pipelines = new Set([
+    ...Object.keys(currentRows),
+    ...Object.keys(previousRows),
+    ...Object.keys(deltaSuccessRows),
+    ...Object.keys(deltaP95Rows),
+    ...Object.keys(deltaFailRows),
+  ])
+
+  const rows = [...pipelines].filter((pipeline) => !pipelineFilter || pipelineFilter(pipeline))
+  if (rows.length === 0) return '- No pipeline trend data found.'
+
+  const lines = [
+    '| Pipeline | Curr Attempts | Prev Attempts | Curr Success | Prev Success | Delta Success | Curr p95 | Prev p95 | Delta p95 | Curr Fail | Prev Fail | Delta Fail | Status |',
+    '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|',
+  ]
+
+  for (const pipeline of rows.sort((a, b) => a.localeCompare(b))) {
+    const current = currentRows[pipeline] || { attempts: 0, successRate: 0, p95Ms: 0, failRate: 0 }
+    const previous = previousRows[pipeline] || { attempts: 0, successRate: 0, p95Ms: 0, failRate: 0 }
+    const pipelineHasBaseline = hasPreviousWindow && Number(previous.attempts || 0) > 0
+    const successDelta = deltaSuccessRows[pipeline] ?? current.successRate - previous.successRate
+    const p95Delta = deltaP95Rows[pipeline] ?? current.p95Ms - previous.p95Ms
+    const failDelta = deltaFailRows[pipeline] ?? current.failRate - previous.failRate
+    const status = pipelineHasBaseline ? pipelineTrendStatus(successDelta, p95Delta, failDelta) : 'n/a'
+    lines.push(
+      `| ${pipeline} | ${current.attempts || 0} | ${valueOrNA(pipelineHasBaseline, previous.attempts || 0)} | ${pct(current.successRate)} | ${metricOrNA(pipelineHasBaseline, pct, previous.successRate)} | ${metricOrNA(pipelineHasBaseline, signedPct, successDelta)} | ${ms(current.p95Ms)} | ${metricOrNA(pipelineHasBaseline, ms, previous.p95Ms)} | ${metricOrNA(pipelineHasBaseline, signedMs, p95Delta)} | ${pct(current.failRate)} | ${metricOrNA(pipelineHasBaseline, pct, previous.failRate)} | ${metricOrNA(pipelineHasBaseline, signedPct, failDelta)} | ${status} |`,
+    )
+  }
+
+  return lines.join('\n')
 }
 
 function sectionProviders(report) {
@@ -168,6 +241,12 @@ async function run() {
       }
       return lines.join('\n')
     })(),
+    '',
+    '## Pipeline Regression Diff (Current vs Previous Window)',
+    sectionPipelineRegression(trends, hasPreviousWindow),
+    '',
+    '## Frontend Interaction Regression Diff',
+    sectionPipelineRegression(trends, hasPreviousWindow, (pipeline) => pipeline.startsWith('frontend.')),
     '',
   ].join('\n')
 

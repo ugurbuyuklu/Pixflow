@@ -73,7 +73,7 @@ export interface QueueItem {
   id: string
   imageUrl: string
   prompt: string
-  workflowType: WorkflowType  // NEW: distinguish between workflows
+  workflowType: WorkflowType // NEW: distinguish between workflows
 
   // Img2Img specific settings
   img2imgSettings?: {
@@ -84,7 +84,7 @@ export interface QueueItem {
   }
 
   // Img2Video specific settings
-  presets: Record<string, string[]>  // Multi-select: key -> array of selected options
+  presets: Record<string, string[]> // Multi-select: key -> array of selected options
   settings: {
     duration: string
     aspectRatio: string
@@ -92,8 +92,8 @@ export interface QueueItem {
 
   status: 'draft' | 'queued' | 'generating' | 'completed' | 'failed' | 'paused'
   result?: {
-    videoUrl?: string     // for img2video
-    imageUrl?: string     // for img2img
+    videoUrl?: string // for img2video
+    imageUrl?: string // for img2img
     localPath: string
   }
   error?: string
@@ -103,9 +103,9 @@ export interface QueueItem {
 
 interface Img2VideoQueueState {
   // Core state
-  queueItems: Record<string, QueueItem>  // Normalized by ID
-  queueOrder: string[]                    // Order array
-  selectedId: string | null               // Currently viewing in workspace
+  queueItems: Record<string, QueueItem> // Normalized by ID
+  queueOrder: string[] // Order array
+  selectedId: string | null // Currently viewing in workspace
 
   // Global defaults
   globalSettings: {
@@ -121,8 +121,8 @@ interface Img2VideoQueueState {
   error: ErrorInfo | null
 
   // Queue operations
-  addItem: (imageUrl: string, workflowType?: WorkflowType) => string  // Returns new item ID
-  addItems: (imageUrls: string[], workflowType?: WorkflowType) => string[]  // Returns array of new IDs
+  addItem: (imageUrl: string, workflowType?: WorkflowType) => string // Returns new item ID
+  addItems: (imageUrls: string[], workflowType?: WorkflowType) => string[] // Returns array of new IDs
   removeItem: (id: string) => void
   clearQueue: () => void
   selectItem: (id: string | null) => void
@@ -135,12 +135,12 @@ interface Img2VideoQueueState {
 
   // Queue management
   reorderQueue: (newOrder: string[]) => void
-  skipItem: (id: string) => void  // Move to end of queue
+  skipItem: (id: string) => void // Move to end of queue
 
   // Batch operations
-  queueItem: (id: string) => void  // Draft -> Queued
-  queueAll: () => void  // All drafts -> Queued
-  retryFailed: () => void  // All failed -> Queued
+  queueItem: (id: string) => void // Draft -> Queued
+  queueAll: () => void // All drafts -> Queued
+  retryFailed: () => void // All failed -> Queued
   clearFailed: () => void
   clearCompleted: () => void
 
@@ -152,7 +152,7 @@ interface Img2VideoQueueState {
   applyGlobalSettingsToAll: () => void
 
   // Upload
-  uploadFiles: (files: File[], workflowType?: WorkflowType) => Promise<string[]>  // Returns array of new item IDs
+  uploadFiles: (files: File[], workflowType?: WorkflowType) => Promise<string[]> // Returns array of new item IDs
 
   // Generation
   generateQueue: () => Promise<void>
@@ -161,9 +161,16 @@ interface Img2VideoQueueState {
   cancelCurrent: () => void
 
   // Img2Img specific methods
-  setImg2ImgSettings: (id: string, settings: Partial<{ aspectRatio: string; numberOfOutputs: number; resolution: string; format: string }>) => void
+  setImg2ImgSettings: (
+    id: string,
+    settings: Partial<{ aspectRatio: string; numberOfOutputs: number; resolution: string; format: string }>,
+  ) => void
   transformImage: (id: string) => Promise<void>
-  transformBatch: (ids: string[], prompt: string, settings: { aspectRatio: string; numberOfOutputs: number; resolution: string; format: string }) => Promise<void>
+  transformBatch: (
+    ids: string[],
+    prompt: string,
+    settings: { aspectRatio: string; numberOfOutputs: number; resolution: string; format: string },
+  ) => Promise<void>
 
   // Utility
   setError: (error: ErrorInfo | null) => void
@@ -200,12 +207,15 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
         duration: get().globalSettings.duration,
         aspectRatio: get().globalSettings.aspectRatio,
       },
-      img2imgSettings: workflowType === 'img2img' ? {
-        aspectRatio: '1:1',
-        numberOfOutputs: 1,
-        resolution: '1K',
-        format: 'PNG'
-      } : undefined,
+      img2imgSettings:
+        workflowType === 'img2img'
+          ? {
+              aspectRatio: '1:1',
+              numberOfOutputs: 1,
+              resolution: '1K',
+              format: 'PNG',
+            }
+          : undefined,
       status: 'draft',
       createdAt: Date.now(),
     }
@@ -213,7 +223,7 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
     set((state) => ({
       queueItems: { ...state.queueItems, [id]: item },
       queueOrder: [...state.queueOrder, id],
-      selectedId: state.selectedId || id,  // Auto-select first item
+      selectedId: state.selectedId || id, // Auto-select first item
     }))
 
     return id
@@ -235,12 +245,15 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
             duration: get().globalSettings.duration,
             aspectRatio: get().globalSettings.aspectRatio,
           },
-          img2imgSettings: workflowType === 'img2img' ? {
-        aspectRatio: '1:1',
-        numberOfOutputs: 1,
-        resolution: '1K',
-        format: 'PNG'
-      } : undefined,
+          img2imgSettings:
+            workflowType === 'img2img'
+              ? {
+                  aspectRatio: '1:1',
+                  numberOfOutputs: 1,
+                  resolution: '1K',
+                  format: 'PNG',
+                }
+              : undefined,
           status: 'draft' as const,
           createdAt: Date.now(),
         },
@@ -264,7 +277,7 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
     set((state) => {
       const { [id]: removed, ...remainingItems } = state.queueItems
       const newOrder = state.queueOrder.filter((itemId) => itemId !== id)
-      const newSelectedId = state.selectedId === id ? (newOrder[0] || null) : state.selectedId
+      const newSelectedId = state.selectedId === id ? newOrder[0] || null : state.selectedId
 
       return {
         queueItems: remainingItems,
@@ -487,7 +500,7 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
           uploading: false,
           error: { message: err instanceof Error ? err.message : 'Upload failed', type: 'error' },
         })
-        return uploadedIds  // Return what we uploaded so far
+        return uploadedIds // Return what we uploaded so far
       }
     }
 
@@ -526,20 +539,17 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
       const fullPrompt = composePrompt(item.prompt, item.presets)
 
       try {
-        const res = await authFetch(
-          apiUrl('/api/avatars/i2v'),
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              imageUrl: item.imageUrl,
-              prompt: fullPrompt,
-              duration: Number.parseInt(item.settings.duration),
-              aspectRatio: item.settings.aspectRatio,
-            }),
-            signal: abortController?.signal,
-          },
-        )
+        const res = await authFetch(apiUrl('/api/avatars/i2v'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageUrl: item.imageUrl,
+            prompt: fullPrompt,
+            duration: Number.parseInt(item.settings.duration, 10),
+            aspectRatio: item.settings.aspectRatio,
+          }),
+          signal: abortController?.signal,
+        })
 
         if (!res.ok) {
           const raw = await res.json().catch(() => ({}))
@@ -652,7 +662,7 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
               aspectRatio: '1:1',
               numberOfOutputs: 1,
               resolution: '1K',
-              format: 'PNG'
+              format: 'PNG',
             }),
             ...settings,
           },
@@ -737,8 +747,8 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
     set((state) => ({
       queueItems: Object.fromEntries(
         Object.entries(state.queueItems).map(([id, item]) =>
-          ids.includes(id) ? [id, { ...item, status: 'generating' as const }] : [id, item]
-        )
+          ids.includes(id) ? [id, { ...item, status: 'generating' as const }] : [id, item],
+        ),
       ),
     }))
 
@@ -789,7 +799,7 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
         const newOutputItems: Record<string, QueueItem> = {}
         const newOutputIds: string[] = []
 
-        data.images.forEach((image, index) => {
+        data.images.forEach((image, _index) => {
           const newId = generateId()
           newOutputIds.push(newId)
           newOutputItems[newId] = {
@@ -837,8 +847,8 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
                     error: err instanceof Error ? err.message : 'Transform failed',
                   },
                 ]
-              : [id, item]
-          )
+              : [id, item],
+          ),
         ),
       }))
     }

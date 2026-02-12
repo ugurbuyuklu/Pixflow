@@ -1,26 +1,18 @@
-import {
-  AlertCircle,
-  CheckCircle,
-  Download,
-  Loader2,
-  Mic,
-  Upload,
-  Video,
-  Volume2,
-  Wand2,
-  XCircle,
-} from 'lucide-react'
+import { AlertCircle, CheckCircle, Download, Loader2, Mic, Upload, Video, Volume2, Wand2, XCircle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { apiUrl, assetUrl, authFetch } from '../../lib/api'
 import { downloadVideo } from '../../lib/download'
 import type { ScriptTone } from '../../stores/avatarStore'
 import { useAvatarStore } from '../../stores/avatarStore'
+import { StepHeader } from '../asset-monster/StepHeader'
 import { AudioPlayer } from '../ui/AudioPlayer'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
+import { LoadingState } from '../ui/LoadingState'
+import { SegmentedTabs } from '../ui/navigation/SegmentedTabs'
 import { Select } from '../ui/Select'
+import { StatusPill } from '../ui/StatusPill'
 import { Textarea } from '../ui/Textarea'
-import { StepHeader } from '../asset-monster/StepHeader'
 import { ScriptRefinementToolbar } from './ScriptRefinementToolbar'
 import { AvatarSelectionCard } from './shared/AvatarSelectionCard'
 
@@ -103,8 +95,22 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl }: TalkingAvatarPagePro
     await transcribeVideoFromStore(url)
   }
 
+  const scriptModeTabs: {
+    id: 'existing' | 'audio' | 'fetch' | 'generate'
+    label: string
+  }[] = [
+    { id: 'existing', label: 'Have a Script' },
+    { id: 'audio', label: 'Have an Audio' },
+    { id: 'fetch', label: 'Transcript from Media' },
+    { id: 'generate', label: 'Generate New' },
+  ]
+  const videoSourceTabs: { id: 'url' | 'upload'; label: string }[] = [
+    { id: 'url', label: 'Video URL' },
+    { id: 'upload', label: 'Upload File' },
+  ]
+
   return (
-    <div className="grid grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* Left Column: Inputs (Avatar + Script + TTS) */}
       <div className="space-y-6">
         {/* Step 1: Avatar Selection */}
@@ -118,9 +124,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl }: TalkingAvatarPagePro
               <button
                 type="button"
                 className="w-16 h-24 rounded-lg overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() =>
-                  setFullSizeAvatarUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')
-                }
+                onClick={() => setFullSizeAvatarUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
               >
                 <img
                   src={assetUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
@@ -144,59 +148,20 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl }: TalkingAvatarPagePro
         <div className="bg-surface-50 rounded-lg p-4">
           <StepHeader stepNumber={2} title="Script" />
 
-          {/* Mode Switcher - 4 modes in 2x2 grid */}
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            <button
-              type="button"
-              onClick={() => setScriptMode('existing')}
-              className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                scriptMode === 'existing'
-                  ? 'bg-brand-600 text-surface-900'
-                  : 'bg-surface-100 text-surface-400 hover:text-surface-900'
-              }`}
-            >
-              Have a Script
-            </button>
-            <button
-              type="button"
-              onClick={() => setScriptMode('audio')}
-              className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                scriptMode === 'audio'
-                  ? 'bg-brand-600 text-surface-900'
-                  : 'bg-surface-100 text-surface-400 hover:text-surface-900'
-              }`}
-            >
-              Have an Audio
-            </button>
-            <button
-              type="button"
-              onClick={() => setScriptMode('fetch')}
-              className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                scriptMode === 'fetch'
-                  ? 'bg-brand-600 text-surface-900'
-                  : 'bg-surface-100 text-surface-400 hover:text-surface-900'
-              }`}
-            >
-              Transcript from Media
-            </button>
-            <button
-              type="button"
-              onClick={() => setScriptMode('generate')}
-              className={`px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                scriptMode === 'generate'
-                  ? 'bg-brand-600 text-surface-900'
-                  : 'bg-surface-100 text-surface-400 hover:text-surface-900'
-              }`}
-            >
-              Generate New
-            </button>
-          </div>
+          <SegmentedTabs
+            value={scriptMode}
+            items={scriptModeTabs}
+            onChange={setScriptMode}
+            ariaLabel="Script mode"
+            size="sm"
+            className="mb-4"
+          />
 
           {/* Mode: Already Have Script */}
           {scriptMode === 'existing' && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm text-surface-400">Your Script</label>
+                <span className="text-sm text-surface-400">Your Script</span>
                 {generatedScript && !scriptGenerating && (
                   <button
                     type="button"
@@ -249,32 +214,15 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl }: TalkingAvatarPagePro
               <p className="text-sm text-surface-400">Select a video source to transcribe its audio into a script</p>
 
               {/* Video Source Tabs */}
-              {!transcribingVideo && !generatedScript && (
+              {!transcribingVideo && (
                 <>
-                  <div className="flex bg-surface-100 rounded-lg p-1">
-                    <button
-                      type="button"
-                      onClick={() => setVideoSource('url')}
-                      className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-colors ${
-                        videoSource === 'url'
-                          ? 'bg-brand-600 text-surface-900'
-                          : 'text-surface-400 hover:text-surface-900'
-                      }`}
-                    >
-                      Video URL
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setVideoSource('upload')}
-                      className={`flex-1 px-3 py-2 rounded text-xs font-medium transition-colors ${
-                        videoSource === 'upload'
-                          ? 'bg-brand-600 text-surface-900'
-                          : 'text-surface-400 hover:text-surface-900'
-                      }`}
-                    >
-                      Upload File
-                    </button>
-                  </div>
+                  <SegmentedTabs
+                    value={videoSource}
+                    items={videoSourceTabs}
+                    onChange={setVideoSource}
+                    ariaLabel="Transcript video source"
+                    size="sm"
+                  />
 
                   {/* Source: Video URL */}
                   {videoSource === 'url' && (
@@ -390,7 +338,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl }: TalkingAvatarPagePro
               {generatedScript && !transcribingVideo && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm text-surface-400">Script</label>
+                    <span className="text-sm text-surface-400">Script</span>
                     <div className="flex items-center gap-2">
                       {!scriptGenerating && (
                         <button
@@ -520,7 +468,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl }: TalkingAvatarPagePro
                 onChange={(e) => setScriptConcept(e.target.value)}
                 placeholder="e.g., Introducing our new AI-powered analytics platform"
               />
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
                   label="Duration (seconds)"
                   type="number"
@@ -551,7 +499,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl }: TalkingAvatarPagePro
               {generatedScript && !scriptGenerating && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-sm text-surface-400">Generated Script</label>
+                    <span className="text-sm text-surface-400">Generated Script</span>
                     <button
                       type="button"
                       onClick={() => setShowVariationOptions(!showVariationOptions)}
@@ -603,9 +551,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl }: TalkingAvatarPagePro
 
             <div className="space-y-4">
               {voicesLoading ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-6 h-6 animate-spin text-surface-400" />
-                </div>
+                <LoadingState title="Loading voices..." size="sm" />
               ) : (
                 <Select
                   label="Voice"
@@ -661,30 +607,34 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl }: TalkingAvatarPagePro
               {lipsyncJob && (
                 <div className="p-3 bg-surface-100 rounded-lg">
                   <div className="flex items-center gap-2 text-sm">
-                    {lipsyncJob.status === 'pending' && (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-brand" />
-                        <span className="text-surface-500">Queued...</span>
-                      </>
-                    )}
-                    {lipsyncJob.status === 'processing' && (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-brand" />
-                        <span className="text-surface-500">Processing... ({lipsyncJob.progress || 0}%)</span>
-                      </>
-                    )}
-                    {lipsyncJob.status === 'completed' && (
-                      <>
-                        <CheckCircle className="w-4 h-4 text-success" />
-                        <span className="text-success">Complete!</span>
-                      </>
-                    )}
-                    {lipsyncJob.status === 'error' && (
-                      <>
-                        <XCircle className="w-4 h-4 text-danger" />
-                        <span className="text-danger">Failed</span>
-                      </>
-                    )}
+                  {lipsyncJob.status === 'pending' && (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-brand" />
+                      <StatusPill status="queued" size="sm" />
+                    </>
+                  )}
+                  {lipsyncJob.status === 'processing' && (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-brand" />
+                      <StatusPill
+                        status="processing"
+                        size="sm"
+                        label={`Processing (${lipsyncJob.progress || 0}%)`}
+                      />
+                    </>
+                  )}
+                  {lipsyncJob.status === 'completed' && (
+                    <>
+                      <CheckCircle className="w-4 h-4 text-success" />
+                      <StatusPill status="completed" size="sm" label="Complete" />
+                    </>
+                  )}
+                  {lipsyncJob.status === 'error' && (
+                    <>
+                      <XCircle className="w-4 h-4 text-danger" />
+                      <StatusPill status="failed" size="sm" />
+                    </>
+                  )}
                   </div>
                   {lipsyncJob.message && <p className="text-xs text-surface-400 mt-1">{lipsyncJob.message}</p>}
                 </div>

@@ -38,7 +38,7 @@ export function runSchemaMigrations(db: Database.Database): void {
 
       db.pragma('user_version = 1')
       console.log('[DB] Migration 1 complete')
-    } catch (error) {
+    } catch (_error) {
       // Columns might already exist
       console.log('[DB] Migration 1 skipped (columns may already exist)')
       db.pragma('user_version = 1')

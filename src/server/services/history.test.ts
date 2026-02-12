@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getDb } from '../db/index.js'
-import { setupTestDb } from '../test-helpers.js'
+import { isSqliteRuntimeCompatible, setupTestDb } from '../test-helpers.js'
 import {
   addToFavorites,
   addToHistory,
@@ -12,11 +12,13 @@ import {
   updateFavoriteName,
 } from './history.js'
 
-let cleanup: () => Promise<void>
+let cleanup: (() => Promise<void>) | undefined
 let userId: number
 let otherUserId: number
+const describeDb = isSqliteRuntimeCompatible() ? describe : describe.skip
 
 beforeAll(async () => {
+  if (!isSqliteRuntimeCompatible()) return
   process.env.JWT_SECRET = 'test-secret-at-least-32-chars-long!'
   const ctx = await setupTestDb()
   cleanup = ctx.cleanup
@@ -33,8 +35,11 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  if (!isSqliteRuntimeCompatible()) return
   delete process.env.JWT_SECRET
-  await cleanup()
+  if (cleanup) {
+    await cleanup()
+  }
 })
 
 const sampleEntry = () => ({
@@ -44,7 +49,7 @@ const sampleEntry = () => ({
   source: 'generated' as const,
 })
 
-describe('getHistory', () => {
+describeDb('getHistory', () => {
   it('returns empty array when no history', async () => {
     expect(await getHistory(userId)).toEqual([])
   })
@@ -71,7 +76,7 @@ describe('getHistory', () => {
   })
 })
 
-describe('addToHistory', () => {
+describeDb('addToHistory', () => {
   it('inserts entry and returns it with id and createdAt', async () => {
     const entry = await addToHistory(userId, sampleEntry())
     expect(entry.id).toBeTruthy()
@@ -117,7 +122,7 @@ describe('addToHistory', () => {
   })
 })
 
-describe('deleteHistoryEntry', () => {
+describeDb('deleteHistoryEntry', () => {
   it('returns true and removes entry for valid id + userId', async () => {
     const entry = await addToHistory(userId, sampleEntry())
     expect(await deleteHistoryEntry(userId, entry.id)).toBe(true)
@@ -141,7 +146,7 @@ describe('deleteHistoryEntry', () => {
   })
 })
 
-describe('clearHistory', () => {
+describeDb('clearHistory', () => {
   it('removes all entries for given user', async () => {
     await addToHistory(userId, sampleEntry())
     await clearHistory(userId)
@@ -156,13 +161,13 @@ describe('clearHistory', () => {
   })
 })
 
-describe('getFavorites', () => {
+describeDb('getFavorites', () => {
   it('returns empty array when no favorites', async () => {
     expect(await getFavorites(userId)).toEqual([])
   })
 })
 
-describe('addToFavorites', () => {
+describeDb('addToFavorites', () => {
   it('inserts favorite and returns it with id', async () => {
     const fav = await addToFavorites(userId, { style: 'minimal' }, 'My Fav', 'Christmas')
     expect(fav.id).toBeTruthy()
@@ -185,7 +190,7 @@ describe('addToFavorites', () => {
   })
 })
 
-describe('removeFromFavorites', () => {
+describeDb('removeFromFavorites', () => {
   it('returns true for valid removal', async () => {
     const fav = await addToFavorites(userId, { x: 1 }, 'Del Me')
     expect(await removeFromFavorites(userId, fav.id)).toBe(true)
@@ -201,7 +206,7 @@ describe('removeFromFavorites', () => {
   })
 })
 
-describe('updateFavoriteName', () => {
+describeDb('updateFavoriteName', () => {
   it('returns true and updates name', async () => {
     const fav = await addToFavorites(userId, { z: 1 }, 'Old Name')
     expect(await updateFavoriteName(userId, fav.id, 'New Name')).toBe(true)

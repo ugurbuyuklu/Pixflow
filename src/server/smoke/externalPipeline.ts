@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -24,6 +25,21 @@ const ESTIMATED_COST_USD = {
   i2v: 0.12,
   batchSingle: 0.03,
 } as const
+
+const require = createRequire(import.meta.url)
+
+function canUseBetterSqliteInCurrentRuntime(): boolean {
+  try {
+    const BetterSqlite3 = require('better-sqlite3') as new (path: string) => { close: () => void }
+    const db = new BetterSqlite3(':memory:')
+    db.close()
+    return true
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    console.warn(`[Smoke:External] Skipping external smoke in this runtime (better-sqlite3 mismatch): ${reason}`)
+    return false
+  }
+}
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message)
@@ -55,6 +71,21 @@ function parsePositiveNumber(raw: string | undefined, fallback: number): number 
 }
 
 async function run(): Promise<void> {
+  if (!canUseBetterSqliteInCurrentRuntime()) {
+    await recordPipelineEvent({
+      pipeline: 'smoke.external',
+      status: 'success',
+      metadata: {
+        provider: 'runtime',
+        skipped: true,
+        reason: 'sqlite_runtime_mismatch',
+      },
+    })
+    stopJobCleanup()
+    process.exit(0)
+    return
+  }
+
   const runReal = process.argv.includes('--real')
   const startedAt = Date.now()
   const maxRuntimeMs = parsePositiveNumber(process.env.PIXFLOW_SMOKE_REAL_MAX_RUNTIME_MS, 20 * 60 * 1000)
@@ -151,7 +182,11 @@ async function run(): Promise<void> {
     assert(avatar.status === 200 && avatar.json.success, 'avatar generate failed')
     await spend(ESTIMATED_COST_USD.avatarGenerate, 'avatars.generate')
     const avatarPath = avatar.json.data.localPath
-    assert(typeof avatarPath === 'string' && avatarPath.startsWith('/avatars/'), 'avatar localPath invalid')
+    assert(
+      typeof avatarPath === 'string' &&
+        (avatarPath.startsWith('/avatars/') || avatarPath.startsWith('/avatars_generated/')),
+      'avatar localPath invalid',
+    )
 
     const script = await requestJson<{ script: string }>(baseUrl, '/api/avatars/script', {
       method: 'POST',

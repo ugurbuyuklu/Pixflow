@@ -36,7 +36,7 @@ Organize, favorite, and reuse your best prompts and generated assets.
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20.x (required)
 - npm or yarn
 
 ### Installation
@@ -59,8 +59,8 @@ npm run dev
 # Build for production
 npm run build
 
-# Package as desktop app
-npm run package
+# Preview production build
+npm run preview
 ```
 
 ## Project Structure
@@ -92,8 +92,9 @@ API keys required in `.env`:
 # Run tests
 npm test
 
-# Lint code
+# Lint code (TypeScript + Biome)
 npm run lint
+npm run lint:biome
 
 # Format code
 npm run format

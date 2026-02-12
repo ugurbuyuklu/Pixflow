@@ -63,18 +63,18 @@ export function createFeedbackRouter(config?: FeedbackRouterConfig): Router {
     sendSuccess(res, {})
   })
 
-  router.post('/export', async (req: AuthRequest, res) => {
+  router.post('/export', async (_req: AuthRequest, res) => {
     try {
       const projectRoot = config?.projectRoot || process.cwd()
       const exportDir = path.join(projectRoot, 'exports')
       const filepath = await exportFeedbackToJson(exportDir)
       sendSuccess(res, { filepath, filename: path.basename(filepath) })
-    } catch (error) {
+    } catch (_error) {
       sendError(res, 500, 'Failed to export feedback', 'EXPORT_FAILED')
     }
   })
 
-  router.get('/export/latest', async (req: AuthRequest, res) => {
+  router.get('/export/latest', async (_req: AuthRequest, res) => {
     try {
       const projectRoot = config?.projectRoot || process.cwd()
       const exportDir = path.join(projectRoot, 'exports')
@@ -86,7 +86,7 @@ export function createFeedbackRouter(config?: FeedbackRouterConfig): Router {
       }
 
       sendSuccess(res, { filepath, filename: path.basename(filepath) })
-    } catch (error) {
+    } catch (_error) {
       sendError(res, 500, 'Failed to get latest export', 'EXPORT_FAILED')
     }
   })

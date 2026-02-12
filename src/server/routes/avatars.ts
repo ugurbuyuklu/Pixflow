@@ -40,8 +40,20 @@ const generationLimiter = rateLimit({
 const MAX_PROMPT_LENGTH = 2000
 const MAX_TEXT_LENGTH = 5000
 const VALID_ASPECT_RATIOS = ['1:1', '9:16', '16:9']
+const VALID_AVATAR_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp']
 const VALID_TONES = ['casual', 'professional', 'energetic', 'friendly', 'dramatic']
-const VALID_REACTIONS = ['sad', 'upset', 'angry', 'disappointed', 'sob', 'excited', 'surprised', 'confused', 'worried', 'happy']
+const VALID_REACTIONS = [
+  'sad',
+  'upset',
+  'angry',
+  'disappointed',
+  'sob',
+  'excited',
+  'surprised',
+  'confused',
+  'worried',
+  'happy',
+]
 
 function sanitizePath(basePath: string, userPath: string): string | null {
   const normalizedBase = path.resolve(basePath)
@@ -105,6 +117,28 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
         cb(new Error('Invalid file type. Only JPG, PNG, and WebP are allowed.'))
       }
     },
+  })
+
+  router.get('/', avatarLimiter, async (_req, res) => {
+    try {
+      await fs.mkdir(avatarsDir, { recursive: true })
+      const curatedFiles = await fs.readdir(avatarsDir)
+
+      const avatars = curatedFiles
+        .filter((file) => VALID_AVATAR_EXTENSIONS.includes(path.extname(file).toLowerCase()))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        .map((file) => ({
+          name: file,
+          filename: file,
+          url: `/avatars/${encodeURIComponent(file)}`,
+          source: 'curated' as const,
+        }))
+
+      sendSuccess(res, { avatars })
+    } catch (error) {
+      console.error('[Avatar] Failed to list avatars:', error)
+      sendError(res, 500, 'Failed to list avatars', 'AVATAR_LIST_FAILED')
+    }
   })
 
   router.post('/upload', avatarLimiter, avatarUpload.array('files', 10), (req, res) => {
@@ -619,15 +653,23 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
       // Based on Kling AI best practices: descriptive micro-expressions, emotive language, cinematic details
       const reactionPrompts: Record<string, string> = {
         sad: 'person looks directly at camera with melancholy expression, eyes glistening with sadness, subtle frown, shoulders slightly slumped, slow deliberate blink, heavy and somber mood',
-        upset: 'person with tense frustrated expression, jaw tight, nostrils slightly flared, furrowed brows creating deep lines, eyes narrowed with irritation, slight head shake showing annoyance',
-        angry: 'person with fierce intense expression, eyes burning with rage, clenched jaw creating tension, flared nostrils, rigid posture, face flushed with anger, breathing heavy',
-        disappointed: 'person with deflated expression, gaze lowered with resignation, soft sigh visible, eyebrows slightly raised in disbelief, mouth corners turned down, subtle head shake of disappointment',
+        upset:
+          'person with tense frustrated expression, jaw tight, nostrils slightly flared, furrowed brows creating deep lines, eyes narrowed with irritation, slight head shake showing annoyance',
+        angry:
+          'person with fierce intense expression, eyes burning with rage, clenched jaw creating tension, flared nostrils, rigid posture, face flushed with anger, breathing heavy',
+        disappointed:
+          'person with deflated expression, gaze lowered with resignation, soft sigh visible, eyebrows slightly raised in disbelief, mouth corners turned down, subtle head shake of disappointment',
         sob: 'person with face contorted in deep sorrow, tears streaming down cheeks, eyes red and swollen, shoulders shaking with sobs, hand trembling as it covers face, raw emotional breakdown',
-        excited: 'person with radiant beaming smile, eyes sparkling with pure joy, eyebrows raised in delight, face lit up with enthusiasm, energetic head movements, infectious happiness and thrill',
-        surprised: 'person with jaw dropped in shock, eyes wide open in astonishment, eyebrows shot up high, slight gasp visible, frozen moment of disbelief, startled and amazed',
-        confused: 'person with perplexed bewildered look, head tilted to side in question, eyes squinting in thought, one eyebrow raised quizzically, lips pursed in puzzlement, searching for understanding',
-        worried: 'person with anxious tense expression, eyes darting nervously, brows knitted together with concern, lips pressed thin, slight tremor visible, uneasy and apprehensive mood',
-        happy: 'person with warm genuine smile reaching eyes, face glowing with contentment, relaxed joyful expression, soft laugh lines visible, peaceful and serene happiness radiating outward',
+        excited:
+          'person with radiant beaming smile, eyes sparkling with pure joy, eyebrows raised in delight, face lit up with enthusiasm, energetic head movements, infectious happiness and thrill',
+        surprised:
+          'person with jaw dropped in shock, eyes wide open in astonishment, eyebrows shot up high, slight gasp visible, frozen moment of disbelief, startled and amazed',
+        confused:
+          'person with perplexed bewildered look, head tilted to side in question, eyes squinting in thought, one eyebrow raised quizzically, lips pursed in puzzlement, searching for understanding',
+        worried:
+          'person with anxious tense expression, eyes darting nervously, brows knitted together with concern, lips pressed thin, slight tremor visible, uneasy and apprehensive mood',
+        happy:
+          'person with warm genuine smile reaching eyes, face glowing with contentment, relaxed joyful expression, soft laugh lines visible, peaceful and serene happiness radiating outward',
       }
 
       const reactionPrompt = reactionPrompts[reaction]
@@ -661,7 +703,13 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
     } catch (error) {
       console.error('[Reaction] Generation failed:', error)
       span?.error(error)
-      sendError(res, 500, 'Failed to generate reaction video', 'REACTION_FAILED', error instanceof Error ? error.message : 'Unknown error')
+      sendError(
+        res,
+        500,
+        'Failed to generate reaction video',
+        'REACTION_FAILED',
+        error instanceof Error ? error.message : 'Unknown error',
+      )
     }
   })
 

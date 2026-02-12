@@ -1,12 +1,15 @@
-import { Check, Loader2, Upload, Users, Wand2 } from 'lucide-react'
+import { Check, Upload, Users, Wand2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { assetUrl } from '../../../lib/api'
 import type { AvatarAgeGroup, AvatarEthnicity, AvatarGender, AvatarOutfit } from '../../../stores/avatarStore'
 import { useAvatarStore } from '../../../stores/avatarStore'
+import { StepHeader } from '../../asset-monster/StepHeader'
 import { Button } from '../../ui/Button'
+import { EmptyState } from '../../ui/EmptyState'
+import { LoadingState } from '../../ui/LoadingState'
+import { SegmentedTabs } from '../../ui/navigation/SegmentedTabs'
 import { Select } from '../../ui/Select'
 import { Slider } from '../../ui/Slider'
-import { StepHeader } from '../../asset-monster/StepHeader'
 import { AvatarGenerationProgress } from '../AvatarGenerationProgress'
 import { GeneratedAvatarsGrid } from '../GeneratedAvatarsGrid'
 
@@ -70,34 +73,44 @@ export function AvatarSelectionCard({ stepNumber, subtitle, showGenerateOptions 
     loadAvatars()
   }, [loadAvatars])
 
+  useEffect(() => {
+    if (!showGenerateOptions && mode === 'generate') setMode('gallery')
+  }, [mode, showGenerateOptions])
+
   const handleGenerate = async () => {
     await generateAvatar({ gender, ageGroup, ethnicity, outfit, count: avatarCount })
   }
+
+  const modeTabs: { id: 'gallery' | 'generate'; label: string; icon?: JSX.Element }[] = [
+    { id: 'gallery', label: 'Gallery', icon: <Users className="w-4 h-4" /> },
+  ]
+  if (showGenerateOptions) {
+    modeTabs.push({ id: 'generate', label: 'Generate New', icon: <Wand2 className="w-4 h-4" /> })
+  }
+  const isGenerateMode = mode === 'generate' && showGenerateOptions
 
   return (
     <div className="bg-surface-50 rounded-lg p-4">
       <StepHeader stepNumber={stepNumber} title="Select Avatar" subtitle={subtitle} />
 
       {/* Mode Toggle */}
-      <div className="flex bg-surface-100 rounded-lg p-1 mb-4">
-        <button
-          type="button"
-          onClick={() => setMode('gallery')}
-          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
-            mode === 'gallery' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          Gallery
-        </button>
-        <button
-          type="button"
+      <div className="flex items-center gap-2 mb-4">
+        <SegmentedTabs
+          value={mode}
+          items={modeTabs}
+          onChange={setMode}
+          ariaLabel="Avatar selection mode"
+          className="flex-1"
+          size="sm"
+        />
+        <Button
+          variant="ghost-muted"
+          size="sm"
+          icon={<Upload className="w-4 h-4" />}
           onClick={() => avatarFileInputRef.current?.click()}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors text-surface-400 hover:text-surface-900"
         >
-          <Upload className="w-4 h-4" />
           Upload
-        </button>
+        </Button>
         <input
           ref={avatarFileInputRef}
           type="file"
@@ -111,35 +124,18 @@ export function AvatarSelectionCard({ stepNumber, subtitle, showGenerateOptions 
             }
           }}
         />
-        {showGenerateOptions && (
-          <button
-            type="button"
-            onClick={() => setMode('generate')}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
-              mode === 'generate' ? 'bg-brand-600 text-surface-900' : 'text-surface-400 hover:text-surface-900'
-            }`}
-          >
-            <Wand2 className="w-4 h-4" />
-            Generate New
-          </button>
-        )}
       </div>
 
-      {mode === 'gallery' ? (
+      {!isGenerateMode ? (
         <div>
           {avatarsLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-surface-400" />
-            </div>
+            <LoadingState title="Loading avatars..." size="sm" />
           ) : avatars.length === 0 ? (
-            <div className="text-center py-8 text-surface-400 border-2 border-dashed border-surface-200 rounded-lg">
-              <Users className="w-10 h-10 mx-auto mb-3 opacity-50" />
-              <p>No avatars in gallery</p>
-              <p className="text-sm mt-1">
-                {showGenerateOptions ? 'Generate a new avatar or add images to ' : 'Add images to '}
-                <code className="bg-surface-100 px-1 rounded">avatars/</code>
-              </p>
-            </div>
+            <EmptyState
+              title="No avatars in gallery"
+              description={`${showGenerateOptions ? 'Generate a new avatar or add images to ' : 'Add images to '}avatars/ folder`}
+              icon={<Users className="w-10 h-10" />}
+            />
           ) : (
             <div className="flex gap-2 overflow-x-auto pb-2">
               {avatars.map((avatar) => (

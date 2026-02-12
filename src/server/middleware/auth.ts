@@ -6,9 +6,15 @@ export interface AuthRequest extends Request {
   user?: { id: number; email: string; name: string; role: string }
 }
 
+function isDevAuthBypassEnabled(): boolean {
+  if (process.env.NODE_ENV !== 'development') return false
+  const raw = process.env.PIXFLOW_AUTH_BYPASS?.trim().toLowerCase()
+  return ['1', 'true', 'yes', 'on'].includes(raw || '')
+}
+
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
-  // Dev mode bypass - use mock user
-  if (process.env.NODE_ENV === 'development') {
+  // Optional local bypass for rapid UI iteration (never enabled by default).
+  if (isDevAuthBypassEnabled()) {
     req.user = { id: 1, email: 'dev@test.com', name: 'Dev User', role: 'admin' }
     next()
     return

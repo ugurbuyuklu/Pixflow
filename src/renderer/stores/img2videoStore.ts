@@ -278,9 +278,7 @@ export const useImg2VideoStore = create<Img2VideoState>()((set, get) => ({
     }
 
     // Build queue only from pending jobs
-    const queue = initialJobs
-      .map((job, i) => (job.status === 'pending' ? i : -1))
-      .filter((i) => i !== -1)
+    const queue = initialJobs.map((job, i) => (job.status === 'pending' ? i : -1)).filter((i) => i !== -1)
     const concurrency = Math.min(MAX_CONCURRENCY, queue.length)
     const workers = Array.from({ length: concurrency }, async () => {
       while (queue.length > 0) {

@@ -1,0 +1,155 @@
+name: Nightly Real Smoke
+
+on:
+  schedule:
+    - cron: '15 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  nightly-real:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PIXFLOW_TELEMETRY_ENABLED: 'true'
+      PIXFLOW_SMOKE_REAL_MAX_BUDGET_USD: '0.50'
+      PIXFLOW_SMOKE_REAL_MAX_RUNTIME_MS: '1200000'
+      PIXFLOW_GATE_MIN_OVERALL_SUCCESS_RATE: '0.90'
+      PIXFLOW_GATE_MIN_PROVIDER_SUCCESS_RATE: '0.80'
+      PIXFLOW_GATE_MAX_P95_MS: '600000'
+      PIXFLOW_REGRESSION_MAX_SUCCESS_DROP: '0.03'
+      PIXFLOW_REGRESSION_MAX_P95_INCREASE_MS: '30000'
+      PIXFLOW_REGRESSION_MAX_PROVIDER_FAILRATE_INCREASE: '0.10'
+      PIXFLOW_REGRESSION_PROVIDER_THRESHOLDS_JSON: '{"openai":0.08,"fal":0.12,"hedra":0.12,"kling":0.15}'
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
+      HEDRA_API_KEY: ${{ secrets.HEDRA_API_KEY }}
+      NIGHTLY_ALERT_WEBHOOK: ${{ secrets.NIGHTLY_ALERT_WEBHOOK }}
+      NIGHTLY_ALERT_WEBHOOK_CRITICAL: ${{ secrets.NIGHTLY_ALERT_WEBHOOK_CRITICAL }}
+      NIGHTLY_ALERT_WEBHOOK_WARNING: ${{ secrets.NIGHTLY_ALERT_WEBHOOK_WARNING }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Playbooks
+        run: npm run validate:playbooks
+
+      - name: Lint (Biome)
+        run: npm run lint:biome
+
+      - name: Lint (TypeScript)
+        run: npm run lint
+
+      - name: External Smoke (Real Providers)
+        run: npm run smoke:external:real
+
+      - name: Telemetry Report (TXT)
+        run: npm run telemetry:report -- --out telemetry-report.txt
+
+      - name: Telemetry Report (JSON)
+        run: npm run telemetry:report:json -- --out telemetry-report.json
+
+      - name: Telemetry Trends
+        run: npm run telemetry:trends -- --out logs/telemetry-trends.json
+
+      - name: Telemetry Dashboard
+        run: npm run telemetry:dashboard -- --report telemetry-report.json --trends logs/telemetry-trends.json --out docs/ops/telemetry-dashboard.md
+
+      - name: Telemetry Highlights
+        run: npm run telemetry:highlights -- --trends logs/telemetry-trends.json --out docs/ops/telemetry-highlights.md
+
+      - name: Telemetry Baseline
+        run: npm run telemetry:baseline -- --trends logs/telemetry-trends.json --history logs/telemetry-trends-history.jsonl --out-json docs/ops/telemetry-baseline.json --out-md docs/ops/telemetry-baseline.md
+
+      - name: Threshold Proposals
+        run: npm run threshold:propose -- --baseline docs/ops/telemetry-baseline.json --out-env docs/ops/proposed-thresholds.env --out-md docs/ops/proposed-thresholds.md
+
+      - name: Nightly Preflight
+        run: npm run preflight:nightly -- --report telemetry-report.json --trends logs/telemetry-trends.json --baseline docs/ops/telemetry-baseline.json --registry docs/ops/playbook-registry.json --out-json docs/ops/nightly-preflight.json --out-md docs/ops/nightly-preflight.md
+
+      - name: Preflight History
+        run: npm run preflight:history -- --preflight docs/ops/nightly-preflight.json --history logs/preflight-history.jsonl --out docs/ops/preflight-history.md
+
+      - name: Nightly Threshold Gate
+        run: npm run telemetry:check:nightly
+
+      - name: Regression Gate (Warn)
+        run: npm run telemetry:check:regression -- --mode warn --out-json docs/ops/regression-gate.json --out-md docs/ops/regression-gate.md
+
+      - name: Publish Ops Summary
+        if: always()
+        run: |
+          {
+            echo "## Nightly Telemetry Highlights"
+            echo ""
+            if [ -f docs/ops/telemetry-highlights.md ]; then cat docs/ops/telemetry-highlights.md; else echo "_not generated_"; fi
+            echo ""
+            echo "## Telemetry Baseline"
+            echo ""
+            if [ -f docs/ops/telemetry-baseline.md ]; then cat docs/ops/telemetry-baseline.md; else echo "_not generated_"; fi
+            echo ""
+            echo "## Nightly Preflight"
+            echo ""
+            if [ -f docs/ops/nightly-preflight.md ]; then cat docs/ops/nightly-preflight.md; else echo "_not generated_"; fi
+            echo ""
+            echo "## Regression Gate"
+            echo ""
+            if [ -f docs/ops/regression-gate.md ]; then cat docs/ops/regression-gate.md; else echo "_not generated_"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build Failure Alert Payload
+        if: failure()
+        run: |
+          node scripts/build-nightly-alert.js
+          npm run alert:dedup
+
+      - name: Send Failure Alert Webhook
+        if: failure()
+        run: |
+          if [ ! -f nightly-alert-webhook.txt ] || [ ! -f nightly-alert.json ]; then
+            echo "Alert files missing; skipping webhook."
+            exit 0
+          fi
+          webhook="$(cat nightly-alert-webhook.txt)"
+          if [ -z "$webhook" ]; then
+            echo "Webhook empty (possibly deduped); skipping."
+            exit 0
+          fi
+          curl -fsS -X POST "$webhook" -H "Content-Type: application/json" --data @nightly-alert.json
+
+      - name: Upload Nightly Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-real-smoke-artifacts
+          path: |
+            telemetry-report.txt
+            telemetry-report.json
+            nightly-alert.json
+            nightly-alert-webhook.txt
+            docs/ops/telemetry-dashboard.md
+            docs/ops/telemetry-highlights.md
+            docs/ops/telemetry-baseline.json
+            docs/ops/telemetry-baseline.md
+            docs/ops/proposed-thresholds.env
+            docs/ops/proposed-thresholds.md
+            docs/ops/nightly-preflight.json
+            docs/ops/nightly-preflight.md
+            docs/ops/regression-gate.json
+            docs/ops/regression-gate.md
+            docs/ops/preflight-history.md
+            logs/telemetry-trends.json
+            logs/telemetry-trends-history.jsonl
+            logs/preflight-history.jsonl
+            logs/pipeline-events.jsonl
+            logs/alert-dedup-state.json
+          if-no-files-found: ignore

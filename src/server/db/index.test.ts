@@ -3,13 +3,16 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { isSqliteRuntimeCompatible } from '../test-helpers.js'
 import { backupDatabase, closeDatabase, getDb, initDatabase } from './index.js'
 
 async function makeTmpDir() {
   return mkdtemp(path.join(os.tmpdir(), 'pixflow-db-test-'))
 }
 
-describe('db lifecycle', () => {
+const describeDb = isSqliteRuntimeCompatible() ? describe : describe.skip
+
+describeDb('db lifecycle', () => {
   it('getDb throws before initDatabase', () => {
     expect(() => getDb()).toThrow('Database not initialized')
   })

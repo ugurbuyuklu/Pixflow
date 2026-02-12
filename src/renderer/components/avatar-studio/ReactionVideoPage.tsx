@@ -1,10 +1,11 @@
 import { AlertTriangle, Download, Loader2, RefreshCw, Video, X } from 'lucide-react'
 import { assetUrl } from '../../lib/api'
 import { downloadVideo } from '../../lib/download'
-import type { ReactionType } from '../../types'
 import { REACTION_DEFINITIONS, useAvatarStore } from '../../stores/avatarStore'
-import { Button } from '../ui/Button'
+import type { ReactionType } from '../../types'
 import { StepHeader } from '../asset-monster/StepHeader'
+import { Button } from '../ui/Button'
+import { EmptyState } from '../ui/EmptyState'
 import { AvatarSelectionCard } from './shared/AvatarSelectionCard'
 
 interface ReactionVideoPageProps {
@@ -12,7 +13,10 @@ interface ReactionVideoPageProps {
   setFullSizeAvatarUrl: (url: string | null) => void
 }
 
-export function ReactionVideoPage({ fullSizeAvatarUrl, setFullSizeAvatarUrl }: ReactionVideoPageProps) {
+export function ReactionVideoPage({
+  fullSizeAvatarUrl: _fullSizeAvatarUrl,
+  setFullSizeAvatarUrl,
+}: ReactionVideoPageProps) {
   const {
     selectedAvatar,
     generatedUrls,
@@ -30,8 +34,8 @@ export function ReactionVideoPage({ fullSizeAvatarUrl, setFullSizeAvatarUrl }: R
   } = useAvatarStore()
 
   return (
-    <div className="grid grid-cols-2 gap-6">
-      {/* LEFT COLUMN: Avatar Selection */}
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      {/* LEFT COLUMN: INPUTS */}
       <div className="space-y-6">
         <AvatarSelectionCard stepNumber={1} showGenerateOptions={false} />
 
@@ -43,9 +47,7 @@ export function ReactionVideoPage({ fullSizeAvatarUrl, setFullSizeAvatarUrl }: R
               <button
                 type="button"
                 className="w-16 h-24 rounded-lg overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() =>
-                  setFullSizeAvatarUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')
-                }
+                onClick={() => setFullSizeAvatarUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
               >
                 <img
                   src={assetUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
@@ -64,32 +66,29 @@ export function ReactionVideoPage({ fullSizeAvatarUrl, setFullSizeAvatarUrl }: R
             </div>
           </div>
         )}
-      </div>
 
-      {/* RIGHT COLUMN: Reaction Workflow */}
-      <div className="space-y-6">
         {/* Step 2: Choose Reaction */}
         <div className="bg-surface-50 rounded-lg p-4">
           <StepHeader stepNumber={2} title="Choose Reaction" />
 
-          <div className="grid grid-cols-5 gap-2">
-            {(Object.entries(REACTION_DEFINITIONS) as [ReactionType, typeof REACTION_DEFINITIONS[ReactionType]][]).map(
-              ([reaction, { label, emoji }]) => (
-                <button
-                  key={reaction}
-                  type="button"
-                  onClick={() => setSelectedReaction(reaction)}
-                  className={`p-3 rounded-lg border-2 transition-all hover:scale-105 flex flex-col items-center gap-2 ${
-                    selectedReaction === reaction
-                      ? 'border-brand bg-brand/10'
-                      : 'border-surface-200 hover:border-surface-300'
-                  }`}
-                >
-                  <span className="text-2xl">{emoji}</span>
-                  <span className="text-xs font-medium text-surface-600">{label}</span>
-                </button>
-              ),
-            )}
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            {(
+              Object.entries(REACTION_DEFINITIONS) as [ReactionType, (typeof REACTION_DEFINITIONS)[ReactionType]][]
+            ).map(([reaction, { label, emoji }]) => (
+              <button
+                key={reaction}
+                type="button"
+                onClick={() => setSelectedReaction(reaction)}
+                className={`p-3 rounded-lg border-2 transition-all hover:scale-105 flex flex-col items-center gap-2 ${
+                  selectedReaction === reaction
+                    ? 'border-brand bg-brand/10'
+                    : 'border-surface-200 hover:border-surface-300'
+                }`}
+              >
+                <span className="text-2xl">{emoji}</span>
+                <span className="text-xs font-medium text-surface-600">{label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -196,15 +195,18 @@ export function ReactionVideoPage({ fullSizeAvatarUrl, setFullSizeAvatarUrl }: R
             )}
           </div>
         </div>
+      </div>
 
+      {/* RIGHT COLUMN: OUTPUT */}
+      <div className="space-y-6">
         {/* Step 5: Output */}
-        {reactionVideoUrl && (
-          <div className="bg-surface-50 rounded-lg p-4">
-            <StepHeader stepNumber={5} title="Output" />
+        <div className="bg-surface-50 rounded-lg p-4 min-h-[420px]">
+          <StepHeader stepNumber={5} title="Output" />
 
+          {reactionVideoUrl ? (
             <div className="space-y-4 flex flex-col items-center">
               {/* biome-ignore lint/a11y/useMediaCaption: AI-generated video, no captions available */}
-              <video controls autoPlay loop src={assetUrl(reactionVideoUrl)} className="w-1/2 rounded-lg" />
+              <video controls autoPlay loop src={assetUrl(reactionVideoUrl)} className="w-full rounded-lg" />
 
               <div className="flex items-center gap-2 text-sm text-surface-500">
                 <span>
@@ -222,7 +224,9 @@ export function ReactionVideoPage({ fullSizeAvatarUrl, setFullSizeAvatarUrl }: R
                   variant="success"
                   size="md"
                   icon={<Download className="w-4 h-4" />}
-                  onClick={() => downloadVideo(assetUrl(reactionVideoUrl), `reaction-${selectedReaction}.mp4`)}
+                  onClick={() =>
+                    downloadVideo(assetUrl(reactionVideoUrl), `reaction-${selectedReaction || 'video'}.mp4`)
+                  }
                   className="flex-1"
                 >
                   Download Video
@@ -239,8 +243,20 @@ export function ReactionVideoPage({ fullSizeAvatarUrl, setFullSizeAvatarUrl }: R
                 </Button>
               </div>
             </div>
-          </div>
-        )}
+          ) : reactionGenerating ? (
+            <EmptyState
+              title="Generating reaction video..."
+              description="Output will appear here when ready."
+              icon={<Loader2 className="w-7 h-7 animate-spin text-brand" />}
+            />
+          ) : (
+            <EmptyState
+              title="No output yet"
+              description="Complete steps on the left and run generation."
+              icon={<Video className="w-7 h-7" />}
+            />
+          )}
+        </div>
       </div>
     </div>
   )

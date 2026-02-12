@@ -24,7 +24,7 @@ interface GenerateRouterConfig {
   projectRoot: string
 }
 
-function resolvePathInsideRoot(root: string, unsafePath: string): string | null {
+function _resolvePathInsideRoot(root: string, unsafePath: string): string | null {
   if (unsafePath.includes('\0')) return null
 
   const resolvedRoot = path.resolve(root)
@@ -305,7 +305,7 @@ export function createGenerateRouter(config: GenerateRouterConfig): Router {
 
       // Support both single imageUrl and multiple imageUrls
       // Fix empty array fallback: check length explicitly
-      const urls = (imageUrls && imageUrls.length > 0) ? imageUrls : (imageUrl ? [imageUrl] : null)
+      const urls = imageUrls && imageUrls.length > 0 ? imageUrls : imageUrl ? [imageUrl] : null
 
       if (!urls || !Array.isArray(urls) || urls.length === 0) {
         sendError(res, 400, 'At least one image URL is required', 'INVALID_IMG2IMG_PAYLOAD')

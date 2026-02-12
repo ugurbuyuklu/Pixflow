@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { getDb } from '../db/index.js'
-import { setupTestDb, withEnv } from '../test-helpers.js'
+import { isSqliteRuntimeCompatible, setupTestDb, withEnv } from '../test-helpers.js'
 import {
   authenticateUser,
   changePassword,
@@ -13,20 +13,25 @@ import {
 } from './auth.js'
 
 const JWT_SECRET = 'test-secret-at-least-32-chars-long!'
-let cleanup: () => Promise<void>
+let cleanup: (() => Promise<void>) | undefined
+const describeDb = isSqliteRuntimeCompatible() ? describe : describe.skip
 
 beforeAll(async () => {
+  if (!isSqliteRuntimeCompatible()) return
   process.env.JWT_SECRET = JWT_SECRET
   const ctx = await setupTestDb()
   cleanup = ctx.cleanup
 })
 
 afterAll(async () => {
+  if (!isSqliteRuntimeCompatible()) return
   delete process.env.JWT_SECRET
-  await cleanup()
+  if (cleanup) {
+    await cleanup()
+  }
 })
 
-describe('createUser', () => {
+describeDb('createUser', () => {
   it('returns User object with id, email, name, role', () => {
     const user = createUser('alice@test.com', 'password123', 'Alice')
     expect(user).toMatchObject({ email: 'alice@test.com', name: 'Alice', role: 'user' })
@@ -54,7 +59,7 @@ describe('createUser', () => {
   })
 })
 
-describe('authenticateUser', () => {
+describeDb('authenticateUser', () => {
   beforeAll(() => {
     createUser('auth@test.com', 'correct-password', 'Auth User')
   })
@@ -75,7 +80,7 @@ describe('authenticateUser', () => {
   })
 })
 
-describe('verifyToken', () => {
+describeDb('verifyToken', () => {
   it('returns payload for valid token', () => {
     const { token } = authenticateUser('auth@test.com', 'correct-password')!
     const payload = verifyToken(token)
@@ -94,7 +99,7 @@ describe('verifyToken', () => {
   })
 })
 
-describe('getUserById', () => {
+describeDb('getUserById', () => {
   it('returns user for valid id', () => {
     const created = createUser('byid@test.com', 'pass', 'ById')
     const found = getUserById(created.id)
@@ -113,7 +118,7 @@ describe('getUserById', () => {
   })
 })
 
-describe('changePassword', () => {
+describeDb('changePassword', () => {
   let userId: number
 
   beforeAll(() => {
@@ -134,7 +139,7 @@ describe('changePassword', () => {
   })
 })
 
-describe('listUsers', () => {
+describeDb('listUsers', () => {
   it('returns all users without password_hash', () => {
     const users = listUsers()
     expect(users.length).toBeGreaterThan(0)
@@ -145,7 +150,7 @@ describe('listUsers', () => {
   })
 })
 
-describe('ensureBootstrapAdminIfConfigured', () => {
+describeDb('ensureBootstrapAdminIfConfigured', () => {
   it('skips when PIXFLOW_BOOTSTRAP_ADMIN_ON_STARTUP is not set', async () => {
     await withEnv({ PIXFLOW_BOOTSTRAP_ADMIN_ON_STARTUP: undefined }, () => {
       expect(() => ensureBootstrapAdminIfConfigured()).not.toThrow()

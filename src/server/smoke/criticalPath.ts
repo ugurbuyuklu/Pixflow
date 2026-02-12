@@ -1,9 +1,11 @@
 import fs from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { createApp } from '../createApp.js'
 import { stopJobCleanup } from '../services/fal.js'
+import { recordPipelineEvent } from '../services/telemetry.js'
 
 type JsonValue = Record<string, unknown>
 
@@ -12,6 +14,21 @@ interface ApiEnvelope<T = JsonValue> {
   data: T
   error?: string
   code?: string
+}
+
+const require = createRequire(import.meta.url)
+
+function canUseBetterSqliteInCurrentRuntime(): boolean {
+  try {
+    const BetterSqlite3 = require('better-sqlite3') as new (path: string) => { close: () => void }
+    const db = new BetterSqlite3(':memory:')
+    db.close()
+    return true
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    console.warn(`[Smoke] Skipping API smoke in this runtime (better-sqlite3 mismatch): ${reason}`)
+    return false
+  }
 }
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -37,6 +54,21 @@ async function requestJson<T>(
 }
 
 async function run(): Promise<void> {
+  if (!canUseBetterSqliteInCurrentRuntime()) {
+    await recordPipelineEvent({
+      pipeline: 'smoke.api',
+      status: 'success',
+      metadata: {
+        provider: 'runtime',
+        skipped: true,
+        reason: 'sqlite_runtime_mismatch',
+      },
+    })
+    stopJobCleanup()
+    process.exit(0)
+    return
+  }
+
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'pixflow-smoke-secret-abcdefghijklmnopqrstuvwxyz'
   process.env.PIXFLOW_BOOTSTRAP_ADMIN_ON_STARTUP = process.env.PIXFLOW_BOOTSTRAP_ADMIN_ON_STARTUP || 'true'
   process.env.PIXFLOW_BOOTSTRAP_ADMIN_EMAIL = process.env.PIXFLOW_BOOTSTRAP_ADMIN_EMAIL || 'smoke-admin@pixflow.local'

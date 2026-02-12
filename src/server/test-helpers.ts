@@ -1,7 +1,35 @@
 import { mkdtemp, rm } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import { closeDatabase, initDatabase } from './db/index.js'
+
+const require = createRequire(import.meta.url)
+
+let cachedSqliteRuntimeSupport: boolean | undefined
+
+export function isSqliteRuntimeCompatible(): boolean {
+  if (typeof cachedSqliteRuntimeSupport === 'boolean') {
+    return cachedSqliteRuntimeSupport
+  }
+
+  try {
+    const BetterSqlite3 = require('better-sqlite3') as new (
+      path: string,
+    ) => {
+      close: () => void
+    }
+    const db = new BetterSqlite3(':memory:')
+    db.close()
+    cachedSqliteRuntimeSupport = true
+  } catch (error) {
+    cachedSqliteRuntimeSupport = false
+    const reason = error instanceof Error ? error.message : String(error)
+    console.warn(`[Test] better-sqlite3 runtime mismatch; DB-backed tests will be skipped (${reason})`)
+  }
+
+  return cachedSqliteRuntimeSupport
+}
 
 export async function setupTestDb() {
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'pixflow-test-'))

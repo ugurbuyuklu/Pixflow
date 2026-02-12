@@ -526,6 +526,7 @@ export async function lookupCachedResearch(keywords: string[]): Promise<CacheRes
         .get(keyword, now) as
         | {
             id: number
+            created_at: number
             trend_findings: string
             competitor_insights: string
             technical_recommendations: string
@@ -548,7 +549,7 @@ export async function lookupCachedResearch(keywords: string[]): Promise<CacheRes
         `,
         ).run(now, row.id)
 
-        const age = Math.round((now - (row as any).created_at) / 1000)
+        const age = Math.round((now - row.created_at) / 1000)
         console.log(`[Research Cache] Hit for "${keyword}" (age: ${age}s)`)
       } else {
         missing.push(keyword)
@@ -633,18 +634,38 @@ export function mergeResearchData(
   let technicalNotes = ''
 
   for (const data of sources.values()) {
-    data.trend_findings.trending_aesthetics.forEach((a) => allAesthetics.add(a))
-    data.trend_findings.color_palettes.forEach((c) => allColorPalettes.add(c))
-    data.trend_findings.outfit_trends.forEach((o) => allOutfitTrends.add(o))
-    data.trend_findings.set_design_trends.forEach((s) => allSetDesigns.add(s))
+    data.trend_findings.trending_aesthetics.forEach((a) => {
+      allAesthetics.add(a)
+    })
+    data.trend_findings.color_palettes.forEach((c) => {
+      allColorPalettes.add(c)
+    })
+    data.trend_findings.outfit_trends.forEach((o) => {
+      allOutfitTrends.add(o)
+    })
+    data.trend_findings.set_design_trends.forEach((s) => {
+      allSetDesigns.add(s)
+    })
 
-    data.competitor_insights.active_competitors.forEach((c) => allCompetitors.add(c))
-    data.competitor_insights.common_patterns.forEach((p) => allPatterns.add(p))
-    data.competitor_insights.differentiation_opportunities.forEach((o) => allOpportunities.add(o))
+    data.competitor_insights.active_competitors.forEach((c) => {
+      allCompetitors.add(c)
+    })
+    data.competitor_insights.common_patterns.forEach((p) => {
+      allPatterns.add(p)
+    })
+    data.competitor_insights.differentiation_opportunities.forEach((o) => {
+      allOpportunities.add(o)
+    })
 
-    data.technical_recommendations.lens_options.forEach((l) => allLensOptions.add(l))
-    data.technical_recommendations.lighting_styles.forEach((l) => allLightingStyles.add(l))
-    data.technical_recommendations.color_grades.forEach((c) => allColorGrades.add(c))
+    data.technical_recommendations.lens_options.forEach((l) => {
+      allLensOptions.add(l)
+    })
+    data.technical_recommendations.lighting_styles.forEach((l) => {
+      allLightingStyles.add(l)
+    })
+    data.technical_recommendations.color_grades.forEach((c) => {
+      allColorGrades.add(c)
+    })
     if (data.technical_recommendations.notes) {
       technicalNotes += (technicalNotes ? ' ' : '') + data.technical_recommendations.notes
     }

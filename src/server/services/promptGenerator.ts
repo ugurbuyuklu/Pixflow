@@ -350,7 +350,15 @@ export async function generatePrompts(
 
   // Generate all prompts in parallel
   const promptPromises = subThemesToUse.map(async (theme, index) => {
-    const singlePromptPromise = generateSinglePromptWithTheme(client, concept, theme, researchBrief, index, imageInsights, count)
+    const singlePromptPromise = generateSinglePromptWithTheme(
+      client,
+      concept,
+      theme,
+      researchBrief,
+      index,
+      imageInsights,
+      count,
+    )
     const timeoutPromise = new Promise<PromptOutput>((_, reject) =>
       setTimeout(() => reject(new Error(`Prompt ${index + 1} timeout after 60s`)), SINGLE_PROMPT_TIMEOUT),
     )
@@ -410,9 +418,9 @@ async function generateSinglePromptWithTheme(
 
     // Show other sub-themes to encourage variety
     const otherThemes = research.sub_themes
-      .filter(t => t.name !== theme.name)
+      .filter((t) => t.name !== theme.name)
       .slice(0, 3)
-      .map(t => `"${t.name}" (${t.aesthetic})`)
+      .map((t) => `"${t.name}" (${t.aesthetic})`)
       .join(', ')
 
     const systemPrompt = `You are a Creative Director and prompt engineer for Clone AI's image-to-image model. You have deep knowledge of photography, fashion, film, and visual culture. You create prompts that are scroll-stopping, Instagram/Pinterest-worthy, and visually sophisticated.
@@ -525,7 +533,9 @@ RESEARCH INSIGHTS:
 SUB-THEME FOR THIS PROMPT:
 ${themeDescription}
 
-${totalCount && totalCount > 1 ? `NOTE: You are generating prompt ${index + 1} of ${totalCount} total prompts for this concept.
+${
+  totalCount && totalCount > 1
+    ? `NOTE: You are generating prompt ${index + 1} of ${totalCount} total prompts for this concept.
 Other sub-themes in this set: ${otherThemes}
 
 VARIETY REQUIREMENT: Ensure MAXIMUM VARIETY across all dimensions:
@@ -536,11 +546,13 @@ VARIETY REQUIREMENT: Ensure MAXIMUM VARIETY across all dimensions:
 - Camera Angles: Mix perspectives (eye-level, slightly above, environmental wide shots, etc.)
 - Outfit Styles: Vary drastically (structured vs. flowing, minimal vs. layered, casual vs. formal)
 
-Your sub-theme provides direction, but push for DISTINCT visual identity that stands apart from the other prompts.` : ''}
+Your sub-theme provides direction, but push for DISTINCT visual identity that stands apart from the other prompts.`
+    : ''
+}
 
 ${
-      imageInsights
-        ? `REFERENCE IMAGE STYLE (for inspiration only):
+  imageInsights
+    ? `REFERENCE IMAGE STYLE (for inspiration only):
 - Lighting: ${JSON.stringify(imageInsights.lighting)}
 - Set Design: ${JSON.stringify(imageInsights.set_design)}
 - Camera: ${JSON.stringify(imageInsights.camera)}
@@ -549,8 +561,8 @@ ${
 
 Use as stylistic inspiration — match the mood, lighting approach, and camera style.
 Create variations blending this reference style with the concept. Do NOT copy the reference verbatim.`
-        : ''
-    }`
+    : ''
+}`
 
     const userPrompt = `Create ONE highly detailed, visually sophisticated prompt for this sub-theme that brings the concept to life.
 

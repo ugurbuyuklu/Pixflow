@@ -2,6 +2,11 @@ import { create } from 'zustand'
 import { apiUrl, getApiError, unwrapApiData } from '../lib/api'
 import { clearToken, getToken, setToken } from '../lib/auth'
 
+const DEV_AUTO_LOGIN_ENABLED =
+  import.meta.env.DEV && String(import.meta.env.VITE_PIXFLOW_DEV_AUTO_LOGIN || '').trim() === '1'
+const DEV_AUTO_LOGIN_EMAIL = String(import.meta.env.VITE_PIXFLOW_DEV_AUTO_LOGIN_EMAIL || 'dev@pixery.ai').trim()
+const DEV_AUTO_LOGIN_PASSWORD = String(import.meta.env.VITE_PIXFLOW_DEV_AUTO_LOGIN_PASSWORD || 'dev123pixery!').trim()
+
 interface User {
   id: number
   email: string
@@ -30,9 +35,10 @@ export const useAuthStore = create<AuthState>()((set) => ({
   init: async () => {
     const token = getToken()
     if (!token) {
-      // Dev auto-login: auth gate is bypassed, auto-login so API calls have a token
-      // TODO: remove when auth gate is re-enabled before release
-      await useAuthStore.getState().login('dev@pixery.ai', 'dev123pixery!')
+      // Optional local shortcut for faster UI iteration.
+      if (DEV_AUTO_LOGIN_ENABLED && DEV_AUTO_LOGIN_EMAIL && DEV_AUTO_LOGIN_PASSWORD) {
+        await useAuthStore.getState().login(DEV_AUTO_LOGIN_EMAIL, DEV_AUTO_LOGIN_PASSWORD)
+      }
       set({ loading: false })
       return
     }

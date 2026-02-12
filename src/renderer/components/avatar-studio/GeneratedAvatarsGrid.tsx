@@ -48,9 +48,7 @@ export function GeneratedAvatarsGrid({
           </button>
         ))}
       </div>
-      <p className="text-xs text-surface-400 text-center">
-        Click to select, double-click to view full size
-      </p>
+      <p className="text-xs text-surface-400 text-center">Click to select, double-click to view full size</p>
     </div>
   )
 }

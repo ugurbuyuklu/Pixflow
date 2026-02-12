@@ -1,7 +1,7 @@
-import path from 'node:path'
-import fs from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import puppeteer from 'puppeteer'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { download as ensureYtDlpBinary } from '@distube/yt-dlp'
 
 export interface YtDlpDownloadResult {
   videoPath: string
@@ -10,175 +10,242 @@ export interface YtDlpDownloadResult {
   platform: string
 }
 
-/**
- * Download video from URL using yt-dlp binary
- * Supports: Facebook, Instagram, TikTok, YouTube, and 1000+ sites
- */
-export async function downloadVideoWithYtDlp(
-  url: string,
+const YTDLP_TIMEOUT_MS = 180_000
+
+interface BinaryResolution {
+  bin: string
+  source: 'env' | 'distube' | 'global'
+}
+
+function parseTruthy(value: string | undefined): boolean {
+  if (!value) return false
+  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase())
+}
+
+function getCookieBrowserSetting(): string | null {
+  const raw = process.env.PIXFLOW_YTDLP_COOKIES_FROM_BROWSER?.trim()
+
+  if (!raw) return 'chrome'
+
+  const normalized = raw.toLowerCase()
+  if (['off', 'none', 'false', '0'].includes(normalized)) {
+    return null
+  }
+
+  return raw
+}
+
+async function resolveYtDlpBinary(): Promise<BinaryResolution> {
+  const configuredPath = process.env.PIXFLOW_YTDLP_BIN?.trim()
+  if (configuredPath) {
+    return { bin: configuredPath, source: 'env' }
+  }
+
+  try {
+    const downloadedBin = await ensureYtDlpBinary()
+    return { bin: downloadedBin, source: 'distube' }
+  } catch (error) {
+    console.warn('[yt-dlp] Failed to resolve bundled yt-dlp binary, falling back to global binary:', error)
+    return { bin: 'yt-dlp', source: 'global' }
+  }
+}
+
+function buildYtDlpArgs(url: string, outputTemplate: string, cookieBrowser: string | null): string[] {
+  const args = [
+    url,
+    '--output',
+    outputTemplate,
+    '--format',
+    'best[ext=mp4]/best',
+    '--yes-playlist',
+    '--playlist-items',
+    '1',
+    '--no-simulate',
+    '--restrict-filenames',
+    '--print',
+    'before_dl:__META__%(title)s|%(duration)s|%(extractor)s',
+    '--print',
+    'after_move:__FILE__%(filepath)s',
+  ]
+
+  if (cookieBrowser) {
+    args.push('--cookies-from-browser', cookieBrowser)
+  }
+
+  return args
+}
+
+async function runYtDlpDownload(
+  ytdlpBin: string,
+  args: string[],
   outputDir: string,
+  timestamp: number,
 ): Promise<YtDlpDownloadResult> {
-  const timestamp = Date.now()
-  // Use restrictfilenames to avoid emoji/special chars in filename
-  const sanitizedFilename = `ytdlp_${timestamp}.%(ext)s`
-  const outputTemplate = path.join(outputDir, sanitizedFilename)
-
-  console.log('[yt-dlp] Downloading video from:', url)
-
   return new Promise((resolve, reject) => {
-    // Spawn yt-dlp process
-    const ytdlp = spawn('yt-dlp', [
-      url,
-      '--output', outputTemplate,
-      '--format', 'best[ext=mp4]/best',
-      '--yes-playlist', // Allow playlists (Facebook Ads Library returns playlists)
-      '--max-downloads', '1', // Only download first video from playlist
-      '--cookies-from-browser', 'chrome', // Use Chrome cookies for authentication
-      '--restrict-filenames', // Sanitize filenames (remove emoji, special chars)
-      '--print', '%(title)s|%(duration)s|%(extractor)s', // Print metadata
-    ])
+    const ytdlp = spawn(ytdlpBin, args)
 
     let stdout = ''
     let stderr = ''
+    let timedOut = false
+    let done = false
+
     let metadata = { title: 'Downloaded Video', duration: 0, platform: 'unknown' }
+    let downloadedFilePath: string | null = null
+
+    const complete = (fn: () => void) => {
+      if (done) return
+      done = true
+      clearTimeout(timeout)
+      fn()
+    }
+
+    const timeout = setTimeout(() => {
+      timedOut = true
+      ytdlp.kill('SIGKILL')
+    }, YTDLP_TIMEOUT_MS)
 
     ytdlp.stdout.on('data', (data) => {
       const output = data.toString()
       stdout += output
       console.log('[yt-dlp]', output.trim())
 
-      // Parse metadata from print output
-      const metaMatch = output.match(/^([^|]+)\|([^|]+)\|([^|]+)$/m)
-      if (metaMatch) {
-        metadata = {
-          title: metaMatch[1].trim(),
-          duration: Number.parseFloat(metaMatch[2]) || 0,
-          platform: metaMatch[3].trim(),
+      for (const line of output.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+
+        if (trimmed.startsWith('__META__')) {
+          const metaPayload = trimmed.slice('__META__'.length)
+          const metaMatch = metaPayload.match(/^([^|]+)\|([^|]+)\|([^|]+)$/)
+          if (metaMatch) {
+            metadata = {
+              title: metaMatch[1].trim(),
+              duration: Number.parseFloat(metaMatch[2]) || 0,
+              platform: metaMatch[3].trim(),
+            }
+          }
+        } else if (trimmed.startsWith('__FILE__')) {
+          downloadedFilePath = trimmed.slice('__FILE__'.length).trim()
         }
       }
     })
 
     ytdlp.stderr.on('data', (data) => {
-      stderr += data.toString()
-      console.error('[yt-dlp]', data.toString().trim())
-    })
-
-    ytdlp.on('close', async (code) => {
-      if (code !== 0) {
-        reject(new Error(`yt-dlp failed with code ${code}: ${stderr || 'Unknown error'}`))
-        return
-      }
-
-      try {
-        // Find downloaded file (exact timestamp match)
-        const files = await fs.readdir(outputDir)
-        const downloadedFile = files.find(
-          (f) => f.startsWith(`ytdlp_${timestamp}.`) && (f.endsWith('.mp4') || f.endsWith('.webm') || f.endsWith('.mkv')),
-        )
-
-        if (!downloadedFile) {
-          console.error('[yt-dlp] Downloaded file not found. Files in output dir:', files.filter(f => f.startsWith('ytdlp_')).slice(0, 5))
-          reject(new Error('Downloaded video file not found'))
-          return
-        }
-
-        const videoPath = path.join(outputDir, downloadedFile)
-        console.log('[yt-dlp] Download complete:', videoPath)
-
-        resolve({
-          videoPath,
-          ...metadata,
-        })
-      } catch (error) {
-        reject(error)
+      const output = data.toString().trim()
+      stderr += `${output}\n`
+      if (output) {
+        console.error('[yt-dlp]', output)
       }
     })
 
     ytdlp.on('error', (error) => {
-      reject(new Error(`Failed to spawn yt-dlp: ${error.message}`))
+      complete(() => reject(new Error(`Failed to spawn yt-dlp: ${error.message}`)))
+    })
+
+    ytdlp.on('close', async (code) => {
+      if (timedOut) {
+        complete(() => reject(new Error(`yt-dlp timed out after ${YTDLP_TIMEOUT_MS / 1000} seconds`)))
+        return
+      }
+
+      if (code !== 0) {
+        const detail = (stderr || stdout || 'Unknown error').trim()
+        complete(() => reject(new Error(`yt-dlp failed with code ${code}: ${detail}`)))
+        return
+      }
+
+      try {
+        if (downloadedFilePath) {
+          complete(() =>
+            resolve({
+              videoPath: downloadedFilePath,
+              ...metadata,
+            }),
+          )
+          return
+        }
+
+        const files = await fs.readdir(outputDir)
+        const downloadedFile = files.find(
+          (f) =>
+            f.startsWith(`ytdlp_${timestamp}.`) && (f.endsWith('.mp4') || f.endsWith('.webm') || f.endsWith('.mkv')),
+        )
+
+        if (!downloadedFile) {
+          console.error(
+            '[yt-dlp] Downloaded file not found. Files in output dir:',
+            files.filter((f) => f.startsWith('ytdlp_')).slice(0, 5),
+          )
+          complete(() => reject(new Error('Downloaded video file not found')))
+          return
+        }
+
+        const videoPath = path.join(outputDir, downloadedFile)
+        complete(() =>
+          resolve({
+            videoPath,
+            ...metadata,
+          }),
+        )
+      } catch (error) {
+        complete(() => reject(error))
+      }
     })
   })
 }
 
 /**
- * Extract direct video URL from Facebook Ads Library page using Puppeteer
- * Opens page in headless browser, waits for JavaScript to render, then extracts video URL
+ * Download video from URL using yt-dlp binary.
+ * Supports: Facebook, Instagram, TikTok, YouTube, and 1000+ sites.
  */
-export async function extractFacebookAdsVideoUrl(pageUrl: string): Promise<string> {
-  console.log('[fb-ads] Launching headless browser for:', pageUrl)
+export async function downloadVideoWithYtDlp(url: string, outputDir: string): Promise<YtDlpDownloadResult> {
+  const timestamp = Date.now()
+  const sanitizedFilename = `ytdlp_${timestamp}.%(ext)s`
+  const outputTemplate = path.join(outputDir, sanitizedFilename)
 
-  let browser = null
-  try {
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    })
+  const binary = await resolveYtDlpBinary()
+  const cookieBrowser = getCookieBrowserSetting()
 
-    const page = await browser.newPage()
+  console.log('[yt-dlp] Downloading video from:', {
+    url,
+    binarySource: binary.source,
+    binary: binary.bin,
+    cookieBrowser: cookieBrowser || 'disabled',
+  })
 
-    // Set user agent to avoid bot detection
-    await page.setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+  const attempts: Array<string | null> = cookieBrowser ? [cookieBrowser, null] : [null]
+  let lastError: Error | null = null
 
-    console.log('[fb-ads] Navigating to page...')
-    await page.goto(pageUrl, { waitUntil: 'networkidle2', timeout: 30000 })
+  for (let attemptIndex = 0; attemptIndex < attempts.length; attemptIndex++) {
+    const browser = attempts[attemptIndex]
+    const args = buildYtDlpArgs(url, outputTemplate, browser)
 
-    console.log('[fb-ads] Page loaded, waiting for video element...')
+    try {
+      const result = await runYtDlpDownload(binary.bin, args, outputDir, timestamp)
+      console.log('[yt-dlp] Download complete:', result.videoPath)
+      return result
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
 
-    // Wait for video element or timeout after 10 seconds
-    await page.waitForSelector('video', { timeout: 10000 }).catch(() => {
-      console.log('[fb-ads] No video element found immediately, trying to extract from page content...')
-    })
+      const shouldRetryWithoutCookies =
+        browser !== null &&
+        attemptIndex === 0 &&
+        attempts.length > 1 &&
+        !parseTruthy(process.env.PIXFLOW_YTDLP_DISABLE_COOKIE_RETRY)
 
-    // Extract video URL from page
-    const videoUrl = await page.evaluate(() => {
-      // Try to find video element
-      const videoElement = document.querySelector('video')
-      if (videoElement?.src && videoElement.src.startsWith('http')) {
-        return videoElement.src
+      if (!shouldRetryWithoutCookies) {
+        break
       }
 
-      // Try to find video source element
-      const sourceElement = document.querySelector('video source')
-      if (sourceElement?.src && sourceElement.src.startsWith('http')) {
-        return sourceElement.src
-      }
-
-      // Try to parse from page HTML
-      const html = document.documentElement.innerHTML
-
-      // Facebook uses &amp; in HTML, so we need to match that
-      const match = html.match(/https:\/\/video[^\s"'<>]+\.mp4[^\s"'<>]*/)
-      if (match) {
-        let url = match[0]
-        // Unescape HTML entities
-        url = url.replace(/&amp;/g, '&')
-        url = url.replace(/&#x([0-9A-Fa-f]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
-        return url
-      }
-
-      return null
-    })
-
-    await browser.close()
-
-    if (!videoUrl) {
-      throw new Error('No video URL found in Facebook Ads page. The page may require login or the ad may have been removed.')
+      console.warn('[yt-dlp] Download failed with browser cookies, retrying without cookies:', lastError.message)
     }
-
-    console.log('[fb-ads] Found video URL:', videoUrl.substring(0, 80) + '...')
-    return videoUrl
-
-  } catch (error) {
-    if (browser) {
-      await browser.close().catch(() => {})
-    }
-    throw new Error(`Failed to extract video from Facebook Ads Library: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
+
+  throw lastError ?? new Error('yt-dlp download failed for unknown reason')
 }
 
 /**
- * Check if URL is supported by yt-dlp
- * Returns platform name if supported, null otherwise
+ * Check if URL is supported by yt-dlp.
+ * Returns platform name if supported, null otherwise.
  */
 export function detectPlatform(url: string): string | null {
   const platforms = [
@@ -201,7 +268,7 @@ export function detectPlatform(url: string): string | null {
 }
 
 /**
- * Check if URL is a Facebook Ads Library page
+ * Check if URL is a Facebook Ads Library page.
  */
 export function isFacebookAdsLibraryUrl(url: string): boolean {
   return /facebook\.com\/ads\/library/i.test(url)

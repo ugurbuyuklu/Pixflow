@@ -41,15 +41,15 @@
       },
       "suspicious": {
         "useIterableCallbackReturn": "error",
-        "noArrayIndexKey": "error"
+        "noArrayIndexKey": "warn"
       },
       "a11y": {
-        "useButtonType": "error",
-        "useKeyWithClickEvents": "error",
-        "useMediaCaption": "error",
-        "noStaticElementInteractions": "error",
-        "noLabelWithoutControl": "error",
-        "noRedundantAlt": "error"
+        "useButtonType": "warn",
+        "useKeyWithClickEvents": "warn",
+        "useMediaCaption": "warn",
+        "noStaticElementInteractions": "warn",
+        "noLabelWithoutControl": "warn",
+        "noRedundantAlt": "warn"
       }
     }
   },

@@ -275,7 +275,7 @@ export const usePromptStore = create<PromptState>()((set, get) => ({
           if (!prompt) return prompt
           return {
             ...prompt,
-            quality_score: individualScores?.[i] ?? qualityMetrics?.overall_score ?? 0
+            quality_score: individualScores?.[i] ?? qualityMetrics?.overall_score ?? 0,
           }
         })
 

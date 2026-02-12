@@ -152,12 +152,7 @@ export async function getGeneratedImages(
   }))
 }
 
-export async function rateImage(
-  userId: number,
-  imageId: number,
-  rating: 1 | -1,
-  notes?: string,
-): Promise<void> {
+export async function rateImage(userId: number, imageId: number, rating: 1 | -1, notes?: string): Promise<void> {
   const db = getDb()
 
   db.prepare(`

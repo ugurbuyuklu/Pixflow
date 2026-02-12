@@ -1,12 +1,8 @@
-import JSZip from 'jszip'
 import {
   AlertCircle,
   Bookmark,
   Check,
-  CheckCircle,
   CheckSquare,
-  ChevronDown,
-  Clock,
   Download,
   FileJson,
   Film,
@@ -15,9 +11,7 @@ import {
   ImagePlus,
   List,
   Loader2,
-  Pencil,
   Play,
-  Plus,
   Save,
   Sparkles,
   ThumbsDown,
@@ -44,13 +38,15 @@ import { useImg2VideoQueueStore } from '../../stores/img2videoQueueStore'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { usePromptStore } from '../../stores/promptStore'
 import type { GeneratedImageRecord, GeneratedPrompt } from '../../types'
-import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
+import { EmptyState } from '../ui/EmptyState'
+import { LoadingState } from '../ui/LoadingState'
+import { SegmentedTabs } from '../ui/navigation/SegmentedTabs'
+import { ProgressBar } from '../ui/ProgressBar'
 import { Select } from '../ui/Select'
-import { Slider } from '../ui/Slider'
-import { AlertBanner } from './AlertBanner'
+import { StatusBanner } from '../ui/StatusBanner'
+import { StatusPill } from '../ui/StatusPill'
 import { ImageGrid } from './ImageGrid'
-import { ModeSelector } from './ModeSelector'
 import { SelectableCardGrid } from './SelectableCardGrid'
 import { StepHeader } from './StepHeader'
 
@@ -212,7 +208,6 @@ export default function AssetMonsterPage() {
     updateCurrentCustomPromptInput,
     setCurrentCustomPromptError,
     saveCurrentCustomPrompt,
-    removeSavedCustomPrompt,
     setImageSource,
     setAspectRatio,
     setNumImagesPerPrompt,
@@ -221,7 +216,6 @@ export default function AssetMonsterPage() {
     setPreviewImage,
     addReferenceFiles,
     removeReferenceImage,
-    clearReferenceImages,
     setUploadError,
     setBatchError,
     selectAvatar,
@@ -242,16 +236,11 @@ export default function AssetMonsterPage() {
   const { favorites, loadAll: loadHistory, addToFavorites } = useHistoryStore()
 
   const [batchImageIds, setBatchImageIds] = useState<Map<number, number>>(new Map())
-  const [selectedLibraryPrompts, setSelectedLibraryPrompts] = useState<Set<string>>(new Set())
+  const [selectedLibraryPrompts] = useState<Set<string>>(new Set())
   const [selectedCustomPrompts, setSelectedCustomPrompts] = useState<Set<string>>(new Set())
   const [customPromptSaved, setCustomPromptSaved] = useState(false)
 
-  const {
-    getRootProps,
-    getInputProps,
-    isDragActive,
-    open: openFilePicker,
-  } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { 'image/jpeg': [], 'image/png': [], 'image/webp': [] },
     maxSize: 10 * 1024 * 1024,
     noClick: false,
@@ -319,12 +308,12 @@ export default function AssetMonsterPage() {
       setTimeout(() => {
         console.warn(`[AssetMonster] Image ${img.index} timed out after 5 minutes`)
         const updatedImages = batchProgress.images.map((i) =>
-          i.index === img.index ? { ...i, status: 'failed' as const, error: 'Generation timeout (5 min)' } : i
+          i.index === img.index ? { ...i, status: 'failed' as const, error: 'Generation timeout (5 min)' } : i,
         )
         useGenerationStore.setState({
           batchProgress: { ...batchProgress, images: updatedImages },
         })
-      }, TIMEOUT_MS)
+      }, TIMEOUT_MS),
     )
 
     return () => timers.forEach(clearTimeout)
@@ -362,6 +351,7 @@ export default function AssetMonsterPage() {
       return
     }
 
+    const { default: JSZip } = await import('jszip')
     const zip = new JSZip()
     await Promise.all(
       urls.map(async (url) => {
@@ -433,102 +423,38 @@ export default function AssetMonsterPage() {
   const remainingSeconds = completedCount > 0 ? Math.ceil(avgPerImage * (totalCount - completedCount)) : 0
 
   return (
-    <div className="grid grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* Left Column: Inputs */}
       <div className="space-y-6">
         {/* Step 1: Select Prompts */}
         <div className="bg-surface-50 rounded-lg p-4">
           <StepHeader stepNumber={1} title="Select Prompts" />
-          <ModeSelector
+          <SegmentedTabs
+            ariaLabel="Prompt source"
             value={promptSource}
-            options={[
-              { value: 'generated' as const, label: 'Generated Prompts', icon: List },
-              { value: 'custom' as const, label: 'Custom Prompt', icon: FileJson },
-              { value: 'library' as const, label: 'Library', icon: Bookmark, disabled: true },
+            items={[
+              { id: 'generated' as const, label: 'Generated Prompts', icon: <List className="w-4 h-4" /> },
+              { id: 'custom' as const, label: 'Custom Prompt', icon: <FileJson className="w-4 h-4" /> },
+              { id: 'library' as const, label: 'Library', icon: <Bookmark className="w-4 h-4" />, disabled: true },
             ]}
             onChange={setPromptSource}
           />
 
           {promptSource === 'library' ? (
-            <div className="text-center py-8 text-surface-400 border-2 border-dashed border-surface-200 rounded-lg">
-              <Bookmark className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">Library integration coming soon</p>
-              <p className="text-xs mt-1">This feature is temporarily disabled</p>
-            </div>
-          ) : false ? (
-            <div className="space-y-3">
-              {favorites.length === 0 ? (
-                <div className="text-center py-8 text-surface-400 border-2 border-dashed border-surface-200 rounded-lg">
-                  <Bookmark className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No favorited prompts yet</p>
-                  <p className="text-xs mt-1">Favorite prompts from Library to use them here</p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setSelectedLibraryPrompts(new Set(favorites.map((f) => f.id)))}
-                      >
-                        Select All
-                      </Button>
-                      <Button variant="secondary" size="sm" onClick={() => setSelectedLibraryPrompts(new Set())}>
-                        Deselect All
-                      </Button>
-                    </div>
-                    <span className="text-sm text-surface-400">
-                      {selectedLibraryPrompts.size}/{favorites.length}
-                    </span>
-                  </div>
-                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                    {favorites.map((fav) => (
-                      <button
-                        type="button"
-                        key={fav.id}
-                        onClick={() => {
-                          const next = new Set(selectedLibraryPrompts)
-                          if (next.has(fav.id)) next.delete(fav.id)
-                          else next.add(fav.id)
-                          setSelectedLibraryPrompts(next)
-                        }}
-                        className={`w-full text-left p-3 rounded-lg transition-colors flex items-start gap-3 ${
-                          selectedLibraryPrompts.has(fav.id)
-                            ? 'bg-brand-600/30 border border-brand-500'
-                            : 'bg-surface-100 hover:bg-surface-200 border border-transparent'
-                        }`}
-                      >
-                        <div
-                          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 ${
-                            selectedLibraryPrompts.has(fav.id) ? 'bg-brand-500 border-brand-500' : 'border-surface-200'
-                          }`}
-                        >
-                          {selectedLibraryPrompts.has(fav.id) && <Check className="w-3 h-3" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm">{fav.name}</div>
-                          {fav.concept && <div className="text-xs text-surface-400 mt-0.5">{fav.concept}</div>}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
+            <EmptyState
+              title="Library integration coming soon"
+              description="This feature is temporarily disabled"
+              icon={<Bookmark className="w-8 h-8" />}
+            />
           ) : promptSource === 'generated' ? (
             prompts.length === 0 ? (
-              <div className="text-center py-8 text-surface-400">
-                <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No prompts yet</p>
-                <button
-                  type="button"
-                  onClick={() => navigate('prompts')}
-                  className="mt-2 text-brand-400 hover:text-brand-300 text-sm"
-                >
-                  Generate prompts first →
-                </button>
-              </div>
+              <EmptyState
+                title="No prompts yet"
+                description="Generate prompts first to continue."
+                icon={<Sparkles className="w-8 h-8" />}
+                actionLabel="Go to Prompt Factory"
+                onAction={() => navigate('prompts')}
+              />
             ) : (
               <div>
                 <div className="flex items-center justify-between mb-3">
@@ -563,7 +489,7 @@ export default function AssetMonsterPage() {
                     type="button"
                     onClick={async () => {
                       const parsed = await parseCustomPrompt(currentCustomPromptInput, 1, setCurrentCustomPromptError)
-                      if (parsed && parsed[0]) {
+                      if (parsed?.[0]) {
                         const prompt = parsed[0]
                         const name = `${savedCustomPrompts.length + 1}`
                         await addToFavorites(prompt, name, 'custom')
@@ -573,9 +499,11 @@ export default function AssetMonsterPage() {
                       }
                     }}
                     disabled={!currentCustomPromptInput.trim() || customPromptSaved}
-                    className={customPromptSaved
-                      ? "text-brand-500 transition-colors disabled:opacity-100"
-                      : "text-secondary-600 hover:text-secondary-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"}
+                    className={
+                      customPromptSaved
+                        ? 'text-brand-500 transition-colors disabled:opacity-100'
+                        : 'text-secondary-600 hover:text-secondary-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed'
+                    }
                     title="Save to Library & Add Card"
                   >
                     {customPromptSaved ? <Check className="w-5 h-5" /> : <Save className="w-5 h-5" />}
@@ -638,16 +566,17 @@ Examples:
           <StepHeader stepNumber={2} title="Reference Images" subtitle="(Optional)" />
           <input {...getInputProps()} />
 
-          <ModeSelector
+          <SegmentedTabs
+            ariaLabel="Reference image source"
             value={imageSource}
-            options={[
+            items={[
               {
-                value: 'gallery' as const,
+                id: 'gallery' as const,
                 label: 'Gallery',
-                icon: FolderOpen,
-                badge: avatars.length > 0 ? `(${avatars.length})` : undefined,
+                icon: <FolderOpen className="w-4 h-4" />,
+                badge: avatars.length > 0 ? <span>({avatars.length})</span> : undefined,
               },
-              { value: 'upload' as const, label: 'Upload', icon: Upload },
+              { id: 'upload' as const, label: 'Upload', icon: <Upload className="w-4 h-4" /> },
             ]}
             onChange={setImageSource}
           />
@@ -656,17 +585,13 @@ Examples:
           {imageSource === 'gallery' && (
             <div className="border border-surface-200 rounded-lg p-3">
               {avatarsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-surface-400" />
-                </div>
+                <LoadingState title="Loading avatars..." size="sm" />
               ) : avatars.length === 0 ? (
-                <div className="text-center py-8 text-surface-400">
-                  <Users className="w-10 h-10 mx-auto mb-3 opacity-50" />
-                  <p className="text-sm">No avatars in gallery</p>
-                  <p className="text-xs text-surface-400 mt-1">
-                    Add images to <code className="bg-surface-100 px-1 rounded text-xs">avatars/</code> folder
-                  </p>
-                </div>
+                <EmptyState
+                  title="No avatars in gallery"
+                  description="Add images to avatars/ folder"
+                  icon={<Users className="w-10 h-10" />}
+                />
               ) : (
                 <div className="flex gap-2 overflow-x-auto pb-2">
                   {avatars.map((avatar) => {
@@ -756,7 +681,7 @@ Examples:
         {/* Step 3: Settings */}
         <div className="bg-surface-50 rounded-lg p-4">
           <StepHeader stepNumber={3} title="Settings" />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select
               label="Aspect Ratio"
               value={aspectRatio}
@@ -821,16 +746,24 @@ Examples:
         </Button>
 
         {batchError && (
-          <AlertBanner
+          <StatusBanner
             type={batchError.type}
             message={batchError.message}
-            action={batchError.action}
+            actionLabel={batchError.action?.label}
+            onAction={batchError.action?.onClick}
             onDismiss={() => setBatchError(null)}
-            offline={!navigator.onLine}
+            icon={!navigator.onLine ? WifiOff : undefined}
           />
         )}
 
-        {uploadError && <AlertBanner type="error" message={uploadError} onDismiss={() => setUploadError(null)} />}
+        {uploadError && (
+          <StatusBanner
+            type="error"
+            message={uploadError}
+            onDismiss={() => setUploadError(null)}
+            icon={!navigator.onLine ? WifiOff : undefined}
+          />
+        )}
       </div>
 
       {/* Right Column: Outputs */}
@@ -843,20 +776,21 @@ Examples:
             <div>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <Badge
-                    variant={
+                  <StatusPill
+                    status={
                       batchProgress.status === 'completed'
-                        ? 'success'
+                        ? 'completed'
                         : batchProgress.status === 'failed'
-                          ? 'danger'
-                          : 'warning'
+                          ? 'failed'
+                          : 'generating'
                     }
-                  >
-                    {batchProgress.status.toUpperCase()}
-                  </Badge>
+                    size="sm"
+                    label={batchProgress.status.toUpperCase()}
+                  />
                   <span className="text-sm text-surface-400">{batchProgress.progress}%</span>
                 </div>
               </div>
+              <ProgressBar value={batchProgress.progress} className="mb-4" />
 
               <div className="grid grid-cols-5 gap-3">
                 {batchProgress.images.map((img) => (
@@ -914,7 +848,9 @@ Examples:
                           onClick={(e) => {
                             e.stopPropagation()
                             const updatedImages = batchProgress.images.map((i) =>
-                              i.index === img.index ? { ...i, status: 'failed' as const, error: 'Cancelled by user' } : i
+                              i.index === img.index
+                                ? { ...i, status: 'failed' as const, error: 'Cancelled by user' }
+                                : i,
                             )
                             useGenerationStore.setState({
                               batchProgress: { ...batchProgress, images: updatedImages },
@@ -1040,7 +976,7 @@ Examples:
                       }}
                     >
                       {selectedResultImages.size === 0 ||
-                       selectedResultImages.size === batchProgress.images.filter((i) => i.status === 'completed').length
+                      selectedResultImages.size === batchProgress.images.filter((i) => i.status === 'completed').length
                         ? 'Download All'
                         : `Download Selected (${selectedResultImages.size})`}
                     </Button>
@@ -1049,12 +985,14 @@ Examples:
                       size="sm"
                       icon={<ImagePlus className="w-4 h-4" />}
                       onClick={() => {
-                        const completedImages = batchProgress?.images.filter((img) => img.status === 'completed' && img.url) ?? []
+                        const completedImages =
+                          batchProgress?.images.filter((img) => img.status === 'completed' && img.url) ?? []
                         const isAllSelected = selectedResultImages.size === completedImages.length
 
-                        const imagesToSend = isAllSelected || selectedResultImages.size === 0
-                          ? completedImages
-                          : completedImages.filter((img) => selectedResultImages.has(img.index))
+                        const imagesToSend =
+                          isAllSelected || selectedResultImages.size === 0
+                            ? completedImages
+                            : completedImages.filter((img) => selectedResultImages.has(img.index))
 
                         const imageUrls = imagesToSend.map((img) => img.url!)
                         const newIds = useImg2VideoQueueStore.getState().addItems(imageUrls, 'img2img')
@@ -1065,7 +1003,7 @@ Examples:
                       }}
                     >
                       {selectedResultImages.size === 0 ||
-                       selectedResultImages.size === batchProgress.images.filter((i) => i.status === 'completed').length
+                      selectedResultImages.size === batchProgress.images.filter((i) => i.status === 'completed').length
                         ? 'Img2Img'
                         : `Img2Img (${selectedResultImages.size})`}
                     </Button>
@@ -1074,12 +1012,14 @@ Examples:
                       size="sm"
                       icon={<Film className="w-4 h-4" />}
                       onClick={() => {
-                        const completedImages = batchProgress?.images.filter((img) => img.status === 'completed' && img.url) ?? []
+                        const completedImages =
+                          batchProgress?.images.filter((img) => img.status === 'completed' && img.url) ?? []
                         const isAllSelected = selectedResultImages.size === completedImages.length
 
-                        const imagesToSend = isAllSelected || selectedResultImages.size === 0
-                          ? completedImages
-                          : completedImages.filter((img) => selectedResultImages.has(img.index))
+                        const imagesToSend =
+                          isAllSelected || selectedResultImages.size === 0
+                            ? completedImages
+                            : completedImages.filter((img) => selectedResultImages.has(img.index))
 
                         const imageUrls = imagesToSend.map((img) => img.url!)
                         const newIds = useImg2VideoQueueStore.getState().addItems(imageUrls, 'img2video')
@@ -1090,7 +1030,7 @@ Examples:
                       }}
                     >
                       {selectedResultImages.size === 0 ||
-                       selectedResultImages.size === batchProgress.images.filter((i) => i.status === 'completed').length
+                      selectedResultImages.size === batchProgress.images.filter((i) => i.status === 'completed').length
                         ? 'Img2Video'
                         : `Img2Video (${selectedResultImages.size})`}
                     </Button>

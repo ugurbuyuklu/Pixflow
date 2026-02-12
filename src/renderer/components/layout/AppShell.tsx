@@ -2,12 +2,12 @@ import { Loader2 } from 'lucide-react'
 import { lazy, Suspense, useEffect } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
+import { reportFrontendPerf } from '../../lib/frontendTelemetry'
 import { useAuthStore } from '../../stores/authStore'
 import { useNavigationStore } from '../../stores/navigationStore'
 import { useNotificationStore } from '../../stores/notificationStore'
 import { useProductStore } from '../../stores/productStore'
 import { useThemeStore } from '../../stores/themeStore'
-// biome-ignore lint/correctness/noUnusedImports: re-enable with auth gate before release
 import { LoginPage } from '../auth/LoginPage'
 import { FeedbackWidget } from '../feedback/FeedbackWidget'
 import { ErrorBoundary } from '../ui/ErrorBoundary'
@@ -50,6 +50,7 @@ export function AppShell() {
   const loadProducts = useProductStore((s) => s.loadProducts)
   const loadNotifications = useNotificationStore((s) => s.load)
   const activeTab = useNavigationStore((s) => s.activeTab)
+  const consumePendingNavigationPerf = useNavigationStore((s) => s.consumePendingNavigationPerf)
 
   useKeyboardShortcuts()
 
@@ -65,6 +66,42 @@ export function AppShell() {
     }
   }, [isAuthenticated, loadProducts, loadNotifications])
 
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const pending = consumePendingNavigationPerf()
+    if (!pending || pending.toTab !== activeTab) return
+
+    const nowMs = globalThis.performance?.now?.() ?? Date.now()
+    const tabSwitchDuration = Math.max(0, nowMs - pending.startedAtMs)
+    void reportFrontendPerf({
+      metric: 'tab_switch',
+      tab: pending.toTab,
+      fromTab: pending.fromTab,
+      durationMs: tabSwitchDuration,
+    })
+
+    let cancelled = false
+    const raf1 = requestAnimationFrame(() => {
+      const raf2 = requestAnimationFrame(() => {
+        if (cancelled) return
+        const renderNow = globalThis.performance?.now?.() ?? Date.now()
+        const pageRenderDuration = Math.max(0, renderNow - pending.startedAtMs)
+        void reportFrontendPerf({
+          metric: 'page_render',
+          tab: pending.toTab,
+          fromTab: pending.fromTab,
+          durationMs: pageRenderDuration,
+        })
+      })
+      if (cancelled) cancelAnimationFrame(raf2)
+    })
+
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(raf1)
+    }
+  }, [activeTab, consumePendingNavigationPerf, isAuthenticated])
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-surface-0 flex items-center justify-center">
@@ -73,8 +110,7 @@ export function AppShell() {
     )
   }
 
-  // TODO: re-enable auth gate before release
-  // if (!isAuthenticated) return <LoginPage />
+  if (!isAuthenticated) return <LoginPage />
 
   const ActivePage = PAGES[activeTab]
 

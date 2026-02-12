@@ -9,7 +9,7 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -24,8 +24,51 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Release Gate
+        run: npm run gate:release
 
-      - name: Build
-        run: npm run build
+      - name: Publish Ops Summary
+        if: always()
+        run: |
+          {
+            echo "## Telemetry Highlights"
+            echo ""
+            if [ -f docs/ops/telemetry-highlights.md ]; then cat docs/ops/telemetry-highlights.md; else echo "_not generated_"; fi
+            echo ""
+            echo "## Telemetry Baseline"
+            echo ""
+            if [ -f docs/ops/telemetry-baseline.md ]; then cat docs/ops/telemetry-baseline.md; else echo "_not generated_"; fi
+            echo ""
+            echo "## Release Preflight"
+            echo ""
+            if [ -f docs/ops/release-preflight.md ]; then cat docs/ops/release-preflight.md; else echo "_not generated_"; fi
+            echo ""
+            echo "## Regression Gate"
+            echo ""
+            if [ -f docs/ops/regression-gate.md ]; then cat docs/ops/regression-gate.md; else echo "_not generated_"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Ops Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-ops-artifacts
+          path: |
+            telemetry-report.txt
+            telemetry-report.json
+            docs/ops/telemetry-dashboard.md
+            docs/ops/telemetry-highlights.md
+            docs/ops/telemetry-baseline.json
+            docs/ops/telemetry-baseline.md
+            docs/ops/proposed-thresholds.env
+            docs/ops/proposed-thresholds.md
+            docs/ops/release-preflight.json
+            docs/ops/release-preflight.md
+            docs/ops/regression-gate.json
+            docs/ops/regression-gate.md
+            docs/ops/preflight-history.md
+            logs/telemetry-trends.json
+            logs/telemetry-trends-history.jsonl
+            logs/preflight-history.jsonl
+            logs/pipeline-events.jsonl
+          if-no-files-found: ignore

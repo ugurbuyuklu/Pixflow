@@ -1,4 +1,3 @@
-import JSZip from 'jszip'
 import {
   AlertCircle,
   CheckCircle,
@@ -21,7 +20,10 @@ import { assetUrl } from '../../lib/api'
 import { ASPECT_RATIOS, DURATIONS, useImg2VideoStore, VIDEO_PRESETS } from '../../stores/img2videoStore'
 import { Badge } from '../ui/Badge'
 import { Button } from '../ui/Button'
+import { ProgressBar } from '../ui/ProgressBar'
+import { StatusPill } from '../ui/StatusPill'
 import { Select } from '../ui/Select'
+import { StatusBanner } from '../ui/StatusBanner'
 
 export default function Img2VideoPage() {
   const {
@@ -55,7 +57,7 @@ export default function Img2VideoPage() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { 'image/jpeg': [], 'image/png': [], 'image/webp': [] },
     maxSize: 10 * 1024 * 1024,
-    disabled: uploading,  // Only block during upload, not generation
+    disabled: uploading, // Only block during upload, not generation
     onDrop: (accepted) => {
       if (accepted.length > 0) uploadFiles(accepted)
     },
@@ -98,6 +100,7 @@ export default function Img2VideoPage() {
     }
 
     // Multiple videos: create ZIP
+    const { default: JSZip } = await import('jszip')
     const zip = new JSZip()
     await Promise.all(
       completedJobs.map(async (job, index) => {
@@ -327,117 +330,124 @@ export default function Img2VideoPage() {
                   return (
                     // biome-ignore lint/suspicious/noArrayIndexKey: static during generation
                     <div key={i} className="bg-surface-0 rounded-lg overflow-hidden border border-surface-100">
-                    <div className="relative aspect-[9/16] bg-surface-100">
-                      <img src={assetUrl(entry.url)} alt={`Source ${i + 1}`} className="w-full h-full object-cover" />
-                      {job && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          {job.status === 'generating' && (
-                            <>
-                              <div className="bg-black/60 rounded-full p-3">
-                                <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
+                      <div className="relative aspect-[9/16] bg-surface-100">
+                        <img src={assetUrl(entry.url)} alt={`Source ${i + 1}`} className="w-full h-full object-cover" />
+                        {job && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            {job.status === 'generating' && (
+                              <>
+                                <div className="bg-black/60 rounded-full p-3">
+                                  <Loader2 className="w-6 h-6 animate-spin text-brand-400" />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => cancelJob(i)}
+                                  className="absolute top-2 right-2 bg-danger/80 hover:bg-danger rounded-full p-1.5 transition-colors"
+                                  title="Cancel generation"
+                                >
+                                  <X className="w-4 h-4 text-white" />
+                                </button>
+                              </>
+                            )}
+                            {job.status === 'completed' && (
+                              <div className="bg-success/80 rounded-full p-2">
+                                <CheckCircle className="w-5 h-5 text-white" />
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => cancelJob(i)}
-                                className="absolute top-2 right-2 bg-danger/80 hover:bg-danger rounded-full p-1.5 transition-colors"
-                                title="Cancel generation"
-                              >
-                                <X className="w-4 h-4 text-white" />
-                              </button>
-                            </>
-                          )}
-                          {job.status === 'completed' && (
-                            <div className="bg-success/80 rounded-full p-2">
-                              <CheckCircle className="w-5 h-5 text-white" />
-                            </div>
-                          )}
-                          {job.status === 'failed' && (
-                            <div className="bg-danger/80 rounded-full p-2">
-                              <XCircle className="w-5 h-5 text-white" />
-                            </div>
-                          )}
-                        </div>
-                      )}
-                      {/* Queued indicator for entries without jobs */}
-                      {!job && generating && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="bg-surface-800/80 rounded-full px-3 py-1.5">
-                            <span className="text-xs font-medium text-surface-200">Queued</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-2 space-y-2">
-                      {editingIndex === i ? (
-                        <>
-                          <textarea
-                            value={editingPrompt}
-                            onChange={(e) => setEditingPrompt(e.target.value)}
-                            className="w-full h-20 text-xs bg-surface-50 border border-surface-200 rounded p-2 resize-none focus:outline-none focus:border-brand-500"
-                            placeholder="Describe the video..."
-                          />
-                          <div className="flex gap-1">
-                            <Button
-                              variant="success"
-                              size="xs"
-                              onClick={() => {
-                                setEntryPrompt(i, editingPrompt)
-                                setEditingIndex(null)
-                              }}
-                              className="flex-1"
-                            >
-                              Save
-                            </Button>
-                            <Button variant="ghost" size="xs" onClick={() => setEditingIndex(null)} className="flex-1">
-                              Cancel
-                            </Button>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-xs text-surface-500 line-clamp-2">{entry.prompt || 'No prompt'}</p>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="xs"
-                              icon={<Pencil className="w-3 h-3" />}
-                              onClick={() => {
-                                setEditingIndex(i)
-                                setEditingPrompt(entry.prompt)
-                              }}
-                              className="flex-1"
-                            >
-                              Edit
-                            </Button>
-                            {(!job || job.status === 'pending' || job.status === 'failed') && (
-                              <Button
-                                variant="primary"
-                                size="xs"
-                                icon={<Play className="w-3 h-3" />}
-                                onClick={() => regenerateSingle(i)}
-                                disabled={!entry.prompt.trim()}
-                                className="flex-1"
-                                title={!entry.prompt.trim() ? 'Add a prompt first' : 'Generate video'}
-                              >
-                                Generate
-                              </Button>
                             )}
-                            {job?.status === 'completed' && (
-                              <Button
-                                variant="secondary"
-                                size="xs"
-                                icon={<Play className="w-3 h-3" />}
-                                onClick={() => regenerateSingle(i)}
-                                className="flex-1"
-                              >
-                                Regenerate
-                              </Button>
+                            {job.status === 'failed' && (
+                              <div className="bg-danger/80 rounded-full p-2">
+                                <XCircle className="w-5 h-5 text-white" />
+                              </div>
                             )}
                           </div>
-                        </>
-                      )}
+                        )}
+                        {/* Queued indicator for entries without jobs */}
+                        {!job && generating && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <StatusPill
+                              status="queued"
+                              size="sm"
+                              className="bg-surface-800/80 text-surface-200 border-surface-700/60"
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-2 space-y-2">
+                        {editingIndex === i ? (
+                          <>
+                            <textarea
+                              value={editingPrompt}
+                              onChange={(e) => setEditingPrompt(e.target.value)}
+                              className="w-full h-20 text-xs bg-surface-50 border border-surface-200 rounded p-2 resize-none focus:outline-none focus:border-brand-500"
+                              placeholder="Describe the video..."
+                            />
+                            <div className="flex gap-1">
+                              <Button
+                                variant="success"
+                                size="xs"
+                                onClick={() => {
+                                  setEntryPrompt(i, editingPrompt)
+                                  setEditingIndex(null)
+                                }}
+                                className="flex-1"
+                              >
+                                Save
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                onClick={() => setEditingIndex(null)}
+                                className="flex-1"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-xs text-surface-500 line-clamp-2">{entry.prompt || 'No prompt'}</p>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="xs"
+                                icon={<Pencil className="w-3 h-3" />}
+                                onClick={() => {
+                                  setEditingIndex(i)
+                                  setEditingPrompt(entry.prompt)
+                                }}
+                                className="flex-1"
+                              >
+                                Edit
+                              </Button>
+                              {(!job || job.status === 'pending' || job.status === 'failed') && (
+                                <Button
+                                  variant="primary"
+                                  size="xs"
+                                  icon={<Play className="w-3 h-3" />}
+                                  onClick={() => regenerateSingle(i)}
+                                  disabled={!entry.prompt.trim()}
+                                  className="flex-1"
+                                  title={!entry.prompt.trim() ? 'Add a prompt first' : 'Generate video'}
+                                >
+                                  Generate
+                                </Button>
+                              )}
+                              {job?.status === 'completed' && (
+                                <Button
+                                  variant="secondary"
+                                  size="xs"
+                                  icon={<Play className="w-3 h-3" />}
+                                  onClick={() => regenerateSingle(i)}
+                                  className="flex-1"
+                                >
+                                  Regenerate
+                                </Button>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
                   )
                 })}
               </div>
@@ -491,14 +501,11 @@ export default function Img2VideoPage() {
                   Cancel
                 </Button>
               </div>
-              <div className="w-full bg-surface-100 rounded-full h-2">
-                <div
-                  className="bg-brand-400 h-2 rounded-full transition-all"
-                  style={{
-                    width: `${(jobs.filter((j) => j.status === 'completed' || j.status === 'failed').length / jobs.length) * 100}%`,
-                  }}
-                />
-              </div>
+              <ProgressBar
+                value={
+                  (jobs.filter((j) => j.status === 'completed' || j.status === 'failed').length / jobs.length) * 100
+                }
+              />
             </div>
           )}
 
@@ -543,10 +550,7 @@ export default function Img2VideoPage() {
                     {/* biome-ignore lint/a11y/useMediaCaption: AI-generated content, no captions available */}
                     <video controls src={assetUrl(job.localPath!)} className="w-full aspect-video" />
                     <div className="p-2 flex items-center justify-between">
-                      <Badge variant="success">
-                        <CheckCircle className="w-3 h-3 mr-1" />
-                        Ready
-                      </Badge>
+                      <StatusPill status="completed" size="sm" label="Ready" />
                       <Button
                         variant="ghost"
                         size="xs"
@@ -580,27 +584,7 @@ export default function Img2VideoPage() {
           )}
 
           {/* Error */}
-          {error && (
-            <div
-              className={`rounded-lg p-4 flex items-start gap-3 ${
-                error.type === 'warning'
-                  ? 'bg-warning-muted/50 border border-warning/40'
-                  : 'bg-danger-muted/50 border border-danger/40'
-              }`}
-            >
-              <AlertCircle
-                className={`w-5 h-5 shrink-0 mt-0.5 ${error.type === 'warning' ? 'text-warning' : 'text-danger'}`}
-              />
-              <p className={`flex-1 ${error.type === 'warning' ? 'text-warning' : 'text-danger'}`}>{error.message}</p>
-              <Button
-                variant="ghost-muted"
-                size="xs"
-                aria-label="Dismiss"
-                icon={<X className="w-4 h-4" />}
-                onClick={() => setError(null)}
-              />
-            </div>
-          )}
+          {error && <StatusBanner type={error.type} message={error.message} onDismiss={() => setError(null)} />}
         </>
       )}
     </div>

@@ -1,0 +1,28 @@
+{
+  "generatedAt": "2026-02-12T09:34:52.186Z",
+  "mode": "block",
+  "decision": "SKIPPED_NO_BASELINE",
+  "sourceFile": "/Users/pixery/Projects/pixflow/logs/telemetry-trends.json",
+  "previousEvents": 0,
+  "currentEvents": 47,
+  "thresholds": {
+    "maxSuccessDrop": 0.01,
+    "maxP95IncreaseMs": 5000,
+    "maxProviderFailRateIncrease": 0.05,
+    "maxPipelineSuccessDrop": 0.01,
+    "maxPipelineP95IncreaseMs": 5000,
+    "maxPipelineFailRateIncrease": 0.05,
+    "maxFrontendSuccessDrop": 0.01,
+    "maxFrontendP95IncreaseMs": 5000,
+    "maxFrontendFailRateIncrease": 0.05,
+    "minPipelineSamples": 3,
+    "providerOverrides": {}
+  },
+  "counters": {
+    "pipelineCandidates": 0,
+    "pipelineEvaluated": 0,
+    "pipelineSkippedNoBaseline": 0,
+    "pipelineSkippedLowSamples": 0
+  },
+  "failures": []
+}

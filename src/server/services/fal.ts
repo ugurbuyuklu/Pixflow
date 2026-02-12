@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fal } from '@fal-ai/client'
 import { v4 as uuidv4 } from 'uuid'
 import { ensureFalConfig } from './falConfig.js'
+import { saveBatchImages } from './imageRatings.js'
 import { notify } from './notifications.js'
 import {
   isMockProvidersEnabled,
@@ -51,6 +52,7 @@ function cleanupOldJobs() {
 }
 
 const cleanupInterval = setInterval(cleanupOldJobs, 5 * 60 * 1000)
+cleanupInterval.unref?.()
 
 export function stopJobCleanup() {
   clearInterval(cleanupInterval)
@@ -275,7 +277,6 @@ export async function generateBatch(
 
     if (job.status === 'completed' && job.userId && job.prompts) {
       try {
-        const { saveBatchImages } = await import('./imageRatings.js')
         await saveBatchImages(job.userId, job, job.prompts, {
           aspectRatio: options.aspectRatio,
           resolution: options.resolution,

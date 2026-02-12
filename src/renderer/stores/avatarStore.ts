@@ -1,6 +1,15 @@
 import { create } from 'zustand'
 import { apiUrl, assetUrl, authFetch, getApiError, unwrapApiData } from '../lib/api'
-import type { Avatar, AvatarStudioMode, ErrorInfo, LipsyncJob, ReactionAspectRatio, ReactionDuration, ReactionType, Voice } from '../types'
+import type {
+  Avatar,
+  AvatarStudioMode,
+  ErrorInfo,
+  LipsyncJob,
+  ReactionAspectRatio,
+  ReactionDuration,
+  ReactionType,
+  Voice,
+} from '../types'
 import { parseError } from '../types'
 
 type AvatarGender = 'female' | 'male'
@@ -74,12 +83,14 @@ export const REACTION_DEFINITIONS: Record<ReactionType, { label: string; emoji: 
   sad: {
     label: 'Sad',
     emoji: '😢',
-    prompt: 'person looking down with sad expression, slight frown, eyes looking downward, subtle head movement showing disappointment',
+    prompt:
+      'person looking down with sad expression, slight frown, eyes looking downward, subtle head movement showing disappointment',
   },
   upset: {
     label: 'Upset',
     emoji: '😠',
-    prompt: 'person showing frustration, furrowed brows, tight lips, slight head shake, showing annoyance and displeasure',
+    prompt:
+      'person showing frustration, furrowed brows, tight lips, slight head shake, showing annoyance and displeasure',
   },
   angry: {
     label: 'Angry',
@@ -94,7 +105,8 @@ export const REACTION_DEFINITIONS: Record<ReactionType, { label: string; emoji: 
   sob: {
     label: 'Sobbing',
     emoji: '😭',
-    prompt: 'person crying, tears, face contorted in sorrow, shoulders shaking, hand covering face, deep emotional distress',
+    prompt:
+      'person crying, tears, face contorted in sorrow, shoulders shaking, hand covering face, deep emotional distress',
   },
   excited: {
     label: 'Excited',
@@ -150,6 +162,7 @@ interface AvatarState {
   scriptEstimatedDuration: number
   scriptHistory: string[]
   scriptHistoryIndex: number
+  transcriptionRequestId: number
 
   voices: Voice[]
   voicesLoading: boolean
@@ -244,6 +257,7 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
   scriptEstimatedDuration: 0,
   scriptHistory: [],
   scriptHistoryIndex: -1,
+  transcriptionRequestId: 0,
 
   voices: [],
   voicesLoading: false,
@@ -626,14 +640,35 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
       return
     }
 
-    set({ transcribingVideo: true, transcriptionError: null, generatedScript: '' })
+    // Increment request ID to invalidate previous requests
+    const currentRequestId = get().transcriptionRequestId + 1
+    const clientRequestId = `transcribe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+
+    set({
+      transcribingVideo: true,
+      transcriptionError: null,
+      generatedScript: '',
+      scriptHistory: [],
+      scriptHistoryIndex: -1,
+      transcriptionRequestId: currentRequestId,
+    })
 
     try {
       const res = await authFetch(apiUrl('/api/videos/transcribe'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Client-Request-Id': clientRequestId,
+        },
         body: JSON.stringify({ videoUrl }),
       })
+
+      // Check if this request is still current (not superseded by newer request)
+      if (get().transcriptionRequestId !== currentRequestId) {
+        console.log('[Transcribe] Ignoring stale response (request superseded)')
+        return
+      }
 
       if (!res.ok) {
         const raw = await res.json().catch(() => ({}))
@@ -642,16 +677,39 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
 
       const raw = await res.json()
       const data = unwrapApiData<{ transcript: string; duration: number; language?: string }>(raw)
+
+      // Double-check request ID before setting transcript
+      if (get().transcriptionRequestId !== currentRequestId) {
+        console.log('[Transcribe] Ignoring stale transcript (request superseded)')
+        return
+      }
+
+      console.log('[Transcribe] Client request id:', clientRequestId)
+      console.log('[Transcribe] Received transcript:', data.transcript.substring(0, 100))
+      console.log('[Transcribe] Video URL was:', videoUrl)
       get().setGeneratedScript(data.transcript)
     } catch (err) {
-      set({ transcriptionError: parseError(err) })
+      // Only set error if this request is still current
+      if (get().transcriptionRequestId === currentRequestId) {
+        set({ transcriptionError: parseError(err) })
+      }
     } finally {
-      set({ transcribingVideo: false })
+      // Only clear loading state if this request is still current
+      if (get().transcriptionRequestId === currentRequestId) {
+        set({ transcribingVideo: false })
+      }
     }
   },
 
   generateReactionVideo: async () => {
-    const { generatedUrls, selectedGeneratedIndex, selectedAvatar, selectedReaction, reactionDuration, reactionAspectRatio } = get()
+    const {
+      generatedUrls,
+      selectedGeneratedIndex,
+      selectedAvatar,
+      selectedReaction,
+      reactionDuration,
+      reactionAspectRatio,
+    } = get()
 
     const avatarUrl = generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url
     if (!avatarUrl) {
