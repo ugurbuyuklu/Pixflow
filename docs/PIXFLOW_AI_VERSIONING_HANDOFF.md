@@ -7,7 +7,7 @@ This document is a machine-readable handoff for another AI agent to understand:
 3. what is still pending.
 
 Date: 2026-02-07
-Last updated: 2026-02-13 (Turning point checkpoint + captions stabilization baseline)
+Last updated: 2026-02-13 (Turning point checkpoint + sentence-level captions selection)
 Project root: `/Users/pixery/Projects/pixflow`
 
 ---
@@ -64,6 +64,20 @@ Project root: `/Users/pixery/Projects/pixflow`
   - or `git reset --hard turning-point-2026-02-13-captions` (only in disposable/local branch contexts).
 - Important note:
   - local untracked avatar image files were intentionally excluded from the checkpoint commit.
+
+### 0.3) Post-Turning-Point Captions Update (2026-02-13)
+
+- Follow-up commit:
+  - `c235924` (`feat(captions): add sentence-level selection and selected rerender`)
+- What was added:
+  - sentence-level segmentation returned from `/api/captions/auto-subtitle`
+  - sentence toggle UI in Captions page (enable/disable per sentence)
+  - new endpoint `/api/captions/render-selected` for rerendering output from selected segments
+  - local ffmpeg subtitle render path for selected-sentence output
+- Verification:
+  - `npm run lint` ✅
+  - `npm run lint:biome` ✅
+  - `npm test` (94/94) ✅
 
 ---
 

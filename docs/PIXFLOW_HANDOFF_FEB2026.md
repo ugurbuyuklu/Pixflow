@@ -45,6 +45,19 @@
 - Note:
   - User-local untracked avatar files were intentionally left outside the checkpoint commit.
 
+### Captions Follow-Up (Post Turning Point)
+
+- Commit: `c235924`
+- Summary:
+  - Captions now return sentence segments from provider metadata/word timeline.
+  - New sentence-selection panel allows enabling/disabling individual sentences.
+  - Added `/api/captions/render-selected` endpoint to rerender final output using only selected sentences.
+  - Added local ffmpeg subtitle render fallback for selected segments.
+- Validation run:
+  - `npm run lint` passed
+  - `npm run lint:biome` passed
+  - `npm test` passed (94 tests)
+
 ---
 
 ## Recent Sessions Summary
