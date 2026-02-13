@@ -161,6 +161,7 @@ export default function CaptionsPage() {
   const [renderingSelection, setRenderingSelection] = useState(false)
   const [segmentLoading, setSegmentLoading] = useState(false)
   const [selectionRevision, setSelectionRevision] = useState(0)
+  const [lastAutoAppliedRevision, setLastAutoAppliedRevision] = useState(0)
   const [outputUrl, setOutputUrl] = useState<string | null>(null)
   const [transcription, setTranscription] = useState<string | null>(null)
   const [sourceVideoUrl, setSourceVideoUrl] = useState<string | null>(null)
@@ -438,6 +439,7 @@ export default function CaptionsPage() {
     segmentRequestIdRef.current += 1
     setSegmentLoading(false)
     setSelectionRevision(0)
+    setLastAutoAppliedRevision(0)
     setVideoFile(null)
     setVideoUrl('')
     setInputVideoMeta(null)
@@ -497,12 +499,14 @@ export default function CaptionsPage() {
       setTranscription(nextTranscript || null)
       setSentenceSegments(nextSegments)
       setSelectionRevision(0)
+      setLastAutoAppliedRevision(0)
     } catch (error) {
       if (segmentRequestIdRef.current !== requestId) return
       setSentenceSegments([])
       setTranscription(null)
       setSourceVideoUrl(null)
       setSelectionRevision(0)
+      setLastAutoAppliedRevision(0)
       notify.error(error instanceof Error ? error.message : 'Failed to prepare sentence selection')
     } finally {
       if (segmentRequestIdRef.current === requestId) {
@@ -688,6 +692,7 @@ export default function CaptionsPage() {
         }))
       })
       setSelectionRevision(0)
+      setLastAutoAppliedRevision(0)
       notify.success('Captions generated')
     } catch (err) {
       notify.error(err instanceof Error ? err.message : 'Failed to generate captions')
@@ -776,12 +781,14 @@ export default function CaptionsPage() {
 
   useEffect(() => {
     if (selectionRevision <= 0) return
+    if (selectionRevision <= lastAutoAppliedRevision) return
     if (!canRenderFromSelection || renderingSelection) return
+    setLastAutoAppliedRevision(selectionRevision)
     const timer = window.setTimeout(() => {
       void handleRenderSelected({ silent: true })
     }, 450)
     return () => window.clearTimeout(timer)
-  }, [canRenderFromSelection, handleRenderSelected, renderingSelection, selectionRevision])
+  }, [canRenderFromSelection, handleRenderSelected, lastAutoAppliedRevision, renderingSelection, selectionRevision])
 
   return (
     <div className="space-y-6">
