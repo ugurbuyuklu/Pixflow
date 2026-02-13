@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fal } from '@fal-ai/client'
+import ffmpegStatic from 'ffmpeg-static'
 import { ensureFalConfig } from './falConfig.js'
 import { isMockProvidersEnabled, makeMockId, recordMockProviderSuccess, runWithRetries } from './providerRuntime.js'
 
@@ -464,40 +465,39 @@ async function resolveInputVideoPath(videoUrl: string, outputDir: string, destin
 
 function runFfmpeg(args: string[]): Promise<void> {
   const configured = process.env.FFMPEG_PATH?.trim()
-  const ffmpegPath = configured || DEFAULT_FFMPEG_PATH
+  const candidates = [configured, DEFAULT_FFMPEG_PATH, ffmpegStatic || undefined, 'ffmpeg']
+    .filter((candidate): candidate is string => Boolean(candidate))
+    .filter((candidate, index, list) => list.indexOf(candidate) === index)
 
-  return new Promise((resolve, reject) => {
-    const proc = spawn(ffmpegPath, args)
-    let stderr = ''
-    proc.stderr.on('data', (chunk) => {
-      stderr += chunk.toString()
+  const runWithBinary = (binary: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const proc = spawn(binary, args)
+      let stderr = ''
+      proc.stderr.on('data', (chunk) => {
+        stderr += chunk.toString()
+      })
+      proc.on('close', (code) => {
+        if (code === 0) {
+          resolve()
+        } else {
+          reject(new Error(`ffmpeg failed (binary=${binary}, code ${code}): ${stderr || 'unknown error'}`))
+        }
+      })
+      proc.on('error', (error) => {
+        reject(new Error(`ffmpeg spawn failed (binary=${binary}): ${error.message}`))
+      })
     })
-    proc.on('close', (code) => {
-      if (code === 0) {
-        resolve()
-      } else {
-        reject(new Error(`ffmpeg failed (code ${code}): ${stderr || 'unknown error'}`))
-      }
+
+  return candidates
+    .reduce<Promise<void>>(
+      (chain, binary) => {
+        return chain.catch(() => runWithBinary(binary))
+      },
+      Promise.reject(new Error('ffmpeg execution not started')),
+    )
+    .catch((error) => {
+      throw error instanceof Error ? error : new Error('ffmpeg execution failed')
     })
-    proc.on('error', (error) => {
-      if (ffmpegPath !== 'ffmpeg') {
-        const fallback = spawn('ffmpeg', args)
-        let fallbackErr = ''
-        fallback.stderr.on('data', (chunk) => {
-          fallbackErr += chunk.toString()
-        })
-        fallback.on('close', (fallbackCode) => {
-          if (fallbackCode === 0) resolve()
-          else reject(new Error(`ffmpeg failed (code ${fallbackCode}): ${fallbackErr || error.message}`))
-        })
-        fallback.on('error', () => {
-          reject(new Error(`ffmpeg not found at ${ffmpegPath}. Set FFMPEG_PATH or install ffmpeg.`))
-        })
-        return
-      }
-      reject(new Error(`ffmpeg spawn failed: ${error.message}`))
-    })
-  })
 }
 
 export async function renderSelectedCaptions(
@@ -532,7 +532,7 @@ export async function renderSelectedCaptions(
     await fs.writeFile(subtitlesPath, buildSrt(segments), 'utf8')
 
     const forceStyle = buildAssForceStyle(input)
-    const subtitleFilter = `subtitles='${escapeFilterPath(subtitlesPath)}':force_style='${forceStyle}'`
+    const subtitleFilter = `subtitles=filename='${escapeFilterPath(subtitlesPath)}':charenc=UTF-8:force_style='${forceStyle}'`
 
     await runFfmpeg([
       '-y',
