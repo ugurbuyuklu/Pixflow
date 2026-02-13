@@ -1,4 +1,3 @@
-import { X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiUrl, authFetch, getApiError, unwrapApiData } from '../../lib/api'
 import { notify } from '../../lib/toast'
@@ -653,11 +652,11 @@ export default function CaptionsPage() {
                   >
                     <button
                       type="button"
-                      className="absolute top-2 right-2 z-20 inline-flex items-center justify-center w-7 h-7 rounded-full bg-surface-900/70 text-surface-50 hover:bg-surface-900"
+                      className="absolute top-2 left-1/2 -translate-x-1/2 z-20 rounded-md bg-surface-900/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-surface-50/90 transition hover:bg-surface-900 hover:text-surface-50"
                       onClick={clearSelectedVideo}
                       title="Remove video"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      Remove
                     </button>
                     <video
                       src={inputPreviewSource}
