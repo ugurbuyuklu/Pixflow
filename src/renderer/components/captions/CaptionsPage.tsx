@@ -65,6 +65,43 @@ const formatSegmentTimestamp = (seconds: number): string => {
   return `${mins}:${String(secs).padStart(2, '0')}`
 }
 
+const splitTranscriptIntoSentences = (transcript: string): string[] => {
+  const cleaned = transcript
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!cleaned) return []
+  const matches = cleaned.match(/[^.!?…]+(?:[.!?…]+|$)/g) || []
+  return matches.map((sentence) => sentence.trim()).filter(Boolean)
+}
+
+const buildApproxSentenceSegments = (transcript: string, durationSeconds: number): CaptionSentenceSegment[] => {
+  const sentences = splitTranscriptIntoSentences(transcript)
+  if (sentences.length === 0) return []
+
+  const wordsPerSentence = sentences.map((sentence) => Math.max(1, sentence.split(/\s+/).filter(Boolean).length))
+  const totalWords = wordsPerSentence.reduce((sum, count) => sum + count, 0)
+  const estimatedDuration = durationSeconds > 0 ? durationSeconds : Math.max(totalWords / 2.5, sentences.length * 1.2)
+
+  let cursor = 0
+  return sentences.map((text, index) => {
+    const baseDuration =
+      index === sentences.length - 1
+        ? Math.max(0.4, estimatedDuration - cursor)
+        : Math.max(0.4, (estimatedDuration * wordsPerSentence[index]) / totalWords)
+    const start = Number(cursor.toFixed(3))
+    const end = Number(Math.max(cursor + 0.4, cursor + baseDuration).toFixed(3))
+    cursor = end
+    return {
+      id: `seg-${index + 1}`,
+      start,
+      end,
+      text,
+      enabled: true,
+    }
+  })
+}
+
 const normalizeFontWeight = (weight: 'normal' | 'bold' | 'black' | undefined): 'normal' | 'bold' => {
   if (weight === 'normal') return 'normal'
   return 'bold'
@@ -122,6 +159,7 @@ export default function CaptionsPage() {
   const [enableAnimation, setEnableAnimation] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [renderingSelection, setRenderingSelection] = useState(false)
+  const [segmentLoading, setSegmentLoading] = useState(false)
   const [outputUrl, setOutputUrl] = useState<string | null>(null)
   const [transcription, setTranscription] = useState<string | null>(null)
   const [sourceVideoUrl, setSourceVideoUrl] = useState<string | null>(null)
@@ -134,6 +172,7 @@ export default function CaptionsPage() {
   const dragStartOffsetRef = useRef(0)
   const dragPointerIdRef = useRef<number | null>(null)
   const previousPositionRef = useRef<'bottom' | 'center' | 'top'>('bottom')
+  const segmentRequestIdRef = useRef(0)
 
   const fontOptions = useMemo(() => {
     const hasCustom = fontName && !FONT_OPTIONS.some((opt) => opt.value === fontName)
@@ -396,6 +435,8 @@ export default function CaptionsPage() {
   }, [selectedPresetId, applyPreset])
 
   const clearSelectedVideo = () => {
+    segmentRequestIdRef.current += 1
+    setSegmentLoading(false)
     setVideoFile(null)
     setVideoUrl('')
     setInputVideoMeta(null)
@@ -405,6 +446,67 @@ export default function CaptionsPage() {
     setTranscription(null)
     setOutputUrl(null)
   }
+
+  const hydrateSentenceSelection = useCallback(async (source: { file?: File; url?: string }) => {
+    const requestId = segmentRequestIdRef.current + 1
+    segmentRequestIdRef.current = requestId
+    setSegmentLoading(true)
+    try {
+      let resolvedVideoUrl = source.url?.trim() || ''
+
+      if (source.file) {
+        const uploadForm = new FormData()
+        uploadForm.append('video', source.file)
+        const uploadRes = await authFetch(apiUrl('/api/videos/upload'), {
+          method: 'POST',
+          body: uploadForm,
+        })
+        if (!uploadRes.ok) {
+          const raw = await uploadRes.json().catch(() => ({}))
+          throw new Error(getApiError(raw, 'Video upload failed'))
+        }
+        const uploadRaw = await uploadRes.json()
+        const uploadData = unwrapApiData<{ url: string }>(uploadRaw)
+        resolvedVideoUrl = uploadData.url
+      }
+
+      if (!resolvedVideoUrl) {
+        throw new Error('Video source is required for sentence extraction')
+      }
+
+      const transcribeRes = await authFetch(apiUrl('/api/videos/transcribe'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoUrl: resolvedVideoUrl }),
+      })
+
+      if (!transcribeRes.ok) {
+        const raw = await transcribeRes.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Failed to extract transcript'))
+      }
+
+      const transcribeRaw = await transcribeRes.json()
+      const transcribeData = unwrapApiData<{ transcript: string; duration?: number }>(transcribeRaw)
+      const nextTranscript = (transcribeData.transcript || '').trim()
+      const duration = Number(transcribeData.duration || 0)
+      const nextSegments = buildApproxSentenceSegments(nextTranscript, duration)
+
+      if (segmentRequestIdRef.current !== requestId) return
+      setSourceVideoUrl(resolvedVideoUrl)
+      setTranscription(nextTranscript || null)
+      setSentenceSegments(nextSegments)
+    } catch (error) {
+      if (segmentRequestIdRef.current !== requestId) return
+      setSentenceSegments([])
+      setTranscription(null)
+      setSourceVideoUrl(null)
+      notify.error(error instanceof Error ? error.message : 'Failed to prepare sentence selection')
+    } finally {
+      if (segmentRequestIdRef.current === requestId) {
+        setSegmentLoading(false)
+      }
+    }
+  }, [])
 
   const openFilePicker = () => {
     const input = fileInputRef.current
@@ -556,7 +658,7 @@ export default function CaptionsPage() {
       }>(raw)
       setOutputUrl(data.videoUrl)
       setTranscription(data.transcription || null)
-      setSourceVideoUrl(data.sourceVideoUrl || directVideoUrl || null)
+      setSourceVideoUrl((prev) => prev || data.sourceVideoUrl || directVideoUrl || null)
       const parsedSegments = (data.segments || [])
         .map((segment, index) => {
           const start = Number(segment.start)
@@ -572,7 +674,16 @@ export default function CaptionsPage() {
           } as CaptionSentenceSegment
         })
         .filter((segment): segment is CaptionSentenceSegment => Boolean(segment))
-      setSentenceSegments(parsedSegments)
+      setSentenceSegments((prev) => {
+        if (parsedSegments.length === 0) return prev
+        const previousEnabled = new Map(
+          prev.map((segment, index) => [`${index}:${segment.text.toLowerCase()}`, segment.enabled]),
+        )
+        return parsedSegments.map((segment, index) => ({
+          ...segment,
+          enabled: previousEnabled.get(`${index}:${segment.text.toLowerCase()}`) ?? true,
+        }))
+      })
       notify.success('Captions generated')
     } catch (err) {
       notify.error(err instanceof Error ? err.message : 'Failed to generate captions')
@@ -681,7 +792,6 @@ export default function CaptionsPage() {
                       onMouseLeave={(event) => {
                         const video = event.currentTarget
                         video.pause()
-                        video.currentTime = 0
                         video.muted = true
                       }}
                       onLoadedMetadata={(event) => {
@@ -729,6 +839,8 @@ export default function CaptionsPage() {
                         onChange={(e) => {
                           const file = e.target.files?.[0]
                           if (!file) return
+                          segmentRequestIdRef.current += 1
+                          setSegmentLoading(false)
                           setVideoFile(file)
                           setVideoUrl('')
                           setInputVideoMeta(null)
@@ -737,6 +849,7 @@ export default function CaptionsPage() {
                           setSentenceSegments([])
                           setTranscription(null)
                           setOutputUrl(null)
+                          void hydrateSentenceSelection({ file })
                         }}
                       />
                       {videoFile && <p className="text-xs text-surface-400 mt-2">{videoFile.name}</p>}
@@ -756,6 +869,8 @@ export default function CaptionsPage() {
                           setVideoUrl(e.target.value)
                           setInputVideoMeta(null)
                           if (e.target.value.trim()) {
+                            segmentRequestIdRef.current += 1
+                            setSegmentLoading(false)
                             setVideoFile(null)
                             setYOffsetTouched(false)
                             setSourceVideoUrl(null)
@@ -771,6 +886,8 @@ export default function CaptionsPage() {
                         className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-md text-surface-400 hover:text-surface-900 hover:bg-surface-100 transition"
                         onClick={() => {
                           if (!videoUrl.trim()) return
+                          segmentRequestIdRef.current += 1
+                          setSegmentLoading(false)
                           setVideoFile(null)
                           setInputVideoMeta(null)
                           setYOffsetTouched(false)
@@ -778,6 +895,7 @@ export default function CaptionsPage() {
                           setSentenceSegments([])
                           setTranscription(null)
                           setOutputUrl(null)
+                          void hydrateSentenceSelection({ url: videoUrl.trim() })
                         }}
                         disabled={!videoUrl.trim()}
                         title="Use URL"
@@ -974,12 +1092,17 @@ export default function CaptionsPage() {
 
           <div className="bg-surface-50 rounded-lg p-4 space-y-4">
             <StepHeader stepNumber={3} title="Sentence Selection" />
-            {!hasSegmentSelection && (
+            {segmentLoading && (
               <div className="rounded-lg border border-surface-200 bg-surface-0 p-4 text-sm text-surface-500">
-                Generate captions once to load sentence-level controls.
+                Extracting sentences from the selected video...
               </div>
             )}
-            {hasSegmentSelection && (
+            {!segmentLoading && !hasSegmentSelection && (
+              <div className="rounded-lg border border-surface-200 bg-surface-0 p-4 text-sm text-surface-500">
+                Select a video to auto-load sentence selection.
+              </div>
+            )}
+            {!segmentLoading && hasSegmentSelection && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-surface-400">
