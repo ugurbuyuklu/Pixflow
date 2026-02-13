@@ -21,6 +21,14 @@ const FONT_OPTIONS = [
 
 type AspectBucket = '9:16' | '4:5' | '1:1'
 
+interface CaptionSentenceSegment {
+  id: string
+  start: number
+  end: number
+  text: string
+  enabled: boolean
+}
+
 const SAFE_ZONE_CONFIG: Record<
   AspectBucket,
   { baseWidth: number; baseHeight: number; top: number; bottom: number; right: number }
@@ -50,6 +58,13 @@ const parseNumericInput = (value: string, fallback: number): number => {
 }
 
 const clampProviderYOffset = (value: number): number => clampValue(value, -200, 200)
+
+const formatSegmentTimestamp = (seconds: number): string => {
+  const safe = Math.max(0, Number.isFinite(seconds) ? seconds : 0)
+  const mins = Math.floor(safe / 60)
+  const secs = Math.floor(safe % 60)
+  return `${mins}:${String(secs).padStart(2, '0')}`
+}
 
 const normalizeFontWeight = (weight: 'normal' | 'bold' | 'black' | undefined): 'normal' | 'bold' => {
   if (weight === 'normal') return 'normal'
@@ -91,7 +106,6 @@ export default function CaptionsPage() {
   const [presetName, setPresetName] = useState('')
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [videoUrl, setVideoUrl] = useState('')
-  const language = 'auto'
   const [fontName, setFontName] = useState('Poppins')
   const [fontSize, setFontSize] = useState(72)
   const [fontWeight, setFontWeight] = useState<'normal' | 'bold'>('bold')
@@ -108,15 +122,16 @@ export default function CaptionsPage() {
   const [wordsPerSubtitle, setWordsPerSubtitle] = useState(4)
   const [enableAnimation, setEnableAnimation] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [renderingSelection, setRenderingSelection] = useState(false)
   const [outputUrl, setOutputUrl] = useState<string | null>(null)
   const [transcription, setTranscription] = useState<string | null>(null)
+  const [sourceVideoUrl, setSourceVideoUrl] = useState<string | null>(null)
+  const [sentenceSegments, setSentenceSegments] = useState<CaptionSentenceSegment[]>([])
   const [inputVideoMeta, setInputVideoMeta] = useState<{ width: number; height: number } | null>(null)
   const [videoPreviewHeight, setVideoPreviewHeight] = useState(0)
   const [captionOverlayHeight, setCaptionOverlayHeight] = useState(0)
   const [isDraggingCaption, setIsDraggingCaption] = useState(false)
-  const dragStartXRef = useRef(0)
   const dragStartYRef = useRef(0)
-  const dragStartXOffsetRef = useRef(0)
   const dragStartOffsetRef = useRef(0)
   const dragPointerIdRef = useRef<number | null>(null)
   const previousPositionRef = useRef<'bottom' | 'center' | 'top'>('bottom')
@@ -141,6 +156,10 @@ export default function CaptionsPage() {
   }, [previewUrl])
 
   const canSubmit = Boolean(videoFile || videoUrl.trim())
+  const enabledSegments = useMemo(() => sentenceSegments.filter((segment) => segment.enabled), [sentenceSegments])
+  const hasSegmentSelection = sentenceSegments.length > 0
+  const hasExcludedSegments = hasSegmentSelection && enabledSegments.length < sentenceSegments.length
+  const canRenderFromSelection = Boolean(sourceVideoUrl && enabledSegments.length > 0)
   const resolvedLanguage = undefined
   const directVideoUrl =
     !videoFile && videoUrl.trim() && /\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(videoUrl.trim()) ? videoUrl.trim() : ''
@@ -148,7 +167,7 @@ export default function CaptionsPage() {
 
   const currentSettings = useMemo(
     () => ({
-      language,
+      language: 'auto',
       fontName,
       fontSize,
       fontWeight,
@@ -165,7 +184,6 @@ export default function CaptionsPage() {
       enableAnimation,
     }),
     [
-      language,
       fontName,
       fontSize,
       fontWeight,
@@ -289,11 +307,20 @@ export default function CaptionsPage() {
       bottom: `${Math.max(6, 6 + yPx)}px`,
       transform: 'translateX(-50%)',
     } as React.CSSProperties
-  }, [position, xOffset, yOffset, inputVideoMeta, safeOffsets.baseWidth, safeOffsets.baseHeight, safeOffsets.right, videoPreviewHeight])
+  }, [
+    position,
+    xOffset,
+    yOffset,
+    inputVideoMeta,
+    safeOffsets.baseWidth,
+    safeOffsets.baseHeight,
+    safeOffsets.right,
+    videoPreviewHeight,
+  ])
 
-  const { previewTopPx, clampedYOffset } = useMemo(() => {
+  const { clampedYOffset } = useMemo(() => {
     if (!videoPreviewScale || !videoPreviewHeight) {
-      return { previewTopPx: 12, clampedYOffset: effectiveYOffset }
+      return { clampedYOffset: effectiveYOffset }
     }
 
     const previewSafeTop = safeOffsets.top * videoPreviewScale
@@ -306,7 +333,6 @@ export default function CaptionsPage() {
 
     if (maxTop < minTop) {
       return {
-        previewTopPx: minTop,
         clampedYOffset: effectiveYOffset,
       }
     }
@@ -315,7 +341,6 @@ export default function CaptionsPage() {
       const rawTop = centerTop + previewOffsetPx
       const boundedTop = clampValue(rawTop, minTop, maxTop)
       return {
-        previewTopPx: boundedTop,
         clampedYOffset: (boundedTop - centerTop) / videoPreviewScale,
       }
     }
@@ -323,7 +348,6 @@ export default function CaptionsPage() {
     if (position === 'top') {
       const boundedTop = clampValue(previewOffsetPx, minTop, maxTop)
       return {
-        previewTopPx: boundedTop,
         clampedYOffset: boundedTop / videoPreviewScale,
       }
     }
@@ -332,7 +356,6 @@ export default function CaptionsPage() {
     const rawTop = videoPreviewHeight - captionHeight - previewOffsetPx
     const boundedTop = clampValue(rawTop, minTop, maxTop)
     return {
-      previewTopPx: boundedTop,
       clampedYOffset: (videoPreviewHeight - captionHeight - boundedTop) / videoPreviewScale,
     }
   }, [
@@ -378,6 +401,10 @@ export default function CaptionsPage() {
     setVideoUrl('')
     setInputVideoMeta(null)
     setYOffsetTouched(false)
+    setSourceVideoUrl(null)
+    setSentenceSegments([])
+    setTranscription(null)
+    setOutputUrl(null)
   }
 
   const openFilePicker = () => {
@@ -522,14 +549,91 @@ export default function CaptionsPage() {
         throw new Error(getApiError(raw, 'Failed to generate captions'))
       }
       const raw = await res.json()
-      const data = unwrapApiData<{ videoUrl: string; transcription?: string }>(raw)
+      const data = unwrapApiData<{
+        videoUrl: string
+        sourceVideoUrl?: string
+        transcription?: string
+        segments?: Array<{ id?: string; start?: number; end?: number; text?: string }>
+      }>(raw)
       setOutputUrl(data.videoUrl)
       setTranscription(data.transcription || null)
+      setSourceVideoUrl(data.sourceVideoUrl || directVideoUrl || null)
+      const parsedSegments = (data.segments || [])
+        .map((segment, index) => {
+          const start = Number(segment.start)
+          const end = Number(segment.end)
+          const text = typeof segment.text === 'string' ? segment.text.trim() : ''
+          if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !text) return null
+          return {
+            id: segment.id || `seg-${index + 1}`,
+            start,
+            end,
+            text,
+            enabled: true,
+          } as CaptionSentenceSegment
+        })
+        .filter((segment): segment is CaptionSentenceSegment => Boolean(segment))
+      setSentenceSegments(parsedSegments)
       notify.success('Captions generated')
     } catch (err) {
       notify.error(err instanceof Error ? err.message : 'Failed to generate captions')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const toggleSentenceSegment = (segmentId: string) => {
+    setSentenceSegments((prev) =>
+      prev.map((segment) => (segment.id === segmentId ? { ...segment, enabled: !segment.enabled } : segment)),
+    )
+  }
+
+  const setAllSentenceSegmentsEnabled = (enabled: boolean) => {
+    setSentenceSegments((prev) => prev.map((segment) => ({ ...segment, enabled })))
+  }
+
+  const handleRenderSelected = async () => {
+    if (!canRenderFromSelection || renderingSelection || !sourceVideoUrl) return
+    setRenderingSelection(true)
+    try {
+      const response = await authFetch(apiUrl('/api/captions/render-selected'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoUrl: sourceVideoUrl,
+          segments: enabledSegments.map((segment) => ({
+            start: segment.start,
+            end: segment.end,
+            text: segment.text,
+          })),
+          fontName,
+          fontSize,
+          fontWeight,
+          fontColor,
+          strokeWidth,
+          strokeColor,
+          backgroundColor,
+          backgroundOpacity,
+          position,
+          xOffset: Math.round(xOffset),
+          yOffset: Math.round(yOffset),
+        }),
+      })
+
+      if (!response.ok) {
+        const raw = await response.json().catch(() => ({}))
+        throw new Error(getApiError(raw, 'Failed to render selected captions'))
+      }
+
+      const raw = await response.json()
+      const data = unwrapApiData<{ videoUrl: string }>(raw)
+      setOutputUrl(data.videoUrl)
+      setTranscription(enabledSegments.map((segment) => segment.text).join(' '))
+      notify.success('Rendered with selected sentences')
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'Failed to render selected captions')
+    } finally {
+      setRenderingSelection(false)
     }
   }
 
@@ -555,7 +659,6 @@ export default function CaptionsPage() {
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
-                    {/* biome-ignore lint/a11y/useMediaCaption: generated preview videos do not have captions yet */}
                     <video
                       src={inputPreviewSource}
                       className="absolute inset-0 w-full h-full object-cover"
@@ -619,6 +722,10 @@ export default function CaptionsPage() {
                           setVideoUrl('')
                           setInputVideoMeta(null)
                           setYOffsetTouched(false)
+                          setSourceVideoUrl(null)
+                          setSentenceSegments([])
+                          setTranscription(null)
+                          setOutputUrl(null)
                         }}
                       />
                       {videoFile && <p className="text-xs text-surface-400 mt-2">{videoFile.name}</p>}
@@ -640,6 +747,10 @@ export default function CaptionsPage() {
                           if (e.target.value.trim()) {
                             setVideoFile(null)
                             setYOffsetTouched(false)
+                            setSourceVideoUrl(null)
+                            setSentenceSegments([])
+                            setTranscription(null)
+                            setOutputUrl(null)
                           }
                         }}
                         className="pr-10"
@@ -652,6 +763,10 @@ export default function CaptionsPage() {
                           setVideoFile(null)
                           setInputVideoMeta(null)
                           setYOffsetTouched(false)
+                          setSourceVideoUrl(null)
+                          setSentenceSegments([])
+                          setTranscription(null)
+                          setOutputUrl(null)
                         }}
                         disabled={!videoUrl.trim()}
                         title="Use URL"
@@ -793,7 +908,9 @@ export default function CaptionsPage() {
                 max={1}
                 step={0.05}
                 value={backgroundOpacity}
-                onChange={(e) => setBackgroundOpacity(clampValue(parseNumericInput(e.target.value, backgroundOpacity), 0, 1))}
+                onChange={(e) =>
+                  setBackgroundOpacity(clampValue(parseNumericInput(e.target.value, backgroundOpacity), 0, 1))
+                }
               />
               <Input
                 label="X Offset"
@@ -820,7 +937,9 @@ export default function CaptionsPage() {
                 max={12}
                 value={wordsPerSubtitle}
                 onChange={(e) =>
-                  setWordsPerSubtitle(Math.max(1, Math.min(12, Math.round(parseNumericInput(e.target.value, wordsPerSubtitle)))))
+                  setWordsPerSubtitle(
+                    Math.max(1, Math.min(12, Math.round(parseNumericInput(e.target.value, wordsPerSubtitle)))),
+                  )
                 }
               />
               <Select
@@ -842,6 +961,53 @@ export default function CaptionsPage() {
             </div>
           </div>
 
+          <div className="bg-surface-50 rounded-lg p-4 space-y-4">
+            <StepHeader stepNumber={3} title="Sentence Selection" />
+            {!hasSegmentSelection && (
+              <div className="rounded-lg border border-surface-200 bg-surface-0 p-4 text-sm text-surface-500">
+                Generate captions once to load sentence-level controls.
+              </div>
+            )}
+            {hasSegmentSelection && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-surface-400">
+                    {enabledSegments.length}/{sentenceSegments.length} sentences enabled
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setAllSentenceSegmentsEnabled(true)}>
+                      Select All
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setAllSentenceSegmentsEnabled(false)}>
+                      Clear All
+                    </Button>
+                  </div>
+                </div>
+                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                  {sentenceSegments.map((segment) => (
+                    <button
+                      key={segment.id}
+                      type="button"
+                      className={`w-full text-left rounded-lg border p-3 transition ${
+                        segment.enabled
+                          ? 'border-surface-200 bg-surface-0 hover:border-primary/50'
+                          : 'border-surface-200/50 bg-surface-100/50 opacity-70'
+                      }`}
+                      onClick={() => toggleSentenceSegment(segment.id)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm text-surface-900 flex-1">{segment.text}</p>
+                        <span className="text-xs text-surface-400 whitespace-nowrap">
+                          {formatSegmentTimestamp(segment.start)} - {formatSegmentTimestamp(segment.end)}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <Button
             variant="primary"
             size="lg"
@@ -852,10 +1018,20 @@ export default function CaptionsPage() {
           >
             {submitting ? 'Generating...' : 'Generate Captioned Video'}
           </Button>
+          <Button
+            variant="secondary"
+            size="md"
+            className="w-full"
+            onClick={handleRenderSelected}
+            disabled={!canRenderFromSelection || !hasExcludedSegments || renderingSelection}
+            loading={renderingSelection}
+          >
+            {renderingSelection ? 'Applying Selection...' : 'Apply Selected Sentences'}
+          </Button>
         </div>
 
         <div className="bg-surface-50 rounded-lg p-4 space-y-4">
-          <StepHeader stepNumber={3} title="Output" />
+          <StepHeader stepNumber={4} title="Output" />
           <div className="space-y-3">
             {outputUrl && (
               // biome-ignore lint/a11y/useMediaCaption: generated preview videos do not have captions yet

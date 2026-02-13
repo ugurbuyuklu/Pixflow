@@ -69,11 +69,7 @@ export default function Img2VideoQueuePage() {
   return (
     <div className="space-y-6">
       {/* Tab Content */}
-      {activeTab === 'img2img' ? (
-        <Img2ImgContent tabs={workflowTabs} />
-      ) : (
-        <Img2VideoContent tabs={workflowTabs} />
-      )}
+      {activeTab === 'img2img' ? <Img2ImgContent tabs={workflowTabs} /> : <Img2VideoContent tabs={workflowTabs} />}
     </div>
   )
 }

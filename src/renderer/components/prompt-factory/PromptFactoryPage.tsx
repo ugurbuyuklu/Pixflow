@@ -4,7 +4,6 @@ import {
   Check,
   CheckCircle,
   Copy,
-  Layers,
   Lightbulb,
   Loader2,
   Pencil,

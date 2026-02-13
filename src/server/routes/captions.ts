@@ -3,11 +3,18 @@ import path from 'node:path'
 import express from 'express'
 import rateLimit from 'express-rate-limit'
 import multer from 'multer'
-import { runAutoSubtitle, uploadVideoFile } from '../services/captions.js'
+import { renderSelectedCaptions, runAutoSubtitle, uploadVideoFile } from '../services/captions.js'
 import { sendError, sendSuccess } from '../utils/http.js'
 
 interface CaptionsRouterConfig {
   projectRoot: string
+}
+
+interface CaptionSegmentResponse {
+  id: string
+  start: number
+  end: number
+  text: string
 }
 
 function formatValidationDetail(detail: unknown): string | undefined {
@@ -29,6 +36,107 @@ function formatValidationDetail(detail: unknown): string | undefined {
     return parts.length ? parts.join(' | ') : undefined
   }
   return undefined
+}
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function normalizeSegmentText(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  return value
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function extractSegmentsFromMetadata(metadata: unknown): CaptionSegmentResponse[] {
+  if (!metadata || typeof metadata !== 'object') return []
+  const maybeSegments = (metadata as { segments?: unknown }).segments
+  if (!Array.isArray(maybeSegments)) return []
+
+  return maybeSegments
+    .map((segment, index) => {
+      if (!segment || typeof segment !== 'object') return null
+      const item = segment as { start?: unknown; end?: unknown; text?: unknown; caption?: unknown }
+      const start = toNumber(item.start)
+      const end = toNumber(item.end)
+      const text = normalizeSegmentText(item.text ?? item.caption)
+      if (start === null || end === null || end <= start || !text) return null
+      return {
+        id: `seg-${index + 1}`,
+        start,
+        end,
+        text,
+      }
+    })
+    .filter((segment): segment is CaptionSegmentResponse => Boolean(segment))
+}
+
+function extractSegmentsFromWords(words: unknown): CaptionSegmentResponse[] {
+  if (!Array.isArray(words)) return []
+  const tokens = words
+    .map((token) => {
+      if (!token || typeof token !== 'object') return null
+      const entry = token as { text?: unknown; word?: unknown; start?: unknown; end?: unknown }
+      const text = normalizeSegmentText(entry.text ?? entry.word)
+      const start = toNumber(entry.start)
+      const end = toNumber(entry.end)
+      if (!text || start === null || end === null || end <= start) return null
+      return { text, start, end }
+    })
+    .filter((token): token is { text: string; start: number; end: number } => Boolean(token))
+
+  const segments: CaptionSegmentResponse[] = []
+  let currentText = ''
+  let currentStart: number | null = null
+  let currentEnd: number | null = null
+
+  for (const token of tokens) {
+    if (currentStart === null) currentStart = token.start
+    currentEnd = token.end
+    currentText = currentText ? `${currentText} ${token.text}` : token.text
+
+    if (/[.!?…]$/.test(token.text)) {
+      const text = normalizeSegmentText(currentText)
+      if (currentStart !== null && currentEnd !== null && text) {
+        segments.push({
+          id: `seg-${segments.length + 1}`,
+          start: currentStart,
+          end: currentEnd,
+          text,
+        })
+      }
+      currentText = ''
+      currentStart = null
+      currentEnd = null
+    }
+  }
+
+  if (currentText && currentStart !== null && currentEnd !== null) {
+    segments.push({
+      id: `seg-${segments.length + 1}`,
+      start: currentStart,
+      end: currentEnd,
+      text: normalizeSegmentText(currentText),
+    })
+  }
+
+  return segments
+}
+
+function extractCaptionSegments(payload: {
+  transcriptionMetadata?: unknown
+  words?: unknown[]
+}): CaptionSegmentResponse[] {
+  const fromMetadata = extractSegmentsFromMetadata(payload.transcriptionMetadata)
+  if (fromMetadata.length > 0) return fromMetadata
+  return extractSegmentsFromWords(payload.words)
 }
 
 const captionsLimiter = rateLimit({
@@ -104,10 +212,8 @@ export function createCaptionsRouter(config: CaptionsRouterConfig): express.Rout
         backgroundColor: req.body.backgroundColor || undefined,
         backgroundOpacity: req.body.backgroundOpacity ? Number(req.body.backgroundOpacity) : undefined,
         position: req.body.position || undefined,
-        xOffset:
-          req.body.xOffset !== undefined && req.body.xOffset !== '' ? Number(req.body.xOffset) : undefined,
-        yOffset:
-          req.body.yOffset !== undefined && req.body.yOffset !== '' ? Number(req.body.yOffset) : undefined,
+        xOffset: req.body.xOffset !== undefined && req.body.xOffset !== '' ? Number(req.body.xOffset) : undefined,
+        yOffset: req.body.yOffset !== undefined && req.body.yOffset !== '' ? Number(req.body.yOffset) : undefined,
         wordsPerSubtitle: req.body.wordsPerSubtitle ? Number(req.body.wordsPerSubtitle) : undefined,
         enableAnimation:
           typeof req.body.enableAnimation === 'string'
@@ -126,7 +232,16 @@ export function createCaptionsRouter(config: CaptionsRouterConfig): express.Rout
         subtitleCount: result.subtitleCount,
       })
 
-      sendSuccess(res, result)
+      const segments = extractCaptionSegments({
+        transcriptionMetadata: result.transcriptionMetadata,
+        words: result.words,
+      })
+
+      sendSuccess(res, {
+        ...result,
+        sourceVideoUrl: finalVideoUrl,
+        segments,
+      })
     } catch (err) {
       const errorBody = (err as { body?: { detail?: unknown } })?.body
       const validationDetails = formatValidationDetail(errorBody?.detail)
@@ -155,6 +270,79 @@ export function createCaptionsRouter(config: CaptionsRouterConfig): express.Rout
       if (localPath) {
         await fs.unlink(localPath).catch(() => {})
       }
+    }
+  })
+
+  router.post('/render-selected', captionsLimiter, async (req, res) => {
+    try {
+      const body = req.body as {
+        videoUrl?: string
+        segments?: unknown
+        fontName?: string
+        fontSize?: number | string
+        fontWeight?: 'normal' | 'bold' | 'black'
+        fontColor?: string
+        strokeWidth?: number | string
+        strokeColor?: string
+        backgroundColor?: string
+        backgroundOpacity?: number | string
+        position?: 'top' | 'center' | 'bottom'
+        xOffset?: number | string
+        yOffset?: number | string
+      }
+
+      const sourceVideoUrl = typeof body.videoUrl === 'string' ? body.videoUrl.trim() : ''
+      if (!sourceVideoUrl) {
+        sendError(res, 400, 'Source video URL is required', 'MISSING_SOURCE_VIDEO_URL')
+        return
+      }
+
+      const segmentsInput = Array.isArray(body.segments) ? body.segments : []
+      const segments = segmentsInput
+        .map((segment) => {
+          if (!segment || typeof segment !== 'object') return null
+          const item = segment as { start?: unknown; end?: unknown; text?: unknown }
+          const start = toNumber(item.start)
+          const end = toNumber(item.end)
+          const text = normalizeSegmentText(item.text)
+          if (start === null || end === null || end <= start || !text) return null
+          return { start, end, text }
+        })
+        .filter((segment): segment is { start: number; end: number; text: string } => Boolean(segment))
+
+      if (segments.length === 0) {
+        sendError(res, 400, 'At least one valid subtitle segment is required', 'MISSING_SUBTITLE_SEGMENTS')
+        return
+      }
+
+      const outputDir = path.join(projectRoot, 'outputs')
+      const result = await renderSelectedCaptions({
+        videoUrl: sourceVideoUrl,
+        outputDir,
+        segments,
+        fontName: body.fontName || undefined,
+        fontSize: toNumber(body.fontSize) ?? undefined,
+        fontWeight: body.fontWeight || undefined,
+        fontColor: body.fontColor || undefined,
+        strokeWidth: toNumber(body.strokeWidth) ?? undefined,
+        strokeColor: body.strokeColor || undefined,
+        backgroundColor: body.backgroundColor || undefined,
+        backgroundOpacity: toNumber(body.backgroundOpacity) ?? undefined,
+        position: body.position || undefined,
+        xOffset: toNumber(body.xOffset) ?? undefined,
+        yOffset: toNumber(body.yOffset) ?? undefined,
+      })
+
+      sendSuccess(res, result)
+    } catch (error) {
+      console.error('[captions] render-selected failed', error)
+      sendError(
+        res,
+        500,
+        'Failed to render selected captions',
+        'CAPTIONS_RENDER_SELECTED_FAILED',
+        error instanceof Error ? error.message : 'Unknown error',
+      )
     }
   })
 

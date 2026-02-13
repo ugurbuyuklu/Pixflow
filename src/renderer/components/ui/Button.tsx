@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react'
-import { type ButtonHTMLAttributes, forwardRef, type ReactNode, isValidElement } from 'react'
+import { type ButtonHTMLAttributes, forwardRef, isValidElement, type ReactNode } from 'react'
 
 type Variant =
   | 'primary'

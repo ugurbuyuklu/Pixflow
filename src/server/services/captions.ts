@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fal } from '@fal-ai/client'
@@ -6,6 +8,7 @@ import { isMockProvidersEnabled, makeMockId, recordMockProviderSuccess, runWithR
 
 const PRIMARY_MODEL_ID = 'fal-ai/workflow-utilities/auto-subtitle'
 const FALLBACK_MODEL_ID = 'fal-ai/auto-caption'
+const DEFAULT_FFMPEG_PATH = '/opt/homebrew/bin/ffmpeg'
 
 const COLOR_MAP: Record<string, [number, number, number]> = {
   white: [255, 255, 255],
@@ -105,6 +108,34 @@ export interface AutoSubtitleResult {
   words?: unknown[]
   transcriptionMetadata?: unknown
   modelUsed?: string
+}
+
+export interface CaptionSegment {
+  start: number
+  end: number
+  text: string
+}
+
+export interface RenderSelectedCaptionsInput {
+  videoUrl: string
+  outputDir: string
+  segments: CaptionSegment[]
+  fontName?: string
+  fontSize?: number
+  fontWeight?: 'normal' | 'bold' | 'black'
+  fontColor?: string
+  strokeWidth?: number
+  strokeColor?: string
+  backgroundColor?: string
+  backgroundOpacity?: number
+  position?: 'top' | 'center' | 'bottom'
+  xOffset?: number
+  yOffset?: number
+}
+
+export interface RenderSelectedCaptionsResult {
+  videoUrl: string
+  subtitleCount: number
 }
 
 async function uploadVideoToFal(filePath: string, contentType?: string): Promise<string> {
@@ -316,6 +347,216 @@ export async function runAutoSubtitle(input: AutoSubtitleInput): Promise<AutoSub
       return runAutoCaptionFallback(input)
     }
     throw error
+  }
+}
+
+function toSrtTimestamp(seconds: number): string {
+  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0
+  const totalMs = Math.round(safe * 1000)
+  const hours = Math.floor(totalMs / 3600000)
+  const minutes = Math.floor((totalMs % 3600000) / 60000)
+  const secs = Math.floor((totalMs % 60000) / 1000)
+  const ms = totalMs % 1000
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(ms).padStart(3, '0')}`
+}
+
+function sanitizeSubtitleText(text: string): string {
+  return text
+    .replace(/\r?\n+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function buildSrt(segments: CaptionSegment[]): string {
+  return segments
+    .map((segment, index) => {
+      const start = toSrtTimestamp(segment.start)
+      const end = toSrtTimestamp(segment.end)
+      const text = sanitizeSubtitleText(segment.text)
+      return `${index + 1}\n${start} --> ${end}\n${text}`
+    })
+    .join('\n\n')
+}
+
+function toAssColor(input: string | undefined, fallback: [number, number, number], alpha: number): string {
+  const rgb = input ? (parseHexColor(input) ?? fallback) : fallback
+  const a = clamp(Math.round(alpha), 0, 255)
+  const aHex = a.toString(16).padStart(2, '0').toUpperCase()
+  const bHex = rgb[2].toString(16).padStart(2, '0').toUpperCase()
+  const gHex = rgb[1].toString(16).padStart(2, '0').toUpperCase()
+  const rHex = rgb[0].toString(16).padStart(2, '0').toUpperCase()
+  return `&H${aHex}${bHex}${gHex}${rHex}`
+}
+
+function buildAssForceStyle(input: RenderSelectedCaptionsInput): string {
+  const position = input.position ?? 'bottom'
+  const alignment = position === 'top' ? 8 : position === 'center' ? 5 : 2
+  const fontName = (input.fontName ?? 'Poppins').replace(/[^a-zA-Z0-9 _-]/g, '') || 'Poppins'
+  const fontSize = Math.round(clamp(input.fontSize ?? 48, 12, 160))
+  const outline = Number(clamp(input.strokeWidth ?? 2, 0, 12).toFixed(2))
+  const bold = normalizeFontWeight(input.fontWeight) === 'bold' ? -1 : 0
+  const xOffset = Math.round(input.xOffset ?? 0)
+  const yOffset = Math.round(input.yOffset ?? 0)
+  const marginL = clamp(40 + Math.max(0, -xOffset), 0, 1000)
+  const marginR = clamp(40 + Math.max(0, xOffset), 0, 1000)
+
+  // Libass margin semantics are alignment-specific. This keeps a deterministic baseline.
+  let marginV = 80
+  if (position === 'bottom') marginV = clamp(80 - yOffset, 0, 1000)
+  else if (position === 'top') marginV = clamp(80 + yOffset, 0, 1000)
+  else marginV = clamp(80 + yOffset, 0, 1000)
+
+  const hasBackground =
+    input.backgroundColor !== undefined && !['none', 'transparent'].includes(input.backgroundColor.trim().toLowerCase())
+  const backgroundOpacity = clamp(input.backgroundOpacity ?? 0.35, 0, 1)
+  const backAlpha = hasBackground ? 255 - Math.round(backgroundOpacity * 255) : 255
+
+  const styles = [
+    `FontName=${fontName}`,
+    `FontSize=${fontSize}`,
+    `Bold=${bold}`,
+    `PrimaryColour=${toAssColor(input.fontColor, [255, 255, 255], 0)}`,
+    `OutlineColour=${toAssColor(input.strokeColor, [0, 0, 0], 0)}`,
+    `BackColour=${toAssColor(input.backgroundColor, [0, 0, 0], backAlpha)}`,
+    `BorderStyle=${hasBackground ? 3 : 1}`,
+    `Outline=${outline}`,
+    'Shadow=0',
+    `Alignment=${alignment}`,
+    `MarginL=${Math.round(marginL)}`,
+    `MarginR=${Math.round(marginR)}`,
+    `MarginV=${Math.round(marginV)}`,
+  ]
+
+  return styles.join(',')
+}
+
+function escapeFilterPath(filePath: string): string {
+  return filePath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "\\'")
+}
+
+async function resolveInputVideoPath(videoUrl: string, outputDir: string, destinationPath: string): Promise<void> {
+  if (videoUrl.startsWith('/')) {
+    const projectRoot = path.dirname(outputDir)
+    const allowedPrefixes = ['/outputs/', '/uploads/']
+    if (!allowedPrefixes.some((prefix) => videoUrl.startsWith(prefix))) {
+      throw new Error('Unsupported local video path. Use /outputs/... or /uploads/...')
+    }
+    const localPath = path.resolve(projectRoot, `.${videoUrl}`)
+    const relative = path.relative(projectRoot, localPath)
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new Error('Invalid local video path')
+    }
+    await fs.copyFile(localPath, destinationPath)
+    return
+  }
+
+  if (!/^https?:\/\//i.test(videoUrl)) {
+    throw new Error('Unsupported video URL. Use a local /outputs path or an http(s) URL.')
+  }
+
+  const response = await fetch(videoUrl)
+  if (!response.ok) {
+    throw new Error(`Failed to download source video: HTTP ${response.status}`)
+  }
+  const buffer = Buffer.from(await response.arrayBuffer())
+  await fs.writeFile(destinationPath, buffer)
+}
+
+function runFfmpeg(args: string[]): Promise<void> {
+  const configured = process.env.FFMPEG_PATH?.trim()
+  const ffmpegPath = configured || DEFAULT_FFMPEG_PATH
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ffmpegPath, args)
+    let stderr = ''
+    proc.stderr.on('data', (chunk) => {
+      stderr += chunk.toString()
+    })
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve()
+      } else {
+        reject(new Error(`ffmpeg failed (code ${code}): ${stderr || 'unknown error'}`))
+      }
+    })
+    proc.on('error', (error) => {
+      if (ffmpegPath !== 'ffmpeg') {
+        const fallback = spawn('ffmpeg', args)
+        let fallbackErr = ''
+        fallback.stderr.on('data', (chunk) => {
+          fallbackErr += chunk.toString()
+        })
+        fallback.on('close', (fallbackCode) => {
+          if (fallbackCode === 0) resolve()
+          else reject(new Error(`ffmpeg failed (code ${fallbackCode}): ${fallbackErr || error.message}`))
+        })
+        fallback.on('error', () => {
+          reject(new Error(`ffmpeg not found at ${ffmpegPath}. Set FFMPEG_PATH or install ffmpeg.`))
+        })
+        return
+      }
+      reject(new Error(`ffmpeg spawn failed: ${error.message}`))
+    })
+  })
+}
+
+export async function renderSelectedCaptions(
+  input: RenderSelectedCaptionsInput,
+): Promise<RenderSelectedCaptionsResult> {
+  const segments = input.segments
+    .map((segment) => ({
+      start: Number(segment.start),
+      end: Number(segment.end),
+      text: sanitizeSubtitleText(segment.text ?? ''),
+    }))
+    .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start)
+    .filter((segment) => segment.text.length > 0)
+
+  if (segments.length === 0) {
+    throw new Error('No valid subtitle segments to render')
+  }
+
+  await fs.mkdir(input.outputDir, { recursive: true })
+
+  const runId = `${Date.now()}_${randomUUID().slice(0, 8)}`
+  const tempDir = path.join(input.outputDir, `caption_render_${runId}`)
+  const inputPath = path.join(tempDir, 'input.mp4')
+  const subtitlesPath = path.join(tempDir, 'captions.srt')
+  const outputName = `captioned_${runId}.mp4`
+  const outputPath = path.join(input.outputDir, outputName)
+
+  await fs.mkdir(tempDir, { recursive: true })
+
+  try {
+    await resolveInputVideoPath(input.videoUrl, input.outputDir, inputPath)
+    await fs.writeFile(subtitlesPath, buildSrt(segments), 'utf8')
+
+    const forceStyle = buildAssForceStyle(input)
+    const subtitleFilter = `subtitles='${escapeFilterPath(subtitlesPath)}':force_style='${forceStyle}'`
+
+    await runFfmpeg([
+      '-y',
+      '-i',
+      inputPath,
+      '-vf',
+      subtitleFilter,
+      '-c:v',
+      'libx264',
+      '-preset',
+      'veryfast',
+      '-crf',
+      '20',
+      '-c:a',
+      'copy',
+      outputPath,
+    ])
+
+    return {
+      videoUrl: `/outputs/${outputName}`,
+      subtitleCount: segments.length,
+    }
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {})
   }
 }
 
