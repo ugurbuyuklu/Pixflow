@@ -117,7 +117,7 @@ export default function CaptionsPage() {
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.35)
   const [position, setPosition] = useState<'bottom' | 'center' | 'top'>('bottom')
   const [xOffset, setXOffset] = useState(0)
-  const [yOffset, setYOffset] = useState(320)
+  const [yOffset, setYOffset] = useState(200)
   const [yOffsetTouched, setYOffsetTouched] = useState(false)
   const [wordsPerSubtitle, setWordsPerSubtitle] = useState(4)
   const [enableAnimation, setEnableAnimation] = useState(true)
@@ -418,19 +418,19 @@ export default function CaptionsPage() {
 
   useEffect(() => {
     if (!inputPreviewSource || yOffsetTouched) return
-    const next = position === 'bottom' ? safeOffsets.bottom : position === 'top' ? safeOffsets.top : 0
+    const next = position === 'bottom' ? 200 : position === 'top' ? safeOffsets.top : 0
     setYOffset(clampProviderYOffset(Math.round(next)))
-  }, [inputPreviewSource, yOffsetTouched, position, safeOffsets.bottom, safeOffsets.top])
+  }, [inputPreviewSource, yOffsetTouched, position, safeOffsets.top])
 
   useEffect(() => {
     const previous = previousPositionRef.current
     if (previous === position) return
     previousPositionRef.current = position
     if (!inputPreviewSource) return
-    const next = position === 'center' ? 0 : position === 'bottom' ? safeOffsets.bottom : safeOffsets.top
+    const next = position === 'center' ? 0 : position === 'bottom' ? 200 : safeOffsets.top
     setYOffset(clampProviderYOffset(Math.round(next)))
     setYOffsetTouched(false)
-  }, [inputPreviewSource, position, safeOffsets.bottom, safeOffsets.top])
+  }, [inputPreviewSource, position, safeOffsets.top])
 
   useEffect(() => {
     if (!inputPreviewSource) {
@@ -645,11 +645,11 @@ export default function CaptionsPage() {
             <StepHeader stepNumber={1} title="Preview & Presets" />
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               <div className="rounded-lg border border-surface-200 bg-surface-0 p-4 space-y-3">
-                <p className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Preview (9:16)</p>
+                <p className="text-xs font-semibold text-surface-400 uppercase tracking-wider">Preview</p>
                 {inputPreviewSource ? (
                   <div
                     ref={videoPreviewRef}
-                    className="relative mx-auto w-full max-w-[220px] aspect-[9/16] rounded-lg overflow-hidden border border-surface-200 bg-surface-0"
+                    className="relative w-full rounded-lg overflow-hidden border border-surface-200 bg-surface-0"
                   >
                     <button
                       type="button"
@@ -661,7 +661,7 @@ export default function CaptionsPage() {
                     </button>
                     <video
                       src={inputPreviewSource}
-                      className="absolute inset-0 w-full h-full object-cover"
+                      className="block w-full h-auto object-contain bg-black"
                       muted
                       loop
                       playsInline
@@ -865,9 +865,9 @@ export default function CaptionsPage() {
                 value={position}
                 onChange={(e) => setPosition(e.target.value as 'top' | 'center' | 'bottom')}
                 options={[
-                  { value: 'bottom', label: 'Bottom' },
-                  { value: 'center', label: 'Center' },
                   { value: 'top', label: 'Top' },
+                  { value: 'center', label: 'Center' },
+                  { value: 'bottom', label: 'Bottom' },
                 ]}
               />
               <Select
