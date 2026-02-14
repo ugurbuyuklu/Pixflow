@@ -1,4 +1,4 @@
-import { Check, Film, Loader2, Sparkles, Upload, X } from 'lucide-react'
+import { Check, Download, Film, Loader2, Sparkles, Upload, X } from 'lucide-react'
 import { type ClipboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { apiUrl, assetUrl, authFetch, getApiError, unwrapApiData } from '../../lib/api'
 import { notify } from '../../lib/toast'
@@ -425,6 +425,21 @@ export default function LifetimePage() {
     }
   }
 
+  const downloadableFrames = displayFrames.filter((f) => f.imageUrl)
+
+  const handleDownloadAllFrames = async () => {
+    for (const frame of downloadableFrames) {
+      const url = assetUrl(frame.imageUrl)
+      const res = await fetch(url)
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `lifetime_${frame.age === 0 ? 'baby' : `age_${frame.age}`}.jpg`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    }
+  }
+
   const showFinalVideoSection = completedTransitions.length > 0 || creatingVideos || assemblyStage !== 'idle'
 
   return (
@@ -562,7 +577,19 @@ export default function LifetimePage() {
         <div className="space-y-6">
           {shouldShowLifetimeFrames && (
             <div className="bg-surface-50 rounded-lg p-4">
-              <StepHeader stepNumber={3} title="Lifetime Frames" />
+              <div className="flex items-center justify-between">
+                <StepHeader stepNumber={3} title="Lifetime Frames" />
+                {downloadableFrames.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleDownloadAllFrames}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-surface-400 hover:text-surface-500 hover:bg-surface-200 transition-colors"
+                  >
+                    <Download className="w-3 h-3" />
+                    Download All
+                  </button>
+                )}
+              </div>
               <div className="space-y-4">
                 <div className="overflow-x-auto">
                   <div className="flex gap-3 min-w-max">
