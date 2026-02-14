@@ -105,6 +105,7 @@ export default function LifetimePage() {
   const [progress, setProgress] = useState(0)
   const [frames, setFrames] = useState<LifetimeFrame[]>([])
   const [videoDurationSec, setVideoDurationSec] = useState(VIDEO_DURATION_DEFAULT_SEC)
+  const [outputSessionId, setOutputSessionId] = useState('')
   const [finalVideoUrl, setFinalVideoUrl] = useState('')
   const [finalVideoDurationSec, setFinalVideoDurationSec] = useState(0)
   const [transitionStatuses, setTransitionStatuses] = useState<TransitionStatus[]>([])
@@ -170,6 +171,7 @@ export default function LifetimePage() {
     setProgress(0)
     setSourceFrameUrl('')
     setFrames([])
+    setOutputSessionId('')
     setTransitionStatuses([])
     setAssemblyStage('idle')
     setFinalVideoUrl('')
@@ -242,6 +244,7 @@ export default function LifetimePage() {
           activeJobIdRef.current = null
           setRunning(false)
           const resolvedSessionId = data.sessionId || ''
+          setOutputSessionId(resolvedSessionId)
           setRunMessage('Frame generation completed')
           setProgress(100)
           if (resolvedSessionId) {
@@ -639,7 +642,21 @@ export default function LifetimePage() {
               ) : (
                 <div className="flex items-center gap-2 text-sm text-green-600">
                   <Check className="w-4 h-4" />
-                  All videos generated
+                  <span>
+                    All videos generated and saved to{' '}
+                    {outputSessionId ? (
+                      <a
+                        href={assetUrl(`/outputs/${outputSessionId}/`)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-green-700"
+                      >
+                        local folder
+                      </a>
+                    ) : (
+                      'local folder'
+                    )}
+                  </span>
                 </div>
               )}
             </div>
