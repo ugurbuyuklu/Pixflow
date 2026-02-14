@@ -1,7 +1,16 @@
 import { create } from 'zustand'
 import { usePromptStore } from './promptStore'
 
-export type TabId = 'home' | 'prompts' | 'generate' | 'img2video' | 'avatars' | 'captions' | 'machine' | 'history'
+export type TabId =
+  | 'home'
+  | 'prompts'
+  | 'generate'
+  | 'lifetime'
+  | 'img2video'
+  | 'avatars'
+  | 'captions'
+  | 'machine'
+  | 'history'
 
 interface NavigationOptions {
   promptMode?: 'concept' | 'image'

@@ -300,12 +300,14 @@ export function createVideosRouter(config: VideosRouterConfig) {
         transcriptChars: result.transcript.length,
         language: result.language,
         duration: result.duration,
+        segmentCount: result.segments?.length || 0,
       })
 
       sendSuccess(res, {
         transcript: result.transcript,
         duration: result.duration,
         language: result.language,
+        segments: result.segments,
         clientRequestId,
       })
     } catch (error) {

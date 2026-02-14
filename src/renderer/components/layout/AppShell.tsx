@@ -1,4 +1,15 @@
-import { BookOpen, Film, Layers, LayoutGrid, Loader2, MessageSquareText, Video, Wand2, Zap } from 'lucide-react'
+import {
+  BookOpen,
+  Film,
+  Layers,
+  LayoutGrid,
+  Loader2,
+  MessageSquareText,
+  TimerReset,
+  Video,
+  Wand2,
+  Zap,
+} from 'lucide-react'
 import { lazy, Suspense, useEffect } from 'react'
 import { Toaster } from 'react-hot-toast'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
@@ -18,6 +29,7 @@ import { SideNav } from './SideNav'
 
 const PromptFactoryPage = lazy(() => import('../prompt-factory/PromptFactoryPage'))
 const AssetMonsterPage = lazy(() => import('../asset-monster/AssetMonsterPage'))
+const LifetimePage = lazy(() => import('../lifetime/LifetimePage'))
 const Img2VideoQueuePage = lazy(() => import('../img2video/Img2VideoQueuePage'))
 const AvatarStudioPage = lazy(() => import('../avatar-studio/AvatarStudioPage'))
 const CaptionsPage = lazy(() => import('../captions/CaptionsPage'))
@@ -29,6 +41,7 @@ const PAGES = {
   home: HomePage,
   prompts: PromptFactoryPage,
   generate: AssetMonsterPage,
+  lifetime: LifetimePage,
   img2video: Img2VideoQueuePage,
   avatars: AvatarStudioPage,
   captions: CaptionsPage,
@@ -40,6 +53,7 @@ const PAGE_TITLES: Record<keyof typeof PAGES, string> = {
   home: 'Pixflow',
   prompts: 'Prompt Factory',
   generate: 'Asset Monster',
+  lifetime: 'Lifetime',
   img2video: 'Img2 Engine',
   avatars: 'Avatar Studio',
   captions: 'Captions',
@@ -51,6 +65,7 @@ const PAGE_ICONS: Record<keyof typeof PAGES, typeof Wand2> = {
   home: LayoutGrid,
   prompts: Wand2,
   generate: Layers,
+  lifetime: TimerReset,
   img2video: Film,
   avatars: Video,
   captions: MessageSquareText,

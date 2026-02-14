@@ -30,6 +30,9 @@ exports/feedback.json
 # Local tooling state
 .playwright-mcp/
 
+# Local Claude config
+.claude.local.md
+
 # One-off local assets
 machine-tab-full.png
 

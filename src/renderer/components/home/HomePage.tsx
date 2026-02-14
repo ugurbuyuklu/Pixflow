@@ -1,4 +1,4 @@
-import { Film, Layers, LayoutGrid, MessageSquareText, Video, Wand2, Zap } from 'lucide-react'
+import { Film, Layers, LayoutGrid, MessageSquareText, TimerReset, Video, Wand2, Zap } from 'lucide-react'
 import { useNavigationStore } from '../../stores/navigationStore'
 
 const CATEGORIES = [
@@ -43,6 +43,13 @@ const CATEGORIES = [
     description:
       'End‑to‑end pipeline from concept to final media. Orchestrates prompts, images, scripts, TTS, and lipsync.',
   },
+  {
+    id: 'lifetime' as const,
+    title: 'Lifetime',
+    icon: TimerReset,
+    description:
+      'Build an age progression timeline from a baby photo. Generate white-background age frames and transition videos end-to-end.',
+  },
 ]
 
 export default function HomePage() {
@@ -71,7 +78,7 @@ export default function HomePage() {
               key={category.id}
               type="button"
               onClick={() => navigate(category.id)}
-              className="home-card-enter text-left bg-surface-50 rounded-xl border border-surface-200/50 p-5 hover:border-brand-500/40 hover:shadow-sm transition"
+              className="home-card-enter text-left bg-surface-50 rounded-xl border border-surface-200/50 p-5 hover:border-brand-500/40 hover:shadow-sm transition cursor-pointer"
               style={{ animationDelay: `${240 + index * 160}ms` }}
             >
               <div className="flex items-start gap-3">

@@ -7,7 +7,7 @@ This document is a machine-readable handoff for another AI agent to understand:
 3. what is still pending.
 
 Date: 2026-02-07
-Last updated: 2026-02-13 (Turning point checkpoint + sentence-level captions selection)
+Last updated: 2026-02-14 (Lifetime pipeline: gender lock + duration-controlled final video)
 Project root: `/Users/pixery/Projects/pixflow`
 
 ---
@@ -78,6 +78,30 @@ Project root: `/Users/pixery/Projects/pixflow`
   - `npm run lint` ✅
   - `npm run lint:biome` ✅
   - `npm test` (94/94) ✅
+
+### 0.4) Lifetime Pipeline Update (2026-02-14)
+
+- Added explicit gender controls in Lifetime input flow:
+  - `male` / `female` buttons
+  - default remains `auto`
+- Auto mode behavior is now deterministic:
+  - system generates first age frame
+  - predicts perceived gender hint from that first generated frame
+  - locks hint for all remaining age-frame prompts in the same run
+- Effective gender hint is persisted to session manifest and reused by regenerate logic.
+- Added model-backed prediction utility:
+  - `predictGenderHint()` in `/Users/pixery/Projects/pixflow/src/server/services/vision.ts`
+  - returns `male | female | auto` + confidence/reason
+- Lifetime generation path now consistently supports:
+  - source frame + 9 age frames (10 image timeline)
+  - 9 transitions (`1-2`, `2-3`, ... style pair chain)
+  - merged final silent video (`1080x1920`) with target duration clamp `8..45s` (default `12s`)
+- Endpoints and payload behavior:
+  - `/api/lifetime/run` accepts `genderHint`
+  - `/api/lifetime/create-videos` accepts `targetDurationSec`
+  - `/api/lifetime/run-status/:jobId` includes source frame in frame list
+- Verification:
+  - `npm run lint` ✅
 
 ---
 

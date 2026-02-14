@@ -3187,3 +3187,51 @@ src/server/services/ytdlp.ts                 # Ad-ID-aware extraction + debug lo
 
 **Current posture after Session 43:**
 - Horizontal space is now reserved for the sidebar, giving room for at least eight categories without wrapping.
+
+---
+
+### Session 44: Lifetime Pipeline Determinism (Gender Lock + Final Video Duration)
+
+**Date:** Feb 14, 2026
+
+**Objective:** Stabilize Lifetime generation so identity progression remains consistent when gender is not manually selected, and finalize timeline output as one duration-controlled vertical video.
+
+**What changed:**
+
+1. **Auto gender behavior is now locked from the first generated frame**
+- Updated:
+  - `src/server/routes/lifetime.ts`
+  - `src/server/services/vision.ts`
+- Change:
+  - If user selects `male` or `female`, prompts use that directly.
+  - If user keeps `auto`, system generates first frame, predicts a gender hint from that frame, and locks it for all subsequent frame prompts in that run.
+  - If prediction is ambiguous/fails, flow safely continues with `auto`.
+- Benefit:
+  - Prevents intra-run prompt drift where later ages switch gender presentation unexpectedly.
+
+2. **Lifetime manifest now persists effective gender hint**
+- Updated:
+  - `src/server/routes/lifetime.ts`
+- Change:
+  - `manifest.genderHint` stores the effective value used during run.
+  - Regenerate paths consume persisted hint for continuity.
+- Benefit:
+  - Re-runs/regenerations stay coherent with original session direction.
+
+3. **Final lifetime video remains duration-controlled**
+- Updated:
+  - `src/server/routes/lifetime.ts`
+- Change:
+  - Final merged output is rendered as silent `1080x1920` video with target duration clamp `8..45s` (default `12s`).
+  - Supports source + 9 age frames (10 images) and 9 transition segments.
+
+4. **API behavior alignment**
+- `/api/lifetime/run` accepts `genderHint` (`auto|male|female`).
+- `/api/lifetime/create-videos` accepts `targetDurationSec`.
+- `/api/lifetime/run-status/:jobId` returns source frame in frames list.
+
+**Validation:**
+- `npm run lint` -> pass
+
+**Current posture after Session 44:**
+- Lifetime pipeline is now deterministic for gender progression in `auto` mode and produces a controlled final timeline output suitable for consistent UX testing.

@@ -57,6 +57,8 @@ const parseNumericInput = (value: string, fallback: number): number => {
 }
 
 const clampProviderYOffset = (value: number): number => clampValue(value, -200, 200)
+const MAX_SEGMENT_WORDS = 8
+const MAX_SEGMENT_CHARS = 72
 
 const formatSegmentTimestamp = (seconds: number): string => {
   const safe = Math.max(0, Number.isFinite(seconds) ? seconds : 0)
@@ -65,14 +67,53 @@ const formatSegmentTimestamp = (seconds: number): string => {
   return `${mins}:${String(secs).padStart(2, '0')}`
 }
 
+const splitLongCaptionText = (text: string, maxWords = MAX_SEGMENT_WORDS, maxChars = MAX_SEGMENT_CHARS): string[] => {
+  const words = text.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return []
+
+  const chunks: string[] = []
+  let currentWords: string[] = []
+  let currentChars = 0
+
+  for (const word of words) {
+    const projectedChars = currentChars + (currentWords.length > 0 ? 1 : 0) + word.length
+    const shouldBreak = currentWords.length > 0 && (currentWords.length >= maxWords || projectedChars > maxChars)
+    if (shouldBreak) {
+      chunks.push(currentWords.join(' '))
+      currentWords = [word]
+      currentChars = word.length
+      continue
+    }
+    currentWords.push(word)
+    currentChars = projectedChars
+  }
+
+  if (currentWords.length > 0) {
+    chunks.push(currentWords.join(' '))
+  }
+
+  return chunks
+}
+
 const splitTranscriptIntoSentences = (transcript: string): string[] => {
   const cleaned = transcript
     .replace(/\r?\n+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   if (!cleaned) return []
-  const matches = cleaned.match(/[^.!?…]+(?:[.!?…]+|$)/g) || []
-  return matches.map((sentence) => sentence.trim()).filter(Boolean)
+  const roughSentences = cleaned.match(/[^.!?…]+(?:[.!?…]+|$)/g) || [cleaned]
+  const chunks: string[] = []
+  for (const sentence of roughSentences) {
+    const normalized = sentence.trim()
+    if (!normalized) continue
+    const clauseParts = normalized.split(/[,;:]\s+/).map((part) => part.trim())
+    for (const clause of clauseParts) {
+      if (!clause) continue
+      const split = splitLongCaptionText(clause)
+      if (split.length > 0) chunks.push(...split)
+    }
+  }
+  return chunks
 }
 
 const buildApproxSentenceSegments = (transcript: string, durationSeconds: number): CaptionSentenceSegment[] => {
@@ -100,6 +141,64 @@ const buildApproxSentenceSegments = (transcript: string, durationSeconds: number
       enabled: true,
     }
   })
+}
+
+const buildSegmentsFromTimedInput = (
+  rawSegments: Array<{ id?: string; start?: number; end?: number; text?: string }>,
+): CaptionSentenceSegment[] => {
+  const sanitized = rawSegments
+    .map((segment) => {
+      const start = Number(segment.start)
+      const end = Number(segment.end)
+      const text = typeof segment.text === 'string' ? segment.text.trim() : ''
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !text) return null
+      return { start, end, text }
+    })
+    .filter((segment): segment is { start: number; end: number; text: string } => Boolean(segment))
+
+  if (sanitized.length === 0) return []
+
+  const expanded: CaptionSentenceSegment[] = []
+  let index = 0
+
+  for (const segment of sanitized) {
+    const parts = splitTranscriptIntoSentences(segment.text)
+    if (parts.length <= 1) {
+      index += 1
+      expanded.push({
+        id: `seg-${index}`,
+        start: Number(segment.start.toFixed(3)),
+        end: Number(segment.end.toFixed(3)),
+        text: segment.text,
+        enabled: true,
+      })
+      continue
+    }
+
+    const totalDuration = Math.max(0.3, segment.end - segment.start)
+    const weights = parts.map((part) => Math.max(1, part.split(/\s+/).filter(Boolean).length))
+    const totalWeight = weights.reduce((sum, weight) => sum + weight, 0)
+    let cursor = segment.start
+
+    parts.forEach((part, partIndex) => {
+      const sliceDuration =
+        partIndex === parts.length - 1
+          ? Math.max(0.15, segment.end - cursor)
+          : Math.max(0.15, (totalDuration * weights[partIndex]) / totalWeight)
+      const nextEnd = partIndex === parts.length - 1 ? segment.end : Math.min(segment.end, cursor + sliceDuration)
+      index += 1
+      expanded.push({
+        id: `seg-${index}`,
+        start: Number(cursor.toFixed(3)),
+        end: Number(nextEnd.toFixed(3)),
+        text: part,
+        enabled: true,
+      })
+      cursor = nextEnd
+    })
+  }
+
+  return expanded.filter((segment) => segment.end > segment.start)
 }
 
 const normalizeFontWeight = (weight: 'normal' | 'bold' | 'black' | undefined): 'normal' | 'bold' => {
@@ -154,6 +253,7 @@ export default function CaptionsPage() {
   const [position, setPosition] = useState<'bottom' | 'center' | 'top'>('bottom')
   const [xOffset, setXOffset] = useState(0)
   const [yOffset, setYOffset] = useState(200)
+  const [timingOffsetMs, setTimingOffsetMs] = useState(0)
   const [yOffsetTouched, setYOffsetTouched] = useState(false)
   const [wordsPerSubtitle, setWordsPerSubtitle] = useState(4)
   const [enableAnimation, setEnableAnimation] = useState(true)
@@ -169,6 +269,8 @@ export default function CaptionsPage() {
   const [inputVideoMeta, setInputVideoMeta] = useState<{ width: number; height: number } | null>(null)
   const [videoPreviewHeight, setVideoPreviewHeight] = useState(0)
   const [captionOverlayHeight, setCaptionOverlayHeight] = useState(0)
+  const [previewCurrentTime, setPreviewCurrentTime] = useState(0)
+  const [previewDuration, setPreviewDuration] = useState(0)
   const [isDraggingCaption, setIsDraggingCaption] = useState(false)
   const dragStartYRef = useRef(0)
   const dragStartOffsetRef = useRef(0)
@@ -203,6 +305,22 @@ export default function CaptionsPage() {
   const directVideoUrl =
     !videoFile && videoUrl.trim() && /\.(mp4|mov|webm|m4v)(\?|#|$)/i.test(videoUrl.trim()) ? videoUrl.trim() : ''
   const inputPreviewSource = previewUrl || directVideoUrl
+  const activePreviewSegment = useMemo(() => {
+    if (enabledSegments.length === 0) return null
+    const duration = previewDuration > 0 ? previewDuration : 0
+    const time = duration > 0 ? previewCurrentTime % duration : previewCurrentTime
+    const active = enabledSegments.find((segment) => time >= segment.start && time <= segment.end)
+    if (active) return active
+    const next = enabledSegments.find((segment) => segment.start > time)
+    if (next) return next
+    return enabledSegments[enabledSegments.length - 1]
+  }, [enabledSegments, previewCurrentTime, previewDuration])
+  const previewCaptionText = useMemo(() => {
+    if (segmentLoading) return 'Extracting sentences...'
+    if (activePreviewSegment) return activePreviewSegment.text
+    if (hasSegmentSelection) return 'No sentence selected.'
+    return 'Choose a video to preview selected captions.'
+  }, [activePreviewSegment, hasSegmentSelection, segmentLoading])
 
   const currentSettings = useMemo(
     () => ({
@@ -219,6 +337,7 @@ export default function CaptionsPage() {
       position,
       xOffset,
       yOffset,
+      timingOffsetMs,
       wordsPerSubtitle,
       enableAnimation,
     }),
@@ -235,6 +354,7 @@ export default function CaptionsPage() {
       position,
       xOffset,
       yOffset,
+      timingOffsetMs,
       wordsPerSubtitle,
       enableAnimation,
     ],
@@ -423,6 +543,7 @@ export default function CaptionsPage() {
       setPosition((p.position as 'top' | 'center' | 'bottom') ?? 'bottom')
       setXOffset(p.xOffset ?? 0)
       setYOffset(clampProviderYOffset(p.yOffset ?? 0))
+      setTimingOffsetMs(typeof p.timingOffsetMs === 'number' ? Math.round(p.timingOffsetMs) : 0)
       setYOffsetTouched(true)
       setWordsPerSubtitle(p.wordsPerSubtitle ?? 4)
       setEnableAnimation(Boolean(p.enableAnimation))
@@ -440,6 +561,8 @@ export default function CaptionsPage() {
     setSegmentLoading(false)
     setSelectionRevision(0)
     setLastAutoAppliedRevision(0)
+    setPreviewCurrentTime(0)
+    setPreviewDuration(0)
     setVideoFile(null)
     setVideoUrl('')
     setInputVideoMeta(null)
@@ -489,10 +612,16 @@ export default function CaptionsPage() {
       }
 
       const transcribeRaw = await transcribeRes.json()
-      const transcribeData = unwrapApiData<{ transcript: string; duration?: number }>(transcribeRaw)
+      const transcribeData = unwrapApiData<{
+        transcript: string
+        duration?: number
+        segments?: Array<{ id?: string; start?: number; end?: number; text?: string }>
+      }>(transcribeRaw)
       const nextTranscript = (transcribeData.transcript || '').trim()
       const duration = Number(transcribeData.duration || 0)
-      const nextSegments = buildApproxSentenceSegments(nextTranscript, duration)
+      const timedSegments = buildSegmentsFromTimedInput(transcribeData.segments || [])
+      const nextSegments =
+        timedSegments.length > 0 ? timedSegments : buildApproxSentenceSegments(nextTranscript, duration)
 
       if (segmentRequestIdRef.current !== requestId) return
       setSourceVideoUrl(resolvedVideoUrl)
@@ -543,6 +672,8 @@ export default function CaptionsPage() {
   useEffect(() => {
     if (!inputPreviewSource) {
       setVideoPreviewHeight(0)
+      setPreviewCurrentTime(0)
+      setPreviewDuration(0)
       return
     }
     if (!videoPreviewRef.current) return
@@ -666,29 +797,21 @@ export default function CaptionsPage() {
       setOutputUrl(data.videoUrl)
       setTranscription(data.transcription || null)
       setSourceVideoUrl((prev) => prev || data.sourceVideoUrl || directVideoUrl || null)
-      const parsedSegments = (data.segments || [])
-        .map((segment, index) => {
-          const start = Number(segment.start)
-          const end = Number(segment.end)
-          const text = typeof segment.text === 'string' ? segment.text.trim() : ''
-          if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !text) return null
-          return {
-            id: segment.id || `seg-${index + 1}`,
-            start,
-            end,
-            text,
-            enabled: true,
-          } as CaptionSentenceSegment
-        })
-        .filter((segment): segment is CaptionSentenceSegment => Boolean(segment))
+      const parsedSegments = buildSegmentsFromTimedInput(data.segments || [])
       setSentenceSegments((prev) => {
         if (parsedSegments.length === 0) return prev
         const previousEnabled = new Map(
-          prev.map((segment, index) => [`${index}:${segment.text.toLowerCase()}`, segment.enabled]),
+          prev.map((segment) => [
+            `${Math.round(segment.start * 10)}:${Math.round(segment.end * 10)}:${segment.text.toLowerCase()}`,
+            segment.enabled,
+          ]),
         )
-        return parsedSegments.map((segment, index) => ({
+        return parsedSegments.map((segment) => ({
           ...segment,
-          enabled: previousEnabled.get(`${index}:${segment.text.toLowerCase()}`) ?? true,
+          enabled:
+            previousEnabled.get(
+              `${Math.round(segment.start * 10)}:${Math.round(segment.end * 10)}:${segment.text.toLowerCase()}`,
+            ) ?? true,
         }))
       })
       setSelectionRevision(0)
@@ -732,6 +855,7 @@ export default function CaptionsPage() {
             fontSize,
             fontWeight,
             fontColor,
+            highlightColor,
             strokeWidth,
             strokeColor,
             backgroundColor,
@@ -739,6 +863,8 @@ export default function CaptionsPage() {
             position,
             xOffset: Math.round(xOffset),
             yOffset: Math.round(yOffset),
+            timingOffsetMs: Math.round(timingOffsetMs),
+            wordsPerSubtitle,
           }),
         })
 
@@ -766,6 +892,7 @@ export default function CaptionsPage() {
       canRenderFromSelection,
       enabledSegments,
       fontColor,
+      highlightColor,
       fontName,
       fontSize,
       fontWeight,
@@ -774,8 +901,10 @@ export default function CaptionsPage() {
       sourceVideoUrl,
       strokeColor,
       strokeWidth,
+      timingOffsetMs,
       xOffset,
       yOffset,
+      wordsPerSubtitle,
     ],
   )
 
@@ -839,9 +968,14 @@ export default function CaptionsPage() {
                       }}
                       onLoadedMetadata={(event) => {
                         const element = event.currentTarget
+                        setPreviewDuration(Number.isFinite(element.duration) ? element.duration : 0)
+                        setPreviewCurrentTime(0)
                         if (element.videoWidth && element.videoHeight) {
                           setInputVideoMeta({ width: element.videoWidth, height: element.videoHeight })
                         }
+                      }}
+                      onTimeUpdate={(event) => {
+                        setPreviewCurrentTime(event.currentTarget.currentTime || 0)
                       }}
                     />
                     <div
@@ -853,9 +987,7 @@ export default function CaptionsPage() {
                       }}
                     >
                       <p className="text-center whitespace-normal break-words" style={apiPreviewStyle}>
-                        This is a{' '}
-                        <span style={{ color: highlightColor, fontWeight: apiPreviewStyle.fontWeight }}>preview</span>{' '}
-                        subtitle.
+                        {previewCaptionText}
                       </p>
                     </div>
                   </div>
@@ -888,6 +1020,8 @@ export default function CaptionsPage() {
                           setVideoFile(file)
                           setVideoUrl('')
                           setInputVideoMeta(null)
+                          setPreviewCurrentTime(0)
+                          setPreviewDuration(0)
                           setYOffsetTouched(false)
                           setSourceVideoUrl(null)
                           setSentenceSegments([])
@@ -917,6 +1051,8 @@ export default function CaptionsPage() {
                             setSegmentLoading(false)
                             setSelectionRevision(0)
                             setVideoFile(null)
+                            setPreviewCurrentTime(0)
+                            setPreviewDuration(0)
                             setYOffsetTouched(false)
                             setSourceVideoUrl(null)
                             setSentenceSegments([])
@@ -936,6 +1072,8 @@ export default function CaptionsPage() {
                           setSelectionRevision(0)
                           setVideoFile(null)
                           setInputVideoMeta(null)
+                          setPreviewCurrentTime(0)
+                          setPreviewDuration(0)
                           setYOffsetTouched(false)
                           setSourceVideoUrl(null)
                           setSentenceSegments([])
@@ -1104,6 +1242,15 @@ export default function CaptionsPage() {
                   setYOffset(next)
                   setYOffsetTouched(true)
                 }}
+              />
+              <Input
+                label="Timing Offset (ms)"
+                type="number"
+                min={-4000}
+                max={4000}
+                step={50}
+                value={timingOffsetMs}
+                onChange={(e) => setTimingOffsetMs(Math.round(parseNumericInput(e.target.value, timingOffsetMs)))}
               />
               <Input
                 label="Words Per Subtitle"

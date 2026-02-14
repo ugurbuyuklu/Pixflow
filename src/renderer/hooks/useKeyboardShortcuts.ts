@@ -3,7 +3,17 @@ import { useAvatarStore } from '../stores/avatarStore'
 import { useGenerationStore } from '../stores/generationStore'
 import { type TabId, useNavigationStore } from '../stores/navigationStore'
 
-const TAB_ORDER: TabId[] = ['home', 'prompts', 'generate', 'img2video', 'avatars', 'captions', 'machine', 'history']
+const TAB_ORDER: TabId[] = [
+  'home',
+  'prompts',
+  'generate',
+  'lifetime',
+  'img2video',
+  'avatars',
+  'captions',
+  'machine',
+  'history',
+]
 
 export function useKeyboardShortcuts() {
   const navigate = useNavigationStore((s) => s.navigate)

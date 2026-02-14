@@ -9,6 +9,7 @@ import {
   PanelLeftOpen,
   Star,
   Sun,
+  TimerReset,
   Video,
   Wand2,
   Zap,
@@ -30,6 +31,7 @@ const SIDEBAR_ITEMS: { id: TabId; label: string; icon: typeof Wand2 }[] = [
   { id: 'avatars', label: 'Avatar Studio', icon: Video },
   { id: 'captions', label: 'Captions', icon: MessageSquareText },
   { id: 'machine', label: 'The Machine', icon: Zap },
+  { id: 'lifetime', label: 'Lifetime', icon: TimerReset },
   { id: 'history', label: 'Library', icon: BookOpen },
 ]
 

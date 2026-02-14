@@ -30,7 +30,7 @@ interface TalkingAvatarPageProps {
   modeTabs?: ReactNode
 }
 
-export function TalkingAvatarPage({ setFullSizeAvatarUrl, modeTabs }: TalkingAvatarPageProps) {
+export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl, modeTabs }: TalkingAvatarPageProps) {
   const videoFileInputRef = useRef<HTMLInputElement>(null)
   const [videoSource, setVideoSource] = useState<'url' | 'upload'>('url')
   const [videoUrl, setVideoUrl] = useState('')
@@ -164,41 +164,18 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl, modeTabs }: TalkingAva
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* Left Column: Inputs (Avatar + Script + TTS) */}
       <div className="space-y-6">
-        {modeTabs && <div className="bg-surface-50 rounded-lg p-4">{modeTabs}</div>}
-        {/* Step 1: Avatar Selection */}
-        <AvatarSelectionCard stepNumber={1} subtitle="(Optional)" showGenerateOptions={true} />
-
-        {/* Selected Avatar Display */}
-        {(selectedAvatar || generatedUrls.length > 0) && (
-          <div className="bg-surface-50 rounded-lg p-4">
-            <p className="text-sm text-surface-400 mb-3">Selected Avatar:</p>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="w-16 h-24 rounded-lg overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => setFullSizeAvatarUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
-              >
-                <img
-                  src={assetUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
-                  alt="Selected avatar"
-                  className="w-full h-full object-cover"
-                />
-              </button>
-              <div>
-                <p className="font-medium">
-                  {generatedUrls.length > 0
-                    ? `Generated Avatar ${selectedGeneratedIndex + 1}/${generatedUrls.length}`
-                    : selectedAvatar?.name}
-                </p>
-                <p className="text-xs text-surface-400">Click image to view full size</p>
-              </div>
-            </div>
+        {modeTabs && (
+          <div className="bg-surface-50 rounded-lg p-4 space-y-4">
+            <StepHeader stepNumber={1} title="Mode" />
+            {modeTabs}
           </div>
         )}
+        {/* Step 2: Avatar Selection */}
+        <AvatarSelectionCard stepNumber={2} subtitle="(Optional)" showGenerateOptions={true} />
 
-        {/* Step 2: Script */}
+        {/* Step 3: Script */}
         <div className="bg-surface-50 rounded-lg p-4">
-          <StepHeader stepNumber={2} title="Script" />
+          <StepHeader stepNumber={3} title="Script" />
 
           <SegmentedTabs
             value={scriptMode}
@@ -657,7 +634,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl, modeTabs }: TalkingAva
 
         {generatedScript && (
           <div className="bg-surface-50 rounded-lg p-4">
-            <StepHeader stepNumber={3} title="Languages" />
+            <StepHeader stepNumber={4} title="Languages" />
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs text-surface-400">Enable language cards (max 10).</p>
               <button
@@ -714,7 +691,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl, modeTabs }: TalkingAva
 
         {generatedScript && (
           <div className="bg-surface-50 rounded-lg p-4">
-            <StepHeader stepNumber={4} title="Voice" />
+            <StepHeader stepNumber={5} title="Voice" />
             <div className="space-y-4">
               {voicesLoading ? (
                 <LoadingState title="Loading voices..." size="sm" />
@@ -772,7 +749,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl, modeTabs }: TalkingAva
       {/* Right Column: Outputs */}
       <div className="space-y-6">
         <div className="bg-surface-50 rounded-lg p-4 space-y-3">
-          <StepHeader stepNumber={5} title="Videos" />
+          <StepHeader stepNumber={6} title="Generated Videos" />
           {translatedScripts.length === 0 ? (
             <p className="text-sm text-surface-400">Generated talking avatar videos will appear here.</p>
           ) : (

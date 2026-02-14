@@ -17,7 +17,7 @@ interface ReactionVideoPageProps {
 
 export function ReactionVideoPage({
   fullSizeAvatarUrl: _fullSizeAvatarUrl,
-  setFullSizeAvatarUrl,
+  setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
   modeTabs,
 }: ReactionVideoPageProps) {
   const {
@@ -40,40 +40,17 @@ export function ReactionVideoPage({
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* LEFT COLUMN: INPUTS */}
       <div className="space-y-6 xl:col-start-1 xl:col-end-2">
-        {modeTabs && <div className="bg-surface-50 rounded-lg p-4">{modeTabs}</div>}
-        <AvatarSelectionCard stepNumber={1} showGenerateOptions={false} />
-
-        {/* Selected Avatar Display */}
-        {(selectedAvatar || generatedUrls.length > 0) && (
-          <div className="bg-surface-50 rounded-lg p-4">
-            <p className="text-sm text-surface-400 mb-3">Selected Avatar:</p>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                className="w-16 h-24 rounded-lg overflow-hidden cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => setFullSizeAvatarUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
-              >
-                <img
-                  src={assetUrl(generatedUrls[selectedGeneratedIndex] || selectedAvatar?.url || '')}
-                  alt="Selected avatar"
-                  className="w-full h-full object-cover"
-                />
-              </button>
-              <div>
-                <p className="font-medium">
-                  {generatedUrls.length > 0
-                    ? `Generated Avatar ${selectedGeneratedIndex + 1}/${generatedUrls.length}`
-                    : selectedAvatar?.name}
-                </p>
-                <p className="text-xs text-surface-400">Click image to view full size</p>
-              </div>
-            </div>
+        {modeTabs && (
+          <div className="bg-surface-50 rounded-lg p-4 space-y-4">
+            <StepHeader stepNumber={1} title="Mode" />
+            {modeTabs}
           </div>
         )}
+        <AvatarSelectionCard stepNumber={2} showGenerateOptions={false} />
 
-        {/* Step 2: Choose Reaction */}
+        {/* Step 3: Choose Reaction */}
         <div className="bg-surface-50 rounded-lg p-4">
-          <StepHeader stepNumber={2} title="Choose Reaction" />
+          <StepHeader stepNumber={3} title="Choose Reaction" />
 
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
             {(
@@ -96,9 +73,9 @@ export function ReactionVideoPage({
           </div>
         </div>
 
-        {/* Step 3: Video Settings */}
+        {/* Step 4: Video Settings */}
         <div className="bg-surface-50 rounded-lg p-4">
-          <StepHeader stepNumber={3} title="Video Settings" />
+          <StepHeader stepNumber={4} title="Video Settings" />
 
           <div className="space-y-4">
             <div>
@@ -197,9 +174,9 @@ export function ReactionVideoPage({
 
       {/* RIGHT COLUMN: OUTPUT */}
       <div className="space-y-6 xl:col-start-2 xl:col-end-3">
-        {/* Step 5: Output */}
+        {/* Step 6: Generated Videos */}
         <div className="bg-surface-50 rounded-lg p-4 min-h-[420px]">
-          <StepHeader stepNumber={5} title="Output" />
+          <StepHeader stepNumber={6} title="Generated Videos" />
 
           {reactionVideoUrl ? (
             <div className="space-y-4 flex flex-col items-center">

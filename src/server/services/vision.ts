@@ -67,6 +67,20 @@ export interface AnalyzedPrompt {
   }
 }
 
+export interface BabyAgePrediction {
+  age: 1 | 2 | 3
+  confidence: number
+  reason: string
+}
+
+export type PredictedGenderHint = 'male' | 'female' | 'auto'
+
+interface GenderHintPrediction {
+  genderHint: PredictedGenderHint
+  confidence: number
+  reason: string
+}
+
 function getMimeType(imagePath: string): string {
   const ext = path.extname(imagePath).toLowerCase()
   if (ext === '.png') return 'image/png'
@@ -213,6 +227,34 @@ CRITICAL: While following the theme, you MUST still respect all technical requir
   return themeGuidance + ANALYSIS_PROMPT
 }
 
+const BABY_AGE_PREDICTION_PROMPT = `You estimate baby/toddler age from an image.
+
+Rules:
+- Predict only among integers 1, 2, or 3.
+- Use visual cues like facial proportions, body proportions, posture, and developmental appearance.
+- If uncertain, choose the closest likely age in {1,2,3}.
+- Return strict JSON only:
+{
+  "age": 1,
+  "confidence": 0.0,
+  "reason": "short explanation"
+}
+- confidence must be a number between 0 and 1.`
+
+const GENDER_HINT_PREDICTION_PROMPT = `You estimate perceived gender presentation from one portrait image.
+
+Rules:
+- Output ONLY one of: "male", "female", "auto".
+- If visual evidence is unclear or ambiguous, use "auto".
+- Do not guess based on stereotypes when confidence is low.
+- Return strict JSON only:
+{
+  "genderHint": "auto",
+  "confidence": 0.0,
+  "reason": "short explanation"
+}
+- confidence must be a number between 0 and 1.`
+
 export async function analyzeImage(imagePath: string, theme?: string): Promise<AnalyzedPrompt> {
   const openai = getOpenAI()
   const buffer = await fs.readFile(imagePath)
@@ -253,4 +295,109 @@ export async function analyzeImage(imagePath: string, theme?: string): Promise<A
   }
 
   return JSON.parse(content) as AnalyzedPrompt
+}
+
+export async function predictBabyAge(imagePath: string): Promise<BabyAgePrediction> {
+  const openai = getOpenAI()
+  const buffer = await fs.readFile(imagePath)
+  const base64Image = buffer.toString('base64')
+  const mimeType = getMimeType(imagePath)
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'system',
+        content: BABY_AGE_PREDICTION_PROMPT,
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:${mimeType};base64,${base64Image}`,
+            },
+          },
+          {
+            type: 'text',
+            text: 'Predict age in 1-3 range and return the JSON object only.',
+          },
+        ],
+      },
+    ],
+    max_completion_tokens: 300,
+    temperature: 0.1,
+    response_format: { type: 'json_object' },
+  })
+
+  const content = response.choices[0]?.message?.content
+  if (!content) {
+    throw new Error('No response from baby age prediction model')
+  }
+
+  const raw = JSON.parse(content) as { age?: unknown; confidence?: unknown; reason?: unknown }
+  const parsedAge = Number(raw.age)
+  const roundedAge = Number.isFinite(parsedAge) ? Math.round(parsedAge) : 2
+  const safeAge = roundedAge <= 1 ? 1 : roundedAge >= 3 ? 3 : 2
+  const parsedConfidence = Number(raw.confidence)
+  const safeConfidence = Number.isFinite(parsedConfidence) ? Math.max(0, Math.min(1, parsedConfidence)) : 0.5
+
+  return {
+    age: safeAge,
+    confidence: safeConfidence,
+    reason: typeof raw.reason === 'string' ? raw.reason : 'Estimated from visual development cues',
+  }
+}
+
+export async function predictGenderHint(imagePath: string): Promise<GenderHintPrediction> {
+  const openai = getOpenAI()
+  const buffer = await fs.readFile(imagePath)
+  const base64Image = buffer.toString('base64')
+  const mimeType = getMimeType(imagePath)
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'system',
+        content: GENDER_HINT_PREDICTION_PROMPT,
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:${mimeType};base64,${base64Image}`,
+            },
+          },
+          {
+            type: 'text',
+            text: 'Predict genderHint and return the JSON object only.',
+          },
+        ],
+      },
+    ],
+    max_completion_tokens: 200,
+    temperature: 0.1,
+    response_format: { type: 'json_object' },
+  })
+
+  const content = response.choices[0]?.message?.content
+  if (!content) {
+    throw new Error('No response from gender hint prediction model')
+  }
+
+  const raw = JSON.parse(content) as { genderHint?: unknown; confidence?: unknown; reason?: unknown }
+  const rawHint = typeof raw.genderHint === 'string' ? raw.genderHint.trim().toLowerCase() : 'auto'
+  const safeHint: PredictedGenderHint = rawHint === 'male' || rawHint === 'female' ? rawHint : 'auto'
+  const parsedConfidence = Number(raw.confidence)
+  const safeConfidence = Number.isFinite(parsedConfidence) ? Math.max(0, Math.min(1, parsedConfidence)) : 0.5
+
+  return {
+    genderHint: safeHint,
+    confidence: safeConfidence,
+    reason: typeof raw.reason === 'string' ? raw.reason : 'Estimated from visual identity cues',
+  }
 }

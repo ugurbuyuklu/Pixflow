@@ -15,6 +15,7 @@ export interface CaptionPresetSettings {
   position: 'top' | 'center' | 'bottom'
   xOffset: number
   yOffset: number
+  timingOffsetMs?: number
   wordsPerSubtitle: number
   enableAnimation: boolean
 }

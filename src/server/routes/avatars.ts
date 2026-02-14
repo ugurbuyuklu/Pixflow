@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import express from 'express'
@@ -81,6 +82,24 @@ const VALID_REACTIONS = [
   'worried',
   'happy',
 ]
+const GREENBOX_PROMPT =
+  'Using the provided reference image, preserve the face, identity, age, and pose exactly. Isolate the subject cleanly and place them on a solid chroma green (#00FF00) background. No extra objects or text. Keep clothing and proportions unchanged. High-quality cutout.'
+
+function mimeTypeFromImagePath(imagePath: string): string {
+  const ext = path.extname(imagePath).toLowerCase()
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg'
+  if (ext === '.webp') return 'image/webp'
+  return 'image/png'
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
 
 function sanitizePath(basePath: string, userPath: string): string | null {
   const normalizedBase = path.resolve(basePath)
@@ -628,6 +647,42 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
     }
   })
 
+  const ensureGreenboxAvatarPath = async (imagePath: string, imageUrl: string): Promise<string> => {
+    // Avatars in /avatars_generated are already created by green-background flows.
+    if (imageUrl.startsWith('/avatars_generated/')) {
+      return imagePath
+    }
+
+    const imageHash = createHash('sha1').update(imagePath).digest('hex').slice(0, 10)
+    const cacheBase = path.parse(path.basename(imagePath)).name.replace(/[^a-zA-Z0-9_-]/g, '_')
+    const cacheFilename = `greenbox_${cacheBase}_${imageHash}.png`
+    const cachedPath = path.join(generatedAvatarsDir, cacheFilename)
+    if (await fileExists(cachedPath)) {
+      return cachedPath
+    }
+
+    const imageBuffer = await fs.readFile(imagePath)
+    const dataUrl = `data:${mimeTypeFromImagePath(imagePath)};base64,${imageBuffer.toString('base64')}`
+    const result = await generateAvatarFromReference(dataUrl, GREENBOX_PROMPT, { aspectRatio: '9:16' })
+    const response = await fetch(result.imageUrl)
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      throw new Error(`Failed to download greenbox avatar: ${response.status} ${detail.slice(0, 120)}`)
+    }
+    const contentType = response.headers.get('content-type') || ''
+    const buffer = Buffer.from(await response.arrayBuffer())
+    if (!contentType.startsWith('image/')) {
+      throw new Error(`Greenbox avatar content-type invalid: ${contentType || 'unknown'}`)
+    }
+    if (!mockProvidersEnabled && buffer.length < MIN_AVATAR_BYTES) {
+      throw new Error(`Greenbox avatar too small: ${buffer.length} bytes`)
+    }
+
+    await fs.mkdir(generatedAvatarsDir, { recursive: true })
+    await fs.writeFile(cachedPath, buffer)
+    return cachedPath
+  }
+
   router.post('/lipsync', lipsyncLimiter, async (req: AuthRequest, res) => {
     req.setTimeout(660_000)
     res.setTimeout(660_000)
@@ -694,8 +749,13 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
         return
       }
 
+      const greenboxImagePath = await ensureGreenboxAvatarPath(imagePath, imageUrl)
+      if (greenboxImagePath !== imagePath) {
+        console.log(`[Lipsync] Avatar normalized to greenbox: ${path.basename(greenboxImagePath)}`)
+      }
+
       console.log('[Lipsync] Creating video with Hedra Character-3...')
-      const result = await createHedraVideo({ imagePath, audioPath, aspectRatio: '9:16' })
+      const result = await createHedraVideo({ imagePath: greenboxImagePath, audioPath, aspectRatio: '9:16' })
 
       await fs.mkdir(outputsDir, { recursive: true })
       const outputFilename = `lipsync_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp4`

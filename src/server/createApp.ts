@@ -12,6 +12,7 @@ import { createFeedbackRouter } from './routes/feedback.js'
 import { createGenerateRouter } from './routes/generate.js'
 import { createHistoryRouter } from './routes/history.js'
 import { createImageRatingsRouter } from './routes/imageRatings.js'
+import { createLifetimeRouter } from './routes/lifetime.js'
 import { createNotificationsRouter } from './routes/notifications.js'
 import { createPresetsRouter } from './routes/presets.js'
 import { createProductsRouter } from './routes/products.js'
@@ -62,6 +63,7 @@ export function createApp(config: ServerConfig): express.Express {
   app.use('/api/generate', requireAuth, createGenerateRouter({ projectRoot }))
   app.use('/api/history', requireAuth, createHistoryRouter())
   app.use('/api/captions', requireAuth, createCaptionsRouter({ projectRoot }))
+  app.use('/api/lifetime', requireAuth, createLifetimeRouter({ projectRoot }))
   app.use('/api/avatars', requireAuth, createAvatarsRouter({ projectRoot }))
   app.use('/api/videos', requireAuth, createVideosRouter({ projectRoot }))
   app.use('/api/presets', requireAuth, createPresetsRouter())

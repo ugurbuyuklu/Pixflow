@@ -11,6 +11,7 @@ import {
 } from './providerRuntime.js'
 
 const MODEL_ID = 'fal-ai/kling-video/v2.5-turbo/pro/image-to-video'
+const MODEL_ID_START_END = 'fal-ai/kling-video/v2.5/master/image-to-video'
 
 async function fileToDataUrl(filePath: string): Promise<string> {
   const buffer = await fs.readFile(filePath)
@@ -31,6 +32,15 @@ export interface KlingI2VOptions {
 export interface KlingI2VResult {
   videoUrl: string
   requestId: string
+}
+
+export interface KlingStartEndOptions {
+  startImagePath: string
+  endImagePath: string
+  prompt: string
+  duration?: '5' | '10'
+  aspectRatio?: '16:9' | '9:16' | '1:1'
+  cfgScale?: number
 }
 
 export async function generateKlingVideo(options: KlingI2VOptions): Promise<KlingI2VResult> {
@@ -90,6 +100,72 @@ export async function generateKlingVideo(options: KlingI2VOptions): Promise<Klin
       ((data.video as Record<string, unknown>).url as string))
   if (!videoUrl)
     throw new Error(`Kling returned no video URL. Response keys: ${data ? Object.keys(data).join(', ') : 'none'}`)
+
+  return { videoUrl, requestId: result.requestId }
+}
+
+export async function generateKlingTransitionVideo(options: KlingStartEndOptions): Promise<KlingI2VResult> {
+  if (isMockProvidersEnabled()) {
+    await recordMockProviderSuccess({
+      pipeline: 'lifetime.transition.provider',
+      provider: 'kling',
+      metadata: { duration: options.duration || '5', aspectRatio: options.aspectRatio || '9:16' },
+    })
+    return {
+      videoUrl: makeMockDataUrl('video/mp4', 'mock-kling-transition-video'),
+      requestId: makeMockId('kling-transition'),
+    }
+  }
+
+  ensureFalConfig()
+
+  const resolvedStart = path.resolve(options.startImagePath)
+  const resolvedEnd = path.resolve(options.endImagePath)
+  try {
+    await fs.access(resolvedStart)
+    await fs.access(resolvedEnd)
+  } catch {
+    throw new Error('Start/end image files not found for Kling transition')
+  }
+
+  const [startImageUrl, endImageUrl] = await Promise.all([fileToDataUrl(resolvedStart), fileToDataUrl(resolvedEnd)])
+
+  const result = await runWithRetries(
+    () =>
+      fal.subscribe(MODEL_ID_START_END, {
+        input: {
+          prompt: options.prompt,
+          image_url: startImageUrl,
+          end_image_url: endImageUrl,
+          duration: options.duration || '5',
+          aspect_ratio: options.aspectRatio || '9:16',
+          cfg_scale: options.cfgScale ?? 0.5,
+        },
+        logs: true,
+        onQueueUpdate: (update) => {
+          if (update.status === 'IN_PROGRESS' && update.logs) {
+            // biome-ignore lint/suspicious/useIterableCallbackReturn: side-effect logging
+            update.logs.forEach((log) => console.log(`[Kling Transition] ${log.message}`))
+          }
+        },
+      }),
+    {
+      pipeline: 'lifetime.transition.provider',
+      provider: 'kling',
+      metadata: { duration: options.duration || '5', aspectRatio: options.aspectRatio || '9:16' },
+    },
+  )
+
+  const data = result.data as Record<string, unknown> | undefined
+  const videoUrl =
+    (typeof data?.video_url === 'string' && data.video_url) ||
+    (typeof (data?.video as Record<string, unknown>)?.url === 'string' &&
+      ((data.video as Record<string, unknown>).url as string))
+  if (!videoUrl) {
+    throw new Error(
+      `Kling transition returned no video URL. Response keys: ${data ? Object.keys(data).join(', ') : 'none'}`,
+    )
+  }
 
   return { videoUrl, requestId: result.requestId }
 }

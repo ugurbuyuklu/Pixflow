@@ -282,6 +282,7 @@ export function createCaptionsRouter(config: CaptionsRouterConfig): express.Rout
         fontSize?: number | string
         fontWeight?: 'normal' | 'bold' | 'black'
         fontColor?: string
+        highlightColor?: string
         strokeWidth?: number | string
         strokeColor?: string
         backgroundColor?: string
@@ -289,6 +290,8 @@ export function createCaptionsRouter(config: CaptionsRouterConfig): express.Rout
         position?: 'top' | 'center' | 'bottom'
         xOffset?: number | string
         yOffset?: number | string
+        timingOffsetMs?: number | string
+        wordsPerSubtitle?: number | string
       }
 
       const sourceVideoUrl = typeof body.videoUrl === 'string' ? body.videoUrl.trim() : ''
@@ -324,6 +327,7 @@ export function createCaptionsRouter(config: CaptionsRouterConfig): express.Rout
         fontSize: toNumber(body.fontSize) ?? undefined,
         fontWeight: body.fontWeight || undefined,
         fontColor: body.fontColor || undefined,
+        highlightColor: body.highlightColor || undefined,
         strokeWidth: toNumber(body.strokeWidth) ?? undefined,
         strokeColor: body.strokeColor || undefined,
         backgroundColor: body.backgroundColor || undefined,
@@ -331,6 +335,8 @@ export function createCaptionsRouter(config: CaptionsRouterConfig): express.Rout
         position: body.position || undefined,
         xOffset: toNumber(body.xOffset) ?? undefined,
         yOffset: toNumber(body.yOffset) ?? undefined,
+        timingOffsetMs: toNumber(body.timingOffsetMs) ?? undefined,
+        wordsPerSubtitle: toNumber(body.wordsPerSubtitle) ?? undefined,
       })
 
       sendSuccess(res, result)

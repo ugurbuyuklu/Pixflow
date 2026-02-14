@@ -125,6 +125,7 @@ export interface RenderSelectedCaptionsInput {
   fontSize?: number
   fontWeight?: 'normal' | 'bold' | 'black'
   fontColor?: string
+  highlightColor?: string
   strokeWidth?: number
   strokeColor?: string
   backgroundColor?: string
@@ -132,6 +133,8 @@ export interface RenderSelectedCaptionsInput {
   position?: 'top' | 'center' | 'bottom'
   xOffset?: number
   yOffset?: number
+  timingOffsetMs?: number
+  wordsPerSubtitle?: number
 }
 
 export interface RenderSelectedCaptionsResult {
@@ -379,6 +382,96 @@ function buildSrt(segments: CaptionSegment[]): string {
     .join('\n\n')
 }
 
+function splitTextByWordLimit(text: string, wordsPerSubtitle: number): string[] {
+  const cleaned = sanitizeSubtitleText(text)
+  if (!cleaned) return []
+  const words = cleaned.split(' ').filter(Boolean)
+  const chunkSize = Math.max(1, Math.min(12, Math.round(wordsPerSubtitle || 4)))
+  const chunks: string[] = []
+  for (let i = 0; i < words.length; i += chunkSize) {
+    const chunk = words
+      .slice(i, i + chunkSize)
+      .join(' ')
+      .trim()
+    if (chunk) chunks.push(chunk)
+  }
+  return chunks
+}
+
+function normalizeRenderSegments(
+  segments: CaptionSegment[],
+  wordsPerSubtitle: number,
+  timingOffsetMs = 0,
+): Array<{ start: number; end: number; text: string }> {
+  const parsed = segments
+    .map((segment) => ({
+      start: Number(segment.start),
+      end: Number(segment.end),
+      text: sanitizeSubtitleText(segment.text ?? ''),
+    }))
+    .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start)
+    .filter((segment) => segment.text.length > 0)
+    .sort((a, b) => a.start - b.start)
+
+  const expanded: Array<{ start: number; end: number; text: string }> = []
+  for (const segment of parsed) {
+    const wordCount = segment.text.split(/\s+/).filter(Boolean).length
+    const duration = segment.end - segment.start
+    const shouldSplit =
+      wordCount > wordsPerSubtitle &&
+      (parsed.length <= 2 || duration >= 4 || wordCount >= Math.max(wordsPerSubtitle + 3, wordsPerSubtitle * 2))
+
+    if (!shouldSplit) {
+      expanded.push({ ...segment })
+      continue
+    }
+    const parts = splitTextByWordLimit(segment.text, wordsPerSubtitle)
+    if (parts.length <= 1) {
+      expanded.push({ ...segment })
+      continue
+    }
+    const totalDuration = duration
+    const wordCounts = parts.map((part) => Math.max(1, part.split(/\s+/).filter(Boolean).length))
+    const totalWords = wordCounts.reduce((sum, count) => sum + count, 0)
+    let cursor = segment.start
+    parts.forEach((part, index) => {
+      const duration =
+        index === parts.length - 1
+          ? Math.max(0.1, segment.end - cursor)
+          : Math.max(0.1, (totalDuration * wordCounts[index]) / totalWords)
+      const end = index === parts.length - 1 ? segment.end : Math.min(segment.end, cursor + duration)
+      expanded.push({
+        start: Number(cursor.toFixed(3)),
+        end: Number(end.toFixed(3)),
+        text: part,
+      })
+      cursor = end
+    })
+  }
+
+  const overlapBuffer = 0.01
+  const minDuration = 0.05
+  const normalized = expanded.map((segment) => ({ ...segment }))
+  for (let i = 0; i < normalized.length - 1; i += 1) {
+    const current = normalized[i]
+    const next = normalized[i + 1]
+    const maxEnd = next.start - overlapBuffer
+    if (current.end <= maxEnd) continue
+    current.end = Math.max(current.start + minDuration, maxEnd)
+  }
+
+  const offsetSeconds = timingOffsetMs / 1000
+
+  return normalized
+    .filter((segment) => segment.end > segment.start)
+    .map((segment) => ({
+      start: Number(Math.max(0, segment.start + offsetSeconds).toFixed(3)),
+      end: Number(Math.max(0.05, segment.end + offsetSeconds).toFixed(3)),
+      text: segment.text,
+    }))
+    .filter((segment) => segment.end > segment.start)
+}
+
 function toAssColor(input: string | undefined, fallback: [number, number, number], alpha: number): string {
   const rgb = input ? (parseHexColor(input) ?? fallback) : fallback
   const a = clamp(Math.round(alpha), 0, 255)
@@ -389,7 +482,7 @@ function toAssColor(input: string | undefined, fallback: [number, number, number
   return `&H${aHex}${bHex}${gHex}${rHex}`
 }
 
-function buildAssForceStyle(input: RenderSelectedCaptionsInput): string {
+function buildAssStyle(input: RenderSelectedCaptionsInput): string {
   const position = input.position ?? 'bottom'
   const alignment = position === 'top' ? 8 : position === 'center' ? 5 : 2
   const fontName = (input.fontName ?? 'Poppins').replace(/[^a-zA-Z0-9 _-]/g, '') || 'Poppins'
@@ -413,22 +506,67 @@ function buildAssForceStyle(input: RenderSelectedCaptionsInput): string {
   const backAlpha = hasBackground ? 255 - Math.round(backgroundOpacity * 255) : 255
 
   const styles = [
-    `FontName=${fontName}`,
-    `FontSize=${fontSize}`,
-    `Bold=${bold}`,
-    `PrimaryColour=${toAssColor(input.fontColor, [255, 255, 255], 0)}`,
-    `OutlineColour=${toAssColor(input.strokeColor, [0, 0, 0], 0)}`,
-    `BackColour=${toAssColor(input.backgroundColor, [0, 0, 0], backAlpha)}`,
-    `BorderStyle=${hasBackground ? 3 : 1}`,
-    `Outline=${outline}`,
-    'Shadow=0',
-    `Alignment=${alignment}`,
-    `MarginL=${Math.round(marginL)}`,
-    `MarginR=${Math.round(marginR)}`,
-    `MarginV=${Math.round(marginV)}`,
+    `Default,${fontName},${fontSize},${toAssColor(input.fontColor, [255, 255, 255], 0)},${toAssColor(input.highlightColor ?? '#7c3aed', [124, 58, 237], 0)},${toAssColor(input.strokeColor, [0, 0, 0], 0)},${toAssColor(input.backgroundColor, [0, 0, 0], backAlpha)},${bold},0,0,0,100,100,0,0,${hasBackground ? 3 : 1},${outline},0,${alignment},${Math.round(marginL)},${Math.round(marginR)},${Math.round(marginV)},1`,
   ]
 
-  return styles.join(',')
+  return styles.join('\n')
+}
+
+function toAssTimestamp(seconds: number): string {
+  const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0
+  const totalCs = Math.round(safe * 100)
+  const hours = Math.floor(totalCs / 360000)
+  const minutes = Math.floor((totalCs % 360000) / 6000)
+  const secs = Math.floor((totalCs % 6000) / 100)
+  const cs = totalCs % 100
+  return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(cs).padStart(2, '0')}`
+}
+
+function escapeAssText(text: string): string {
+  return text.replace(/\\/g, '\\\\').replace(/{/g, '\\{').replace(/}/g, '\\}')
+}
+
+function buildHighlightedDialogueText(text: string, input: RenderSelectedCaptionsInput): string {
+  const words = sanitizeSubtitleText(text).split(' ').filter(Boolean)
+  if (words.length === 0) return ''
+  const highlight = toAssColor(input.highlightColor ?? '#7c3aed', [124, 58, 237], 0)
+  if (words.length === 1) {
+    return `{\\1c${highlight}}${escapeAssText(words[0])}{\\r}`
+  }
+  const [first, ...rest] = words
+  return `{\\1c${highlight}}${escapeAssText(first)}{\\r} ${escapeAssText(rest.join(' '))}`
+}
+
+function buildAssFile(
+  segments: Array<{ start: number; end: number; text: string }>,
+  input: RenderSelectedCaptionsInput,
+): string {
+  const styleLine = buildAssStyle(input)
+  const events = segments
+    .map((segment) => {
+      const start = toAssTimestamp(segment.start)
+      const end = toAssTimestamp(segment.end)
+      const dialogueText = buildHighlightedDialogueText(segment.text, input)
+      return `Dialogue: 0,${start},${end},Default,,0,0,0,,${dialogueText}`
+    })
+    .join('\n')
+
+  return [
+    '[Script Info]',
+    'ScriptType: v4.00+',
+    'PlayResX: 1080',
+    'PlayResY: 1920',
+    'ScaledBorderAndShadow: yes',
+    '',
+    '[V4+ Styles]',
+    'Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding',
+    `Style: ${styleLine}`,
+    '',
+    '[Events]',
+    'Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text',
+    events,
+    '',
+  ].join('\n')
 }
 
 function escapeFilterPath(filePath: string): string {
@@ -503,14 +641,8 @@ function runFfmpeg(args: string[]): Promise<void> {
 export async function renderSelectedCaptions(
   input: RenderSelectedCaptionsInput,
 ): Promise<RenderSelectedCaptionsResult> {
-  const segments = input.segments
-    .map((segment) => ({
-      start: Number(segment.start),
-      end: Number(segment.end),
-      text: sanitizeSubtitleText(segment.text ?? ''),
-    }))
-    .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start)
-    .filter((segment) => segment.text.length > 0)
+  const wordsPerSubtitle = Math.max(1, Math.min(12, Math.round(input.wordsPerSubtitle ?? 4)))
+  const segments = normalizeRenderSegments(input.segments, wordsPerSubtitle, input.timingOffsetMs ?? 0)
 
   if (segments.length === 0) {
     throw new Error('No valid subtitle segments to render')
@@ -521,7 +653,8 @@ export async function renderSelectedCaptions(
   const runId = `${Date.now()}_${randomUUID().slice(0, 8)}`
   const tempDir = path.join(input.outputDir, `caption_render_${runId}`)
   const inputPath = path.join(tempDir, 'input.mp4')
-  const subtitlesPath = path.join(tempDir, 'captions.srt')
+  const subtitlesSrtPath = path.join(tempDir, 'captions.srt')
+  const subtitlesAssPath = path.join(tempDir, 'captions.ass')
   const outputName = `captioned_${runId}.mp4`
   const outputPath = path.join(input.outputDir, outputName)
 
@@ -529,27 +662,65 @@ export async function renderSelectedCaptions(
 
   try {
     await resolveInputVideoPath(input.videoUrl, input.outputDir, inputPath)
-    await fs.writeFile(subtitlesPath, buildSrt(segments), 'utf8')
+    await fs.writeFile(subtitlesSrtPath, buildSrt(segments), 'utf8')
+    await fs.writeFile(subtitlesAssPath, buildAssFile(segments, input), 'utf8')
 
-    const forceStyle = buildAssForceStyle(input)
-    const subtitleFilter = `subtitles=filename='${escapeFilterPath(subtitlesPath)}':charenc=UTF-8:force_style='${forceStyle}'`
-
-    await runFfmpeg([
-      '-y',
-      '-i',
-      inputPath,
-      '-vf',
-      subtitleFilter,
-      '-c:v',
-      'libx264',
-      '-preset',
-      'veryfast',
-      '-crf',
-      '20',
-      '-c:a',
-      'copy',
-      outputPath,
-    ])
+    const assFilter = `ass=filename='${escapeFilterPath(subtitlesAssPath)}'`
+    try {
+      await runFfmpeg([
+        '-y',
+        '-i',
+        inputPath,
+        '-vf',
+        assFilter,
+        '-c:v',
+        'libx264',
+        '-preset',
+        'veryfast',
+        '-crf',
+        '20',
+        '-c:a',
+        'copy',
+        outputPath,
+      ])
+    } catch (assError) {
+      // Fallback for environments where ass filter is unavailable.
+      const position = input.position ?? 'bottom'
+      const alignment = position === 'top' ? 8 : position === 'center' ? 5 : 2
+      const fontName = (input.fontName ?? 'Poppins').replace(/[^a-zA-Z0-9 _-]/g, '') || 'Poppins'
+      const fontSize = Math.round(clamp(input.fontSize ?? 48, 12, 160))
+      const outline = Number(clamp(input.strokeWidth ?? 2, 0, 12).toFixed(2))
+      const bold = normalizeFontWeight(input.fontWeight) === 'bold' ? -1 : 0
+      const forceStyle = [
+        `FontName=${fontName}`,
+        `FontSize=${fontSize}`,
+        `Bold=${bold}`,
+        `PrimaryColour=${toAssColor(input.fontColor, [255, 255, 255], 0)}`,
+        `OutlineColour=${toAssColor(input.strokeColor, [0, 0, 0], 0)}`,
+        `BorderStyle=1`,
+        `Outline=${outline}`,
+        'Shadow=0',
+        `Alignment=${alignment}`,
+      ].join(',')
+      const subtitleFilter = `subtitles=filename='${escapeFilterPath(subtitlesSrtPath)}':charenc=UTF-8:force_style='${forceStyle}'`
+      console.warn('[captions] ass renderer failed, falling back to srt renderer', assError)
+      await runFfmpeg([
+        '-y',
+        '-i',
+        inputPath,
+        '-vf',
+        subtitleFilter,
+        '-c:v',
+        'libx264',
+        '-preset',
+        'veryfast',
+        '-crf',
+        '20',
+        '-c:a',
+        'copy',
+        outputPath,
+      ])
+    }
 
     return {
       videoUrl: `/outputs/${outputName}`,

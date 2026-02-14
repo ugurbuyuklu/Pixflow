@@ -56,7 +56,7 @@ export function unwrapApiData<T>(payload: unknown): T {
 export function getApiError(payload: unknown, fallback: string): string {
   if (!payload || typeof payload !== 'object') return fallback
   const p = payload as ApiEnvelope<unknown>
-  if (typeof p.error === 'string' && p.error.trim()) return p.error
   if (typeof p.details === 'string' && p.details.trim()) return p.details
+  if (typeof p.error === 'string' && p.error.trim()) return p.error
   return fallback
 }
