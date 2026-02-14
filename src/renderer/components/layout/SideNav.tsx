@@ -135,7 +135,7 @@ export function SideNav() {
             >
               <div className={`flex items-center ${sidebarCollapsed ? '' : 'gap-3'}`}>
                 <item.icon className="w-4 h-4" />
-                {!sidebarCollapsed && <span>{brandedName(item.id)}</span>}
+                {!sidebarCollapsed && <span>{brandedName(item.id, 'text-secondary-500')}</span>}
               </div>
               {!sidebarCollapsed && item.badge && <span className="flex items-center">{item.badge}</span>}
               {sidebarCollapsed && item.badge && (

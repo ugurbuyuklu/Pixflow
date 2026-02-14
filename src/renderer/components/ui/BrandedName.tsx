@@ -4,12 +4,13 @@ interface BrandedNameProps {
   prefix: string
   suffix: string
   className?: string
+  prefixClassName?: string
 }
 
-export function BrandedName({ prefix, suffix, className = '' }: BrandedNameProps) {
+export function BrandedName({ prefix, suffix, className = '', prefixClassName = 'text-brand-500' }: BrandedNameProps) {
   return (
     <span className={className}>
-      <span className="text-brand-500">{prefix}</span>
+      <span className={prefixClassName}>{prefix}</span>
       {suffix}
     </span>
   )
@@ -29,10 +30,10 @@ const CATEGORY_NAMES: Record<string, NameDef> = {
   home: { prefix: 'Pix', suffix: 'flow' },
 }
 
-export function brandedName(id: string): ReactNode {
+export function brandedName(id: string, prefixClassName?: string): ReactNode {
   const def = CATEGORY_NAMES[id]
   if (!def) return id
-  return <BrandedName prefix={def.prefix} suffix={def.suffix} />
+  return <BrandedName prefix={def.prefix} suffix={def.suffix} prefixClassName={prefixClassName} />
 }
 
 export function brandedPlainText(id: string): string {
