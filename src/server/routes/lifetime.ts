@@ -164,6 +164,7 @@ interface LifetimeRunJob {
   frames: Array<{ age: number; imageUrl: string }>
   sessionId: string
   error: string
+  earlyTransitionsStarted: number
   earlyTransitions: Map<string, LifetimeTransitionRecord>
   earlyTransitionPromises: Promise<void>[]
 }
@@ -1204,6 +1205,7 @@ function createJob(backgroundMode: LifetimeBackgroundMode): LifetimeRunJob {
     frames: [],
     sessionId: '',
     error: '',
+    earlyTransitionsStarted: 0,
     earlyTransitions: new Map(),
     earlyTransitionPromises: [],
   }
@@ -1231,6 +1233,9 @@ function fireEarlyTransition(params: {
   const { jobId, outputsDir, outputDir, fromAge, fromImagePath, toAge, toImagePath, backgroundMode, narrativeTrack } =
     params
   const key = `${fromAge}-${toAge}`
+
+  const job = lifetimeRunJobs.get(jobId)
+  if (job) job.earlyTransitionsStarted += 1
 
   return (async () => {
     try {
@@ -1801,6 +1806,7 @@ export function createLifetimeRouter(config: LifetimeRouterConfig): Router {
       progress: job.progress,
       sourceFrameUrl: job.sourceFrameUrl,
       frames: framesWithSource,
+      earlyTransitionsStarted: job.earlyTransitionsStarted,
       earlyTransitionsCompleted: job.earlyTransitions.size,
     })
   })

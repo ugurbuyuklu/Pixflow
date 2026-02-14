@@ -46,6 +46,7 @@ interface LifetimeRunStatus {
     message: string
   }
   frames?: LifetimeFrame[]
+  earlyTransitionsStarted?: number
   earlyTransitionsCompleted?: number
 }
 
@@ -110,6 +111,7 @@ export default function LifetimePage() {
   const [hasRequestedVideoCreation, setHasRequestedVideoCreation] = useState(false)
   const [videoProgress, setVideoProgress] = useState(0)
   const [videoProgressMessage, setVideoProgressMessage] = useState('')
+  const [earlyTransitionsStarted, setEarlyTransitionsStarted] = useState(0)
   const [earlyTransitionsCompleted, setEarlyTransitionsCompleted] = useState(0)
 
   const inputPreviewUrl = useMemo(() => {
@@ -169,6 +171,7 @@ export default function LifetimePage() {
     setSessionId('')
     setSourceFrameUrl('')
     setFrames([])
+    setEarlyTransitionsStarted(0)
     setEarlyTransitionsCompleted(0)
     setVideoDurationSec(VIDEO_DURATION_DEFAULT_SEC)
     if (!preserveVideoOutput) {
@@ -209,6 +212,9 @@ export default function LifetimePage() {
         }
         if (data.sourceFrameUrl) {
           setSourceFrameUrl(data.sourceFrameUrl)
+        }
+        if (typeof data.earlyTransitionsStarted === 'number') {
+          setEarlyTransitionsStarted(data.earlyTransitionsStarted)
         }
         if (typeof data.earlyTransitionsCompleted === 'number') {
           setEarlyTransitionsCompleted(data.earlyTransitionsCompleted)
@@ -629,9 +635,9 @@ export default function LifetimePage() {
                 {running ? 'Generating frames...' : 'Generate frames'}
               </Button>
               {running && <ProgressBar value={progress} label={runMessage || 'Generating lifetime frames'} />}
-              {running && earlyTransitionsCompleted > 0 && (
+              {running && earlyTransitionsStarted > 0 && (
                 <p className="text-xs text-surface-400 mt-1">
-                  Pre-generating transition videos: {earlyTransitionsCompleted}/9
+                  Transition videos: {earlyTransitionsCompleted}/{earlyTransitionsStarted} ready
                 </p>
               )}
             </div>
