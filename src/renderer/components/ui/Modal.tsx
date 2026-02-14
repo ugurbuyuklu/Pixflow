@@ -24,14 +24,14 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <button type="button" aria-label="Close modal" className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-surface-50 border border-surface-100 rounded-xl shadow-xl w-full max-w-md mx-4">
+      <div className="relative bg-surface-50 border border-surface-100 rounded-xl shadow-xl w-full max-w-[min(28rem,calc(100vw-2rem))] mx-4">
         {title && (
           <div className="flex items-center justify-between px-5 py-4 border-b border-surface-100">
-            <h2 className="text-lg font-semibold text-surface-900">{title}</h2>
+            <h2 className="text-lg font-semibold text-surface-900 truncate mr-2">{title}</h2>
             <button
               type="button"
               onClick={onClose}
-              className="text-surface-400 hover:text-surface-600 transition-colors"
+              className="flex items-center justify-center w-9 h-9 rounded-lg text-surface-400 hover:text-surface-600 hover:bg-surface-100 transition-colors shrink-0"
             >
               <X className="w-5 h-5" />
             </button>

@@ -14,6 +14,7 @@ import {
   Wand2,
   Zap,
 } from 'lucide-react'
+import { useEffect } from 'react'
 import { useAuthStore } from '../../stores/authStore'
 import { useHistoryStore } from '../../stores/historyStore'
 import { useMachineStore } from '../../stores/machineStore'
@@ -35,13 +36,26 @@ const SIDEBAR_ITEMS: { id: TabId; label: string; icon: typeof Wand2 }[] = [
   { id: 'history', label: 'Library', icon: BookOpen },
 ]
 
+const LG_BREAKPOINT = '(min-width: 1024px)'
+
 export function SideNav() {
-  const { activeTab, navigate, sidebarCollapsed, toggleSidebarCollapsed } = useNavigationStore()
+  const { activeTab, navigate, sidebarCollapsed, toggleSidebarCollapsed, setSidebarCollapsed } = useNavigationStore()
   const promptCount = usePromptStore((s) => s.prompts.length)
   const machineStep = useMachineStore((s) => s.step)
   const favoritesCount = useHistoryStore((s) => s.favorites.length)
   const { mode, toggleMode } = useThemeStore()
   const userName = useAuthStore((s) => s.user?.name || 'User')
+
+  useEffect(() => {
+    const mql = window.matchMedia(LG_BREAKPOINT)
+    const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      if (useNavigationStore.getState().sidebarManuallyToggled) return
+      setSidebarCollapsed(!e.matches)
+    }
+    handleChange(mql)
+    mql.addEventListener('change', handleChange)
+    return () => mql.removeEventListener('change', handleChange)
+  }, [setSidebarCollapsed])
 
   const items = SIDEBAR_ITEMS.map((item) => {
     if (item.id === 'generate' && promptCount > 0) {

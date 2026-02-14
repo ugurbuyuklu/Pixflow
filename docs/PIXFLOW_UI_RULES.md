@@ -30,6 +30,14 @@ Keep the UI consistent and predictable across all Pixflow categories. These rule
 - Use shared `Button` variants for all actions.
 - Avoid raw `<button>` unless the element is a card overlay or complex hit-target.
 
+## Responsive & Touch Standards
+- **Touch targets:** All interactive elements (buttons, slider thumbs, modal close) must be at least 44×44px CSS (WCAG 2.2 AAA). Use `min-h-[44px] min-w-[44px]` guard classes on custom hit areas.
+- **Responsive padding:** Content areas use `p-4 sm:p-6 xl:p-8` — never a fixed `p-8` at all widths.
+- **Sidebar:** Auto-collapses at `<lg` (1024px). Expanded at `≥lg` if the user hasn't manually toggled.
+- **Modals:** Use `max-w-[min(<desired>,calc(100vw-2rem))]` to cap width while preventing horizontal overflow on narrow viewports. Never stack two `max-w-*` utilities — the later one wins.
+- **Text overflow:** Use `truncate` or `line-clamp-*` on any user-generated or variable-length text (prompt previews, file names, error messages). Never allow unbounded text to break layout.
+- **Breakpoint ladder:** Use at least `sm:` + `xl:` where layout shifts. Avoid relying on `xl:` alone.
+
 ## Accessibility Baseline
 - Tabs must be keyboard navigable (ArrowLeft/ArrowRight/Home/End).
 - Buttons need clear labels and visible focus states.

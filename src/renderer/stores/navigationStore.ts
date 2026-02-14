@@ -26,6 +26,7 @@ interface PendingNavigationPerf {
 interface NavigationState {
   activeTab: TabId
   sidebarCollapsed: boolean
+  sidebarManuallyToggled: boolean
   hasSelectedCategory: boolean
   pendingNavigationPerf: PendingNavigationPerf | null
   navigate: (tab: TabId, options?: NavigationOptions) => void
@@ -37,6 +38,7 @@ interface NavigationState {
 export const useNavigationStore = create<NavigationState>()((set) => ({
   activeTab: 'home',
   sidebarCollapsed: true,
+  sidebarManuallyToggled: false,
   hasSelectedCategory: false,
   pendingNavigationPerf: null,
 
@@ -68,6 +70,7 @@ export const useNavigationStore = create<NavigationState>()((set) => ({
   toggleSidebarCollapsed: () =>
     set((state) => ({
       sidebarCollapsed: !state.sidebarCollapsed,
+      sidebarManuallyToggled: true,
       hasSelectedCategory: state.hasSelectedCategory || !state.sidebarCollapsed,
     })),
 
