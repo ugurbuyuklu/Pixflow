@@ -110,6 +110,13 @@ body {
   overflow: hidden;
 }
 
+/* Interactive elements — always show pointer cursor */
+button,
+a,
+[role="button"] {
+  cursor: pointer;
+}
+
 /* macOS traffic light drag region */
 .drag-region {
   -webkit-app-region: drag;
