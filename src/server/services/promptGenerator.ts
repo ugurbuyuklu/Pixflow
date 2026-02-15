@@ -380,9 +380,11 @@ export async function generatePrompts(
 ): Promise<{ prompts: PromptOutput[]; varietyScore: VarietyScore }> {
   const client = await getOpenAI()
   const subThemesToUse = distributeSubThemes(researchBrief.sub_themes, count)
-  const SINGLE_PROMPT_TIMEOUT = 60000 // 60 second timeout per individual prompt
+  const SINGLE_PROMPT_TIMEOUT = 120000 // 120 second timeout per individual prompt
+  const RETRY_LIMIT = 2
 
-  const concurrencyLimit = Math.min(10, count)
+  // Lower concurrency reduces provider throttling and fallback drift on larger batches.
+  const concurrencyLimit = Math.min(4, count)
   console.log(`[generatePrompts] Starting PARALLEL generation for ${count} prompts (concurrency=${concurrencyLimit})`)
 
   const prompts: PromptOutput[] = Array.from({ length: count })
@@ -395,37 +397,62 @@ export async function generatePrompts(
       if (!next) return
       const { theme, index } = next
 
-      const singlePromptPromise = generateSinglePromptWithTheme(
-        client,
-        concept,
-        theme,
-        researchBrief,
-        index,
-        imageInsights,
-        count,
-      )
-      const timeoutPromise = new Promise<PromptOutput>((_, reject) =>
-        setTimeout(() => reject(new Error(`Prompt ${index + 1} timeout after 60s`)), SINGLE_PROMPT_TIMEOUT),
-      )
+      let resolvedPrompt: PromptOutput | null = null
+      let lastError: unknown = null
 
-      try {
-        const prompt = await Promise.race([singlePromptPromise, timeoutPromise])
-        prompts[index] = enforceReferenceDrivenPrompt(prompt)
-        console.log(`[generatePrompts] Prompt ${index + 1}/${count} complete`)
-      } catch (error) {
-        console.error(`[generatePrompts] Prompt ${index + 1} failed:`, error)
-        const fallbackPrompt = enforceReferenceDrivenPrompt(createFallbackPrompt(theme, concept))
-        console.log(`[generatePrompts] Using fallback for prompt ${index + 1}`)
-        prompts[index] = fallbackPrompt
-      } finally {
-        completed += 1
-        onBatchDone?.(completed, count, prompts[index], index)
+      for (let attempt = 1; attempt <= RETRY_LIMIT; attempt += 1) {
+        try {
+          const batchedPromptPromise = generatePromptBatch(client, concept, [theme], researchBrief, index, imageInsights)
+          const timeoutPromise = new Promise<PromptOutput>((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`Prompt ${index + 1} timeout after ${SINGLE_PROMPT_TIMEOUT / 1000}s`)),
+              SINGLE_PROMPT_TIMEOUT,
+            ),
+          )
+
+          const generated = await Promise.race([
+            batchedPromptPromise.then((items) => items[0] as PromptOutput | undefined),
+            timeoutPromise,
+          ])
+
+          if (!generated) {
+            throw new Error(`Prompt ${index + 1} returned empty batch item`)
+          }
+          if ((generated.outfit?.main || '').includes('FALLBACK SCAFFOLD')) {
+            throw new Error(`Prompt ${index + 1} returned fallback scaffold payload`)
+          }
+
+          resolvedPrompt = enforceReferenceDrivenPrompt(generated)
+          console.log(`[generatePrompts] Prompt ${index + 1}/${count} complete (attempt ${attempt})`)
+          break
+        } catch (error) {
+          lastError = error
+          console.warn(`[generatePrompts] Prompt ${index + 1} attempt ${attempt}/${RETRY_LIMIT} failed:`, error)
+          if (attempt < RETRY_LIMIT) {
+            await new Promise((resolve) => setTimeout(resolve, 1200 * attempt))
+          }
+        }
       }
+
+      if (!resolvedPrompt) {
+        console.error(`[generatePrompts] Prompt ${index + 1} failed after retries:`, lastError)
+        resolvedPrompt = enforceReferenceDrivenPrompt(createFallbackPrompt(theme, concept))
+        console.log(`[generatePrompts] Using fallback for prompt ${index + 1}`)
+      }
+
+      prompts[index] = resolvedPrompt
+      completed += 1
+      onBatchDone?.(completed, count, prompts[index], index)
     }
   }
 
   const workerCount = Math.min(concurrencyLimit, queue.length)
   await Promise.all(Array.from({ length: workerCount }, () => worker()))
+
+  const fallbackCount = prompts.filter((prompt) => (prompt.outfit?.main || '').includes('FALLBACK SCAFFOLD')).length
+  if (fallbackCount > 0) {
+    console.warn(`[generatePrompts] Completed with ${fallbackCount}/${prompts.length} fallback prompts`)
+  }
 
   console.log(`[generatePrompts] PARALLEL generation complete, total: ${prompts.length} prompts`)
   const varietyScore = calculateVarietyScore(prompts)
