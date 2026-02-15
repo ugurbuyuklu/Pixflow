@@ -1,6 +1,7 @@
-# Research Pipeline Documentation
+# Prompt Factory Research Pipeline Documentation
 
-> This document details the research process that MUST happen before any prompt generation.
+> Last updated: 2026-02-15
+> This document details the research and prompt-generation process that runs before prompt output delivery.
 
 ## Overview
 
@@ -74,10 +75,10 @@ The research pipeline is the core differentiator of Prompt Factory. It ensures e
 
 **Search Queries:**
 ```
-"[concept] photoshoot ideas 2024"
+"[concept] photoshoot ideas 2026"
 "[concept] aesthetic Pinterest trends"
 "[concept] editorial photography style"
-"[concept] fashion editorial 2024"
+"[concept] fashion editorial 2026"
 "[concept] color palette trends"
 ```
 
@@ -110,7 +111,7 @@ The research pipeline is the core differentiator of Prompt Factory. It ensures e
 "Momo AI photo [concept] Instagram"
 "HubX AI [concept] creative ads"
 "Remini [concept] photo transformation ads"
-"AI photo app [concept] ads 2024"
+"AI photo app [concept] ads 2026"
 ```
 
 **What to Extract:**
@@ -238,7 +239,8 @@ The research pipeline is the core differentiator of Prompt Factory. It ensures e
 2. **Rotate 1-2 axes** per prompt for variety
 3. **Technical choices come from research** - not fixed rules
 4. **CRITICAL tags** for must-have elements
-5. **No locked parameters** (identity, hair color, etc.)
+5. **No arbitrary identity overrides** (no forced ethnicity/body/beauty constraints)
+6. **Reference-first rule**: prompts must assume user may provide one or more reference images.
 
 ### Variety Score Calculation
 
@@ -269,7 +271,7 @@ Before generating prompts, ALL must be checked:
 
 - [ ] Minimum 5 different sources searched
 - [ ] Competitor analysis completed (MANDATORY)
-- [ ] Sources are current (2024/2025)
+- [ ] Sources are current (recent cycle; avoid stale references)
 - [ ] Technical recommendations extracted
 - [ ] Sub-themes identified (minimum 4)
 - [ ] Differentiation opportunities noted
@@ -284,7 +286,8 @@ Before finalizing each prompt:
 - [ ] Lighting choice is research-justified
 - [ ] Camera/lens choice is research-justified
 - [ ] CRITICAL elements are tagged
-- [ ] No locked parameters mentioned
+- [ ] No arbitrary locked identity parameters mentioned
+- [ ] Prompt is reference-first and works with multiple reference images
 - [ ] Would look natural with user's selfie
 
 ### Variety Checklist
@@ -385,11 +388,11 @@ Frontend (EventSource)          Backend (Express SSE)           GPT-4o Workers
 
 ### Parallel Worker Pattern
 
-`generatePrompts()` spawns `min(10, count)` workers pulling from a shared queue:
+`generatePrompts()` spawns `min(4, count)` workers pulling from a shared queue:
 
 ```
 generatePrompts(concept, count, researchBrief, onBatchDone)
-  └── workers[0..9] (parallel)
+  └── workers[0..3] (parallel)
        └── generateSinglePromptWithTheme(client, concept, theme, research, index)
             ├── success → prompts[index] = result
             └── failure → prompts[index] = createFallbackPrompt()
@@ -398,6 +401,8 @@ generatePrompts(concept, count, researchBrief, onBatchDone)
 
 The `onBatchDone` callback passes `(completedCount, total, prompt, index)` so the route can emit
 both `prompt` and `progress` SSE events immediately as each worker finishes.
+
+Concurrency is intentionally capped at `4` to reduce provider throttling, fallback drift, and quality collapse on larger batches.
 
 ### Schema Alignment (Critical)
 
@@ -445,3 +450,12 @@ researchBrief.sub_themes[].name / .aesthetic / .mood / .key_elements
 ```
 
 **Never** access flat properties like `research.key_themes` or `research.visual_elements` — they don't exist.
+
+### Web Search + JSON Mode Constraint
+
+When using OpenAI Responses with web search tools (`web_search_preview`), do not send JSON mode (`response_format`).
+
+Expected pattern:
+- request grounded output text with clear JSON instructions,
+- parse JSON from `output_text` defensively,
+- keep strict fallback behavior and logging for parse failures.

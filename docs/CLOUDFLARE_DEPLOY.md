@@ -1,5 +1,7 @@
 # Cloudflare Deploy (Web Frontend)
 
+Last updated: 2026-02-15
+
 This project is currently deployed to Cloudflare as a **frontend-only Pages app**.
 
 ## Why frontend-only right now
@@ -46,6 +48,9 @@ Preview:
 ```bash
 npm run deploy:pages:preview
 ```
+
+Safety rule for collaborative sessions:
+- Never deploy without explicit user approval.
 
 ## First-time project creation (if project does not exist)
 

@@ -1,136 +1,125 @@
 # Pixflow
 
-AI-powered web platform for creative asset production workflows.
+Last updated: 2026-02-15
 
-## Features
+Pixflow is a web-first AI production workspace for social/media creative pipelines.
 
-### Prompt Factory
-Transform concepts and images into structured, production-ready prompts using GPT-4o Vision.
+## Product Areas
 
-### Asset Monster
-Batch image generation with advanced prompt management:
-- Generated, custom, and library prompt sources
-- Reference image support (up to 5 images)
-- Character-consistent generation
-- Configurable aspect ratios, resolutions, and formats
+- `Prompt Factory`: research-backed structured prompt generation (concept/image input).
+- `Asset Monster`: batch image generation with multi-reference inputs.
+- `Img2Engine`: image-to-video generation with queue-based execution.
+- `Avatar Studio`: script, voice, and talking-avatar generation flows.
+- `Captions`: subtitle generation, sentence selection, and burned-in rendering.
+- `The Machine`: end-to-end pipeline orchestration from concept to final media.
+- `Lifetime`: baby photo -> age frames -> transition videos -> merged timeline video.
+- `Library`: saved history, favorites, and reusable assets.
+- `Competitor Report`: last-7-day creative intelligence report (currently Clone AI).
 
-### Avatar Studio
-Create AI avatars with script refinement, multi-language TTS, and lip-sync video generation.
+## Stack
 
-### Captions
-AI-generated video subtitles with sentence-level selection, style presets, and local ffmpeg rendering.
+- `Frontend`: React 19, Vite 6, Tailwind 4, Zustand 5.
+- `Backend`: Express 4, better-sqlite3 (WAL), Multer.
+- `AI providers`: OpenAI, FAL.ai, Hedra, ElevenLabs, Kling.
+- `Tooling`: TypeScript, Biome, Vitest, tsx.
+- `Deploy`: Cloudflare Pages (frontend) + Node server (backend).
 
-### Img2Video
-Image-to-video conversion with camera controls and per-job queue management.
-
-### Lifetime
-Age progression pipeline: upload a photo and generate a lifetime video (baby to 75) with transition animations.
-
-### The Machine
-End-to-end pipeline orchestration: concept to prompts to images to script to TTS to lip-sync video.
-
-### Library
-Organize, favorite, and reuse your best prompts and generated assets.
-
-## Tech Stack
-
-- **Frontend:** React 19, Vite 6, Tailwind 4, Zustand 5, Lucide icons
-- **Backend:** Express 4.18, better-sqlite3 (SQLite WAL mode), Multer
-- **AI Services:** OpenAI GPT-4o, FAL.ai, ElevenLabs, Hedra, Kling
-- **Tooling:** Biome 2.3 (lint + format), Vitest 4, tsx
-- **Deploy:** Cloudflare Pages (frontend), Node server (backend)
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
 
-- Node.js >= 20
+- Node.js `>=20 <21`
 - npm
 
-### Installation
+### Install and run
 
 ```bash
 npm install
-
 cp .env.example .env
-# Add your API keys to .env
-
 npm run dev
 ```
 
-Or run each process separately:
+Run client/server separately if needed:
 
 ```bash
-npm run dev:web:server   # Express API (port 3002)
-npm run dev:web:client   # Vite dev server
+npm run dev:web:server   # API on port 3002 by default
+npm run dev:web:client   # Vite frontend
 ```
 
-Default API port is `3002` (override with `PIXFLOW_WEB_API_PORT`).
-
-### Build
+## Build and Preview
 
 ```bash
-npm run build          # Production build -> dist/web
-npm run preview:web    # Preview production build
+npm run build
+npm run preview:web
 ```
 
 ## Deploy
 
-Pixflow frontend deploys to Cloudflare Pages.
+Frontend deploy command:
 
 ```bash
-npx wrangler login
-export VITE_API_BASE_URL="https://your-api-domain.example.com"
 npm run deploy:pages
 ```
 
-See `docs/CLOUDFLARE_DEPLOY.md` for the full guide.
-CI: `.github/workflows/deploy-pages.yml` deploys on `main` pushes and manual preview runs.
+Detailed deployment guide:
+- `docs/CLOUDFLARE_DEPLOY.md`
 
-## Project Structure
+Note:
+- Do not deploy without explicit user approval in active collaboration sessions.
 
-```
-pixflow/
-├── src/
-│   ├── renderer/          # React SPA (Vite root)
-│   │   ├── components/    # Feature-organized pages
-│   │   ├── stores/        # Zustand state
-│   │   ├── hooks/         # React hooks
-│   │   └── lib/           # API client, utilities
-│   └── server/            # Express API
-│       ├── routes/        # REST endpoints
-│       ├── services/      # Business logic + AI providers
-│       ├── db/            # SQLite schema + migrations
-│       └── telemetry/     # Performance tracking + gates
-├── docs/                  # Documentation
-├── data/                  # SQLite database (auto-created, gitignored)
-├── avatars/               # Curated avatar gallery
-└── outputs/               # Generated assets (gitignored)
-```
-
-## Configuration
-
-Copy `.env.example` for the full variable list. Key API keys:
-
-- `OPENAI_API_KEY` - Prompt generation, vision analysis
-- `FAL_API_KEY` - Image generation
-- `ELEVENLABS_API_KEY` - Text-to-speech
-- `HEDRA_API_KEY` - Lip-sync video
-- `KLING_API_KEY` - Video generation and transitions
-
-Auth is disabled by default (`PIXFLOW_AUTH_MODE=disabled`).
-Re-enable with `PIXFLOW_AUTH_MODE=token` and set `JWT_SECRET` (min 32 chars).
-
-## Development
+## Quality Gates
 
 ```bash
-npm test             # Vitest (94 tests)
-npm run lint         # TypeScript type check
-npm run lint:biome   # Biome linter
-npm run format       # Biome auto-format
-npm run gate:release # Full release gate (lint + tests + smoke + telemetry)
+npm run lint
+npm run lint:biome
+npm run test
+npm run smoke:api
+npm run smoke:journey
+npm run gate:release
 ```
+
+## Prompt Generation Pipeline Lock (PGP)
+
+Prompt Factory core pipeline is protected against accidental edits.
+
+```bash
+npm run pgp:lock:check
+npm run pgp:lock:update
+```
+
+Lock files:
+- `scripts/pgp-lock-guard.js`
+- `docs/ops/pgp-lock.json`
+
+`pgp:lock:update` must only be run after explicit user approval for PGP changes.
+
+## Structure (high level)
+
+```text
+src/
+  renderer/   # React SPA
+  server/     # Express API + services + db + telemetry
+docs/         # Product + engineering docs
+data/         # Local sqlite runtime
+outputs/      # Generated artifacts
+uploads/      # Temp uploads
+avatars/      # Curated avatar assets
+```
+
+## Environment Notes
+
+Key variables:
+- `OPENAI_API_KEY`
+- `FAL_API_KEY`
+- `HEDRA_API_KEY`
+- `ELEVENLABS_API_KEY`
+- `KLING_API_KEY`
+- `PIXFLOW_WEB_API_PORT` (default `3002`)
+
+Auth defaults:
+- `PIXFLOW_AUTH_MODE=disabled` for internal/trusted development.
+- To enable token auth: set `PIXFLOW_AUTH_MODE=token` and secure `JWT_SECRET`.
 
 ## License
 
-Private - All rights reserved
+Private - all rights reserved.

@@ -7,7 +7,7 @@ This document is a machine-readable handoff for another AI agent to understand:
 3. what is still pending.
 
 Date: 2026-02-07
-Last updated: 2026-02-14 (Lifetime pipeline: gender lock + duration-controlled final video)
+Last updated: 2026-02-15 (PGP restoration lock + competitor report web-grounding fixes)
 Project root: `/Users/pixery/Projects/pixflow`
 
 ---
@@ -102,6 +102,45 @@ Project root: `/Users/pixery/Projects/pixflow`
   - `/api/lifetime/run-status/:jobId` includes source frame in frame list
 - Verification:
   - `npm run lint` ✅
+
+### 0.5) Prompt Factory Turning Point + Lock Protocol (2026-02-15)
+
+- Turning point tag created for known-good Prompt Factory quality:
+  - `turning-point-2026-02-15-pgp-restored`
+  - commit: `0c96fd4`
+- PGP protection hardening:
+  - Added lock guard script:
+    - `/Users/pixery/Projects/pixflow/scripts/pgp-lock-guard.js`
+  - Added lock fingerprint file:
+    - `/Users/pixery/Projects/pixflow/docs/ops/pgp-lock.json`
+  - Added npm commands:
+    - `npm run pgp:lock:check`
+    - `npm run pgp:lock:update` (requires explicit unlock token)
+  - Added release-gate enforcement:
+    - `gate:release` now runs PGP lock check.
+- Current prompt generation behavior:
+  - SSE prompt streaming remains progressive.
+  - Worker concurrency is intentionally capped at `min(4, count)` to reduce provider fallback drift and throttling pressure.
+  - Prompt style is enforced as reference-first so generation assumes user may pass multiple reference images.
+
+### 0.6) Competitor Report + Web Search Constraint Fix (2026-02-15)
+
+- Added new category/page: **Competitor Report** (after Library in nav order).
+- Backend route added:
+  - `/Users/pixery/Projects/pixflow/src/server/routes/competitorReport.ts`
+  - Endpoints:
+    - `GET /api/competitor-report/apps`
+    - `POST /api/competitor-report/weekly`
+- Frontend page added:
+  - `/Users/pixery/Projects/pixflow/src/renderer/components/competitor-report/CompetitorReportPage.tsx`
+- Safety/quality normalization in competitor report:
+  - strict URL sanitization (http/https only),
+  - date-window filtering (last 7 days only),
+  - response normalization for malformed/partial model payloads.
+- Critical API fix:
+  - OpenAI web search cannot be used with JSON mode (`response_format`).
+  - Updated web-grounded calls to request text and parse structured JSON safely from output text.
+  - Same rule now applies to Prompt Factory research web path.
 
 ---
 

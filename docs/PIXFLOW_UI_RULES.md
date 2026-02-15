@@ -1,5 +1,7 @@
 # Pixflow UI Rules (Feb 2026)
 
+Last updated: 2026-02-15
+
 ## Purpose
 Keep the UI consistent and predictable across all Pixflow categories. These rules are the source of truth for layout, navigation, and state feedback.
 
@@ -11,11 +13,12 @@ Keep the UI consistent and predictable across all Pixflow categories. These rule
 - Result grids: `grid-cols-2 sm:grid-cols-3 xl:grid-cols-4` — not page-specific column counts.
 
 ## Navigation
-- Top-level category navigation: `PrimaryTabBar`.
+- Top-level category navigation: `SideNav` (collapsible icon/label sidebar).
 - In-page mode switches: `SegmentedTabs`.
 - Actions are always `Button` (no action inside tab sets).
 - If a control changes the view/state, it is a tab. If it triggers work, it is a button.
 - Tab switch scrolls content to top automatically.
+- Active category set (current): Prompt Factory, Asset Monster, Img2Engine, Avatar Studio, Captions, The Machine, Lifetime, Library, Competitor Report.
 
 ## Steps
 - Wizard-like flows use `StepHeader` for numbering + titles.
@@ -73,7 +76,7 @@ Keep the UI consistent and predictable across all Pixflow categories. These rule
 - No single-click destructive actions — use `ConfirmationDialog`.
 
 ## Component Map
-- `PrimaryTabBar`: top nav categories
+- `SideNav`: top-level category navigation
 - `SegmentedTabs`: in-page mode toggles
 - `StepHeader`: step-based flows
 - `StatusPill`: per-item status

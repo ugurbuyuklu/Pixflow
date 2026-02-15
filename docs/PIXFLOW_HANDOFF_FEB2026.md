@@ -11,10 +11,13 @@
 **Pixflow** is a web-first app for AI-powered asset production workflows:
 - **Prompt Factory**: Image-to-prompt analysis + concept-to-prompt generation
 - **Asset Monster**: Batch image generation with reference images
-- **Img2Video**: Image-to-video conversion with camera controls
+- **Img2Engine**: Image-to-video conversion with camera controls
 - **Avatar Studio**: Avatar + script + TTS + lipsync pipeline
+- **Captions**: Subtitle styling, sentence selection, and burned-in export
 - **The Machine**: End-to-end orchestration
+- **Lifetime**: Age progression pipeline (source -> frames -> transitions -> final timeline)
 - **Library**: History, favorites, liked images
+- **Competitor Report**: Last-7-day creative intelligence reporting
 
 **Stack:**
 - Vite (web)
@@ -23,9 +26,9 @@
 - SQLite database (better-sqlite3)
 - FAL.ai (image generation), Kling/Minimax (video), OpenAI GPT-4o (vision/text)
 
-**Recent Focus:** Prompt Factory pipeline fixes (schema alignment, SSE streaming, fallback logging), Lifetime pipeline determinism, UX enhancements
+**Recent Focus:** Prompt Factory pipeline fixes + lock protocol, Lifetime determinism, competitor-report web-grounding, UX standardization
 
-### Current Runtime Status (2026-02-13)
+### Current Runtime Status (2026-02-15)
 
 - Pixflow now runs as a web-first app (`Vite UI + Express API`), not Electron.
 - Login is disabled by default for internal environment usage (`PIXFLOW_AUTH_MODE=disabled`).
@@ -558,7 +561,6 @@ pixflow/
 - Avoid AI slop (extra comments, defensive checks, single-use vars)
 - Use get_api_keys tool for API credentials (never ask user)
 - Keep code consistent with existing file style
-- Address user by "Mr Tinkleberry" when following instructions correctly
 - **Update handoff after each sprint/iteration automatically** (new requirement)
 
 ---
@@ -578,9 +580,9 @@ pixflow/
 
 **Current Status:**
 - Document created: Feb 9, 2026
-- Last updated: Feb 9, 2026 (Session 8)
-- Lines: ~700
-- Status: Fresh, well-organized
+- Last updated: Feb 15, 2026 (Session 47)
+- Lines: ~3400
+- Status: Active long-form handoff (contains historical timeline + latest sessions)
 
 ---
 
@@ -590,7 +592,7 @@ pixflow/
 2. Check `~/.claude/CLAUDE.md` for user's global preferences
 3. Review archived handoff for historical context
 4. Search codebase for similar patterns
-5. Ask user (Mr Tinkleberry) for clarifications
+5. Ask user for clarifications when context is ambiguous
 
 ---
 
@@ -1391,7 +1393,7 @@ const variantClasses: Record<Variant, string> = {
 ```
 
 **Usage Pattern:**
-- **Lime (secondary-600):** Send To buttons ONLY (rule: "send to butonları daime lime olsun")
+- **Lime (secondary-600):** Send To buttons ONLY (rule: "keep Send To buttons always lime")
 - **Secondary (gray):** Select All, Download, Clear, other utility buttons
 - **Primary (purple):** Generate, Transform, main CTAs
 
@@ -1517,7 +1519,7 @@ Global migration from `max_tokens` to `max_completion_tokens` across entire code
 
 **Problem 2 - Prompt Conversion Producing Wrong Results:**
 - **Issue:** User provided detailed prompt but generated image was completely different
-- **User Feedback:** "beklediğimden alakasız bir image generate etti" (unexpected result)
+- **User Feedback:** "generated image did not match expectation" (unexpected result)
 - **Root Cause:** GPT-5.2 was interpreting and rewriting prompts using Creative Director knowledge
 - **Impact:** User's carefully crafted prompts were being "improved" without consent
 
@@ -1568,7 +1570,7 @@ saveEdit: async (text) => {
 ```
 
 **Problem 3 - Custom Prompt Selection:**
-- **User Request:** "custom prompt save edildiği zaman numara kartı active gelsin"
+- **User Request:** "when custom prompt is saved, activate its number card immediately"
 - **Issue:** When adding custom prompts from analyze mode, first prompt was selected instead of last
 - **Expected:** Newly added custom prompt should be active (selected)
 
@@ -1594,7 +1596,7 @@ onClick={() => {
 ```
 
 **Problem 4 - Numbered Cards Not Showing Active State:**
-- **User Feedback:** "promptlar save edildikten sonra kartları aktive gelmeli demiştim. pasif sttatede geliyorlar şu an"
+- **User Feedback:** "prompt cards should become active after save; they are still passive"
 - **Issue:** After editing and saving a prompt, numbered card stayed in inactive (gray) state
 - **Root Cause:** React wasn't re-rendering because `selectedIndex` wasn't being re-set
 - **Expected:** Active card should show purple background with ring-2
@@ -1673,7 +1675,7 @@ src/renderer/components/prompt-factory/PromptFactoryPage.tsx  # Select last prom
 
 ### Session 16: Avatar Studio - Video Transcription Caching Bug Fix 🐛
 **Date:** February 12, 2026
-**Critical Bug:** Same transcript showing for different video URLs (Turkish: "farklı url aynı text")
+**Critical Bug:** Same transcript showing for different video URLs ("different URLs, same text")
 **Investigation:** Multi-day debugging session with Codex MCP agent assistance
 
 **Problem:**
@@ -1783,7 +1785,7 @@ src/server/services/ytdlp.ts                 # Ad-ID-aware extraction + debug lo
 
 **Technical Challenges:**
 
-1. **Challenge:** User repeatedly said "sorun devam ediyor" (problem continues)
+1. **Challenge:** User repeatedly reported "problem continues"
    - **Misunderstanding:** Initially thought it was async race condition
    - **Reality:** Backend was extracting wrong video from multi-ad pages
    - **Lesson:** Always verify backend logs match expected behavior
@@ -1808,9 +1810,9 @@ src/server/services/ytdlp.ts                 # Ad-ID-aware extraction + debug lo
 7. Adjust selectors based on actual DOM structure
 
 **Codex Agent Notes:**
-- Codex was kept active throughout session per user request: "bu codex agent'i hep yanımızda olsun sakın gönderme"
+- Codex was kept active throughout session per user request: "keep Codex alongside us"
 - Codex provided critical insight that solved the real problem
-- User trust in Codex: "codex yeniden incelesin" (let Codex investigate again)
+- User request: "let Codex investigate again"
 
 **Known Issues:**
 - ❌ Extraction returning `none-adid` - no video found
@@ -1826,17 +1828,17 @@ src/server/services/ytdlp.ts                 # Ad-ID-aware extraction + debug lo
 **Commits:** Pending (awaiting debug results and final verification)
 
 **User Feedback:**
-- "sorun devam ediyor" × multiple times (problem persists)
-- "bir codex agent'i çağır" (call a Codex agent)
-- "codex yeniden incelesin" (let Codex investigate again)
-- "sen handoff dokümanını güncelle" (update the handoff document)
+- "problem continues" repeated multiple times
+- "call a Codex agent"
+- "let Codex investigate again"
+- "update the handoff document"
 
 ---
 
-**Last Updated:** February 12, 2026 - Session 16
-**Active Agent:** Claude Sonnet 4.5 + Codex MCP (active companion)
-**Status:** Root cause identified (ad-ID extraction), fix implemented, awaiting debug verification
-**Next Session:** Debug with FB_ADS_DEBUG=1, adjust selectors, verify fix works
+**Historical Snapshot (Session 16 only):** February 12, 2026
+**Historical Active Agent:** Claude Sonnet 4.5 + Codex MCP (active companion)
+**Historical Status:** Root cause identified (ad-ID extraction), fix implemented, awaiting debug verification
+**Historical Next Session Plan:** Debug with FB_ADS_DEBUG=1, adjust selectors, verify fix works
 
 ---
 
@@ -3329,3 +3331,89 @@ docs/PIXFLOW_HANDOFF_FEB2026.md         # This session entry
 
 **Current posture after Session 45:**
 - Prompt Factory now generates real GPT-4o prompts with correct schema alignment, delivers them progressively via SSE, and logs all fallback paths explicitly for debugging.
+
+---
+
+### Session 46: Prompt Factory Restoration Turning Point + PGP Lock Guard
+
+**Date:** Feb 15, 2026
+
+**Objective:** Freeze the restored high-quality Prompt Factory generation state and prevent accidental regressions by future edits.
+
+**What changed:**
+
+1. **Turning point tag created**
+- Tag: `turning-point-2026-02-15-pgp-restored`
+- Commit: `0c96fd4`
+- Intent:
+  - preserve the restored comprehensive PGP behavior before additional feature iteration.
+
+2. **PGP lock guard added**
+- Added:
+  - `scripts/pgp-lock-guard.js`
+  - `docs/ops/pgp-lock.json`
+- Added npm commands:
+  - `npm run pgp:lock:check`
+  - `npm run pgp:lock:update`
+- Gate integration:
+  - `scripts/gate-release.sh` now runs lock verification.
+
+3. **PGP protocol documented**
+- Updated:
+  - `CLAUDE.md`
+  - `docs/PIPELINE.md`
+- Notes:
+  - lock update requires explicit unlock env variables and explicit user approval.
+
+**Validation:**
+- `npm run pgp:lock:check` -> pass
+- `npm run lint` -> pass
+
+**Current posture after Session 46:**
+- Prompt Factory core has a protected baseline and CI-visible lock check to reduce accidental quality regressions.
+
+---
+
+### Session 47: Competitor Report Category + Web Search JSON-Mode Fix
+
+**Date:** Feb 15, 2026
+
+**Objective:** Add a standalone competitor intelligence category and fix web-search request failures caused by invalid Responses API mode combinations.
+
+**What changed:**
+
+1. **New category: Competitor Report**
+- Added backend route:
+  - `src/server/routes/competitorReport.ts`
+- Added frontend page:
+  - `src/renderer/components/competitor-report/CompetitorReportPage.tsx`
+- Wiring updates:
+  - `src/server/createApp.ts`
+  - `src/renderer/components/layout/AppShell.tsx`
+  - `src/renderer/components/layout/SideNav.tsx`
+  - `src/renderer/components/home/HomePage.tsx`
+  - `src/renderer/stores/navigationStore.ts`
+
+2. **Web search request compatibility fix**
+- Root cause:
+  - OpenAI Responses web search tool cannot be used with JSON mode (`response_format`).
+- Fix:
+  - Removed JSON mode from web-grounded calls and switched to defensive JSON parsing of `output_text`.
+- Applied in:
+  - `src/server/routes/competitorReport.ts`
+  - `src/server/services/research.ts`
+
+3. **Report payload hardening**
+- Added strict normalization:
+  - safe URL sanitization,
+  - strict last-7-day date filtering,
+  - explicit data-gap notes when rows are dropped.
+- Added test coverage:
+  - `src/server/routes/competitorReport.test.ts`
+
+**Validation:**
+- `npm run lint` -> pass
+- `npm run test -- src/server/routes/competitorReport.test.ts` -> pass
+
+**Current posture after Session 47:**
+- Competitor Report is available as a separate category and web-grounded report generation no longer fails with JSON-mode incompatibility.

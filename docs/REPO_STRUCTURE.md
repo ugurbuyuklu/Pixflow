@@ -1,39 +1,39 @@
-# Repository Structure (Target)
+# Repository Structure (Current)
 
-This project is currently in active UI/UX iteration. To keep development fast, treat the repository with a strict split between source code and runtime output.
+Last updated: 2026-02-15
 
-## Source of truth (active)
+This repo is an active web-first Pixflow workspace. Keep a strict split between source-of-truth code and runtime artifacts.
 
-- `src/renderer` - React UI
-- `src/server` - Express API used by the web app
-- `docs` - Product and engineering documentation
-- `scripts` - Utility and maintenance scripts
+## Active source-of-truth areas
 
-## Runtime/local artifacts (not versioned)
+- `src/renderer` - React UI (pages, shared components, stores, hooks)
+- `src/server` - Express API (routes, services, db, telemetry, smoke)
+- `src/constants` - shared limits and cross-runtime constants
+- `scripts` - operational scripts (gate, deploy, telemetry, PGP lock guard)
+- `docs` - product/engineering documentation
 
-- `outputs/` - generated images/audio/video
-- `uploads/` - temporary uploaded files
-- `logs/` - local logs
-- `backups/` - local backups
-- `data/*.db*` - SQLite runtime files
+## Runtime and local artifact areas (not versioned)
 
-## Legacy/unclear ownership zones
+- `outputs/` - generated media
+- `uploads/` - uploaded input files
+- `logs/` - local log artifacts
+- `data/*.db*` - sqlite runtime files
+- `avatars_generated/` - generated avatar images
+- `avatars_uploads/` - uploaded avatar images
 
-- `packages/server`
-- `packages/web`
-- `Documentation`
+## Intentional long-lived asset folders
 
-These should be either:
+- `avatars/` - curated avatar gallery used by UI flows
+- `exports/` - explicit export artifacts
 
-1. migrated into active folders, or
-2. moved to an explicit `legacy/` folder, or
-3. removed if no longer needed.
+## Archive boundary
 
-Do not keep duplicate app implementations indefinitely.
+- `Burgflow Archive/` stores historical Borgflow-era materials.
+- No new Pixflow development should be added under archive paths.
 
-## Cleanup policy
+## Structure hygiene rules
 
-- Keep runtime directories out of git.
-- Prefer one canonical document per topic.
-- Avoid committing generated media.
-- Any large binary assets should be intentional and live under a single documented folder.
+1. One active implementation per feature (no duplicate runtime paths).
+2. Keep generated media and sqlite runtime files out of git.
+3. Prefer one canonical active doc per topic; mark historical docs clearly.
+4. Add new top-level folders only when there is no existing home in `src/`, `docs/`, or `scripts/`.

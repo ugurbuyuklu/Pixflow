@@ -1,5 +1,12 @@
 # Pixflow UI Interaction Standardization Plan (Feb 2026)
 
+Last reviewed: 2026-02-15
+
+Note:
+- This document captures the original standardization plan and baseline audit.
+- Some component/file references are historical (for traceability).
+- Current category naming uses `Img2Engine` (previously `Img2Video`).
+
 ## Goal
 Standardize category-level interaction patterns across Pixflow so users see the same mental model everywhere:
 - If it is navigation between peer views, it must be a `Tab`.

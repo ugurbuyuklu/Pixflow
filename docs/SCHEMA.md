@@ -1,6 +1,7 @@
 # Prompt Schema Documentation
 
 > Complete schema reference for Prompt Factory outputs.
+> Last reviewed: 2026-02-15
 
 ## Schema Version: B (Current)
 

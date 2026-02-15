@@ -2,6 +2,7 @@
 
 > Real examples tested with fal.ai Nano Banana Pro Edit.
 > These serve as reference for quality and style.
+> Last reviewed: 2026-02-15
 
 ---
 
