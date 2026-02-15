@@ -87,13 +87,13 @@ async function runPromptGenerationPipeline({
     researchBrief,
     emit
       ? (completed, total, prompt, index) => {
+          emit('prompt', { prompt, index, total, enriched: true })
           emit('progress', {
             step: 'enriching',
             completed,
             total,
             message: `Generating prompt ${completed}/${total}...`,
           })
-          emit('prompt', { prompt, index, total, enriched: true })
         }
       : undefined,
     imageInsights,
@@ -201,10 +201,14 @@ export function createPromptsRouter(config: PromptsRouterConfig): express.Router
 
     if (useStream) {
       res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
       })
+      res.flushHeaders()
+      res.socket?.setNoDelay(true)
+      res.write(': connected\n\n')
     }
 
     try {
@@ -329,6 +333,7 @@ export function createPromptsRouter(config: PromptsRouterConfig): express.Router
       })
 
       emit('done', {
+        prompts: result.prompts,
         varietyScore: result.varietyScore,
         qualityMetrics: result.qualityMetrics,
         individualScores: result.qualityMetrics.individual_scores || [],
