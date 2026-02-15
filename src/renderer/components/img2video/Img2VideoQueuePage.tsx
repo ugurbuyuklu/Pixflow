@@ -67,7 +67,7 @@ export default function Img2VideoQueuePage() {
       items={[
         { id: 'img2img', label: 'img2img', icon: <Image className="w-4 h-4" /> },
         { id: 'img2video', label: 'img2video', icon: <Film className="w-4 h-4" /> },
-        { id: 'startEnd', label: 'StartEnd Frame', icon: <ArrowRight className="w-4 h-4" /> },
+        { id: 'startEnd', label: 'Start2End', icon: <ArrowRight className="w-4 h-4" /> },
       ]}
       className="w-full"
     />
@@ -978,7 +978,6 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
   const [endFile, setEndFile] = useState<{ file: File; preview: string } | null>(null)
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set())
 
-  // Filter for startEnd items only
   const startEndItems = queueOrder
     .map((id) => queueItems[id])
     .filter((item): item is QueueItem => !!item && item.workflowType === 'startEnd')
@@ -988,7 +987,6 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
   const completedItems = startEndItems.filter((item) => item.status === 'completed')
   const generatingItems = startEndItems.filter((item) => item.status === 'generating')
 
-  // Clean up previews on unmount only
   const startPreviewRef = useRef<string | null>(null)
   const endPreviewRef = useRef<string | null>(null)
   startPreviewRef.current = startFile?.preview ?? null
@@ -1017,7 +1015,7 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
   }, [startFile, endFile, uploadStartEndFiles])
 
   const handleGenerateVideo = async () => {
-    if (!selectedItem) return
+    if (!selectedItem || !selectedItem.prompt.trim()) return
     queueItem(selectedItem.id)
     await generateQueue()
   }
@@ -1048,7 +1046,7 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       {/* LEFT COLUMN: INPUTS */}
       <div className="space-y-6">
-        {/* Step 1: Upload Start & End Frames */}
+        {/* Step 1: Start & End Frames */}
         <div className="bg-surface-50 rounded-lg p-4">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
@@ -1058,7 +1056,6 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
           </h2>
           <div className="mb-4">{tabs}</div>
 
-          {/* Upload area — show when no draft items */}
           {draftItems.length === 0 && (
             <div className="flex gap-3">
               <FrameDropZone
@@ -1094,7 +1091,6 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
             </div>
           )}
 
-          {/* Existing draft items */}
           {draftItems.length > 0 && (
             <div className="space-y-3">
               {draftItems.map((item) => (
@@ -1164,11 +1160,30 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
           )}
         </div>
 
-        {/* Step 3: Settings */}
+        {/* Step 3: Camera Controls */}
         <div className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}>
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
               3
+            </span>
+            Camera Controls
+            {selectedItem && Object.values(selectedItem.presets).flat().length > 0 && (
+              <span className="px-1.5 py-0.5 bg-brand/20 text-brand text-[10px] font-semibold rounded">
+                {Object.values(selectedItem.presets).flat().length}
+              </span>
+            )}
+          </h2>
+          <CameraPresetCards
+            selectedPresets={selectedItem?.presets || {}}
+            onPresetsChange={(presets) => selectedItem && setItemPresets(selectedItem.id, presets)}
+          />
+        </div>
+
+        {/* Step 4: Settings */}
+        <div className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}>
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
+              4
             </span>
             Settings
           </h2>
@@ -1188,25 +1203,6 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
           </div>
         </div>
 
-        {/* Step 4: Camera Controls */}
-        <div className={`bg-surface-50 rounded-lg p-4 ${!selectedItem ? 'opacity-50 pointer-events-none' : ''}`}>
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
-              4
-            </span>
-            Camera Controls
-            {selectedItem && Object.values(selectedItem.presets).flat().length > 0 && (
-              <span className="px-1.5 py-0.5 bg-brand/20 text-brand text-[10px] font-semibold rounded">
-                {Object.values(selectedItem.presets).flat().length}
-              </span>
-            )}
-          </h2>
-          <CameraPresetCards
-            selectedPresets={selectedItem?.presets || {}}
-            onPresetsChange={(presets) => selectedItem && setItemPresets(selectedItem.id, presets)}
-          />
-        </div>
-
         {/* Generate Video Button */}
         <Button
           variant="lime"
@@ -1221,10 +1217,8 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
 
       {/* RIGHT COLUMN: OUTPUTS */}
       <div className="space-y-6">
-        {/* Videos in Progress */}
         <LoadingGrid items={generatingItems} />
 
-        {/* Generated Videos */}
         {completedItems.length > 0 && (
           <div className="bg-surface-50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
