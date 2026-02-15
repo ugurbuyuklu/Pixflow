@@ -13,17 +13,20 @@ async function getOpenAI(): Promise<OpenAI> {
     return getOpenAI()
   }
   clientInitializing = true
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) {
-    throw new Error('OPENAI_API_KEY environment variable is required')
+  try {
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY environment variable is required')
+    }
+    openaiClient = new OpenAI({
+      apiKey,
+      timeout: 60000,
+      maxRetries: 2,
+    })
+    return openaiClient
+  } finally {
+    clientInitializing = false
   }
-  openaiClient = new OpenAI({
-    apiKey,
-    timeout: 60000,
-    maxRetries: 2,
-  })
-  clientInitializing = false
-  return openaiClient
 }
 
 function safeJsonParse<T>(content: string, fallback: T): T {
@@ -477,7 +480,6 @@ ${CREATIVE_DIRECTOR_KNOWLEDGE}
 5. NEVER mention: age descriptors (young, mature, youthful), skin color, ethnicity, race
 6. NEVER mention hair COLOR - only style/texture (comes from reference photo)
 6.5. HAIR MUST MATCH REFERENCE - do NOT change length, cut, or overall style. If unknown, set hairstyle fields to "match reference" or leave empty. Avoid mentioning hair in the style field.
-6.5. HAIR MUST MATCH REFERENCE - do NOT change length, cut, or overall style. If unknown, set hairstyle fields to "match reference" or leave empty. Avoid mentioning hair in the style field.
 7. NO gender/appearance sections in JSON
 
 ### Pose & Expression
@@ -515,21 +517,21 @@ Return a JSON object with this EXACT structure (all fields are nested objects):
     "styling": "How pieces work together, layering, proportions"
   },
   "makeup": {
+    "style": "Overall makeup approach: elevated natural, editorial glam, no-makeup-makeup, etc.",
     "skin": "Foundation tone, coverage, finish (matte/dewy/satin) with natural skin texture and visible pores",
-    "eyes": "Eyeshadow placement and finish, liner style, lashes",
-    "lips": "Color family, finish, application style",
-    "details": "Blush placement, highlighter, brows, overall intensity"
+    "eyes": "Eyeshadow placement and finish, liner style, lashes, brows",
+    "lips": "Color family, finish, application style"
   },
   "pose": {
     "framing": "Shot composition: full body, 3/4 length, waist up, etc.",
     "body_position": "Overall stance with weight distribution - standing/seated/leaning, must be stable and natural",
     "arms": "Both arms explicitly defined: left arm position, right arm position, hand placement",
-    "posture": "Spine alignment, shoulder position, head tilt angle, overall body language"
-  },
-  "expression": {
-    "eyes": "Eye direction, intensity, emotion (smizing, soft gaze, intense stare, etc.)",
-    "mouth": "Lip position, smile type, tension (subtle smirk, genuine laugh, relaxed, etc.)",
-    "overall_mood": "Combined facial emotion and character"
+    "posture": "Spine alignment, shoulder position, head tilt angle, overall body language",
+    "expression": {
+      "facial": "Combined facial emotion and character",
+      "eyes": "Eye direction, intensity, emotion (smizing, soft gaze, intense stare, etc.)",
+      "mouth": "Lip position, smile type, tension (subtle smirk, genuine laugh, relaxed, etc.)"
+    }
   },
   "lighting": {
     "setup": "Overall lighting style and approach (natural, studio, cinematic, etc.)",
@@ -542,7 +544,7 @@ Return a JSON object with this EXACT structure (all fields are nested objects):
     "lens": "Focal length and type (35mm, 50mm, 85mm portrait, etc.)",
     "aperture": "f-stop and depth of field effect (f/1.4 shallow, f/8 sharp, etc.)",
     "angle": "Camera height and perspective (eye level, slightly above, low angle, etc.)",
-    "framing": "Subject placement in frame, rule of thirds, breathing room, composition"
+    "focus": "Focus strategy: tack sharp on nearest eye, split focus, selective focus, etc."
   },
   "set_design": {
     "backdrop": "Background environment: walls, surfaces, what's behind the subject",
@@ -552,13 +554,13 @@ Return a JSON object with this EXACT structure (all fields are nested objects):
   },
   "hairstyle": {
     "style": "Match reference hair length and style exactly — do NOT introduce new length or cut",
-    "texture": "Only if visible in reference; otherwise ''",
-    "accessories": "Only if visible in reference; otherwise 'none'"
+    "parting": "Parting direction and character, or 'match reference'",
+    "details": "Texture, movement, volume details, or 'match reference'",
+    "finish": "Hair finish: healthy shine, matte, lived-in, etc."
   },
   "effects": {
     "color_grade": "Color treatment: tone (warm/cool), saturation level, contrast approach",
-    "film_emulation": "Film stock look if appropriate (Portra 400, Kodak Gold, etc.) or 'digital clean'",
-    "special_effects": "Practical effects if any (smoke, water droplets, etc.) or 'none'"
+    "grain": "Film grain style: fine film grain, heavy 35mm grain, digital clean, etc."
   }
 }
 
@@ -632,11 +634,28 @@ Return as JSON with the exact structure specified in the system prompt.`
     console.log(`[generateSinglePrompt] OpenAI response received for prompt ${index + 1}`)
 
     const content = response.choices[0]?.message?.content
-    if (!content) return fallbackPrompt
+    if (!content) {
+      console.error(`[generateSinglePrompt] Prompt ${index + 1}: OpenAI returned empty content, using fallback`)
+      return fallbackPrompt
+    }
 
-    const parsed = safeJsonParse<PromptOutput>(content, fallbackPrompt)
+    let parsed: PromptOutput
+    try {
+      parsed = JSON.parse(content) as PromptOutput
+    } catch {
+      console.error(
+        `[generateSinglePrompt] Prompt ${index + 1}: JSON parse failed, using fallback. Raw: ${content.substring(0, 300)}`,
+      )
+      return fallbackPrompt
+    }
 
-    // Quality gate: Check for vague language
+    if (!parsed.style || !parsed.pose || !parsed.lighting) {
+      console.error(
+        `[generateSinglePrompt] Prompt ${index + 1}: Parsed JSON missing core fields (style/pose/lighting), using fallback`,
+      )
+      return fallbackPrompt
+    }
+
     const outfitCheck = validateOutfitSpecificity(parsed.outfit?.main || '')
     if (!outfitCheck.valid) {
       console.warn(`[Prompt ${index + 1}] Quality issue: ${outfitCheck.reason}`)
@@ -644,7 +663,10 @@ Return as JSON with the exact structure specified in the system prompt.`
 
     return enforceReferenceDrivenPrompt(parsed)
   } catch (error) {
-    console.error(`[generateSinglePrompt] Failed for prompt ${index + 1}:`, error)
+    console.error(
+      `[generateSinglePrompt] FALLBACK for prompt ${index + 1}:`,
+      error instanceof Error ? error.message : error,
+    )
     return enforceReferenceDrivenPrompt(fallbackPrompt)
   }
 }
