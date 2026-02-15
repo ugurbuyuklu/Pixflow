@@ -1004,7 +1004,11 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
     if (!startFile || !endFile || uploadingRef.current) return
     uploadingRef.current = true
     const doUpload = async () => {
-      await uploadStartEndFiles(startFile.file, endFile.file)
+      const oldDraftIds = draftItems.map((d) => d.id)
+      const newId = await uploadStartEndFiles(startFile.file, endFile.file)
+      if (newId) {
+        for (const id of oldDraftIds) removeItem(id)
+      }
       URL.revokeObjectURL(startFile.preview)
       URL.revokeObjectURL(endFile.preview)
       setStartFile(null)
@@ -1012,7 +1016,7 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
       uploadingRef.current = false
     }
     doUpload()
-  }, [startFile, endFile, uploadStartEndFiles])
+  }, [startFile, endFile, uploadStartEndFiles, draftItems, removeItem])
 
   const handleGenerateVideo = async () => {
     if (!selectedItem || !selectedItem.prompt.trim()) return
@@ -1056,82 +1060,50 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
           </h2>
           <div className="mb-4">{tabs}</div>
 
-          {draftItems.length === 0 && (
-            <div className="flex gap-3">
-              <FrameDropZone
-                label="START FRAME"
-                imageUrl={startFile?.preview ?? null}
-                onDrop={(file) => setStartFile({ file, preview: URL.createObjectURL(file) })}
-                onClear={() => {
-                  if (startFile) URL.revokeObjectURL(startFile.preview)
+          <div className="flex gap-3">
+            <FrameDropZone
+              label="START FRAME"
+              imageUrl={startFile?.preview ?? selectedItem?.startEndImages?.startImageUrl ?? null}
+              onDrop={(file) => setStartFile({ file, preview: URL.createObjectURL(file) })}
+              onClear={() => {
+                if (startFile) {
+                  URL.revokeObjectURL(startFile.preview)
                   setStartFile(null)
-                }}
-                disabled={uploading}
-              />
-              <div className="flex items-center justify-center pt-6">
-                <ArrowRight className="w-5 h-5 text-surface-400" />
-              </div>
-              <FrameDropZone
-                label="END FRAME"
-                imageUrl={endFile?.preview ?? null}
-                onDrop={(file) => setEndFile({ file, preview: URL.createObjectURL(file) })}
-                onClear={() => {
-                  if (endFile) URL.revokeObjectURL(endFile.preview)
+                }
+                if (endFile) {
+                  URL.revokeObjectURL(endFile.preview)
                   setEndFile(null)
-                }}
-                disabled={uploading}
-              />
+                }
+                if (selectedItem?.status === 'draft') removeItem(selectedItem.id)
+              }}
+              disabled={uploading}
+            />
+            <div className="flex items-center justify-center pt-6">
+              <ArrowRight className="w-5 h-5 text-surface-400" />
             </div>
-          )}
+            <FrameDropZone
+              label="END FRAME"
+              imageUrl={endFile?.preview ?? selectedItem?.startEndImages?.endImageUrl ?? null}
+              onDrop={(file) => setEndFile({ file, preview: URL.createObjectURL(file) })}
+              onClear={() => {
+                if (startFile) {
+                  URL.revokeObjectURL(startFile.preview)
+                  setStartFile(null)
+                }
+                if (endFile) {
+                  URL.revokeObjectURL(endFile.preview)
+                  setEndFile(null)
+                }
+                if (selectedItem?.status === 'draft') removeItem(selectedItem.id)
+              }}
+              disabled={uploading}
+            />
+          </div>
 
           {uploading && (
             <div className="flex items-center justify-center gap-2 mt-3 text-sm text-surface-400">
               <Loader2 className="w-4 h-4 animate-spin" />
               Uploading frames...
-            </div>
-          )}
-
-          {draftItems.length > 0 && (
-            <div className="space-y-3">
-              {draftItems.map((item) => (
-                <div
-                  key={item.id}
-                  className={`flex items-center gap-3 p-2 rounded-lg border-2 transition-colors ${
-                    selectedId === item.id
-                      ? 'border-brand-500 bg-brand-500/5'
-                      : 'border-transparent hover:bg-surface-100'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => selectItem(item.id)}
-                    className="flex gap-2 items-center flex-1 min-w-0 cursor-pointer"
-                  >
-                    {item.startEndImages && (
-                      <>
-                        <img
-                          src={assetUrl(item.startEndImages.startImageUrl)}
-                          alt="Start"
-                          className="w-16 aspect-video rounded object-cover"
-                        />
-                        <ArrowRight className="w-4 h-4 text-surface-400 shrink-0" />
-                        <img
-                          src={assetUrl(item.startEndImages.endImageUrl)}
-                          alt="End"
-                          className="w-16 aspect-video rounded object-cover"
-                        />
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeItem(item.id)}
-                    className="text-surface-400 hover:text-danger shrink-0"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
             </div>
           )}
         </div>
