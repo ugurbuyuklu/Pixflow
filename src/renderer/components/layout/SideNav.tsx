@@ -101,7 +101,8 @@ export function SideNav() {
           <span className="text-brand-400 inline-block align-baseline text-3xl">⚡</span>
           {!sidebarCollapsed && (
             <span className="leading-none text-3xl">
-              <span className="text-brand-500">Pix</span>flow
+              <span className="text-brand-500 font-black">Pix</span>
+              <span className="italic font-normal text-white">flow</span>
             </span>
           )}
         </button>
