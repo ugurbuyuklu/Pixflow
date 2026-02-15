@@ -1206,51 +1206,73 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
         {completedItems.length > 0 && (
           <div className="bg-surface-50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold">Generated Videos</h3>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <span className="bg-brand-600 rounded-full w-6 h-6 flex items-center justify-center text-sm text-white">
+                  5
+                </span>
+                {completedItems.length} Generated {completedItems.length === 1 ? 'Video' : 'Videos'}
+              </h2>
               {selectedVideos.size > 0 && (
                 <Button variant="primary" size="xs" icon={<Download className="w-3 h-3" />} onClick={downloadSelected}>
                   Download {selectedVideos.size}
                 </Button>
               )}
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               {completedItems.map((item) => {
                 const isSelected = selectedVideos.has(item.id)
                 return (
-                  <button
-                    type="button"
-                    key={item.id}
-                    className={`relative aspect-video rounded-lg overflow-hidden bg-surface-100 cursor-pointer group border-2 transition-colors ${
-                      isSelected ? 'border-brand' : 'border-transparent'
-                    }`}
-                    onClick={() => {
-                      selectItem(item.id)
-                      toggleVideoSelection(item.id)
-                    }}
-                  >
-                    <video
-                      src={assetUrl(item.result?.videoUrl || '')}
-                      className="w-full h-full object-cover"
-                      muted
-                      loop
-                      playsInline
-                      onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.pause()
-                        e.currentTarget.currentTime = 0
+                  <div key={item.id} className="space-y-2">
+                    <button
+                      type="button"
+                      className={`relative w-full aspect-video rounded-lg overflow-hidden bg-surface-100 group border-2 transition-colors cursor-pointer ${
+                        isSelected ? 'border-brand' : 'border-surface-200'
+                      }`}
+                      onClick={() => {
+                        selectItem(item.id)
+                        toggleVideoSelection(item.id)
                       }}
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                      <Play className="w-6 h-6 text-white" />
-                    </div>
-                    <div className="absolute top-2 right-2 w-5 h-5 rounded bg-surface-900/80 flex items-center justify-center z-10">
-                      {isSelected ? (
-                        <Check className="w-4 h-4 text-brand" />
-                      ) : (
-                        <div className="w-3 h-3 border-2 border-surface-300 rounded" />
-                      )}
-                    </div>
-                  </button>
+                    >
+                      <video
+                        src={assetUrl(item.result?.localPath || '')}
+                        className="w-full h-full object-cover"
+                        muted
+                        loop
+                        playsInline
+                        onMouseEnter={(e) => e.currentTarget.play().catch(() => {})}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.pause()
+                          e.currentTarget.currentTime = 0
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                        <Play className="w-8 h-8 text-white" />
+                      </div>
+                      <div className="absolute top-2 right-2 w-5 h-5 rounded bg-surface-900/80 flex items-center justify-center">
+                        {isSelected ? (
+                          <Check className="w-4 h-4 text-brand" />
+                        ) : (
+                          <div className="w-3 h-3 border-2 border-surface-300 rounded" />
+                        )}
+                      </div>
+                    </button>
+                    <Button
+                      variant="primary"
+                      size="xs"
+                      icon={<Download className="w-3 h-3" />}
+                      onClick={() => {
+                        if (item.result?.localPath) {
+                          const a = document.createElement('a')
+                          a.href = assetUrl(item.result.localPath)
+                          a.download = item.result.localPath.split('/').pop() || 'video.mp4'
+                          a.click()
+                        }
+                      }}
+                      className="w-full"
+                    >
+                      Download
+                    </Button>
+                  </div>
                 )
               })}
             </div>
