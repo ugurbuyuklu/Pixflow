@@ -660,64 +660,6 @@ export default function PromptFactoryPage() {
           </div>
         )}
 
-        {/* 5x2 Numbered Grid */}
-        {(prompts.length > 0 || loading) && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-surface-600">Prompts</h3>
-              {prompts.length > 0 && (
-                <Button
-                  variant="ghost-danger"
-                  size="xs"
-                  icon={<Trash2 className="w-4 h-4" />}
-                  onClick={() => setConfirmClearPrompts(true)}
-                >
-                  Clear All
-                </Button>
-              )}
-            </div>
-            <div className="grid grid-cols-5 gap-3">
-              {Array.from({ length: count }).map((_, i) => {
-                const prompt = prompts[i]
-                const isSelected = selectedIndex === i
-                const isLoading = loading && !prompt
-
-                return (
-                  <button
-                    type="button"
-                    // biome-ignore lint/suspicious/noArrayIndexKey: static ordered slots
-                    key={i}
-                    onClick={() => setSelectedIndex(i)}
-                    className={`
-                  aspect-square rounded-lg p-3 flex flex-col items-center justify-center
-                  text-lg font-semibold transition-all relative
-                  ${
-                    isSelected
-                      ? 'bg-brand-600 text-white ring-2 ring-brand-500'
-                      : prompt
-                        ? 'bg-surface-100 text-surface-900 hover:bg-surface-200'
-                        : isLoading
-                          ? 'bg-surface-200/30 animate-pulse'
-                          : 'bg-surface-50 text-surface-300'
-                  }
-                `}
-                  >
-                    <span className="text-2xl mb-1">{i + 1}</span>
-                    {prompt?._enriched && (
-                      <span
-                        className={`absolute top-2 right-2 w-2.5 h-2.5 rounded-full border ${
-                          isSelected ? 'bg-white border-white/70' : 'bg-success border-success/60'
-                        }`}
-                        title="Enhanced"
-                      />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Progress Indicator */}
         {loading && generationProgress && (
           <div className="space-y-3">
@@ -762,7 +704,59 @@ export default function PromptFactoryPage() {
       {/* RIGHT PANEL - Outputs */}
       <div className="flex flex-col gap-4 overflow-visible xl:overflow-hidden">
         <div className="flex-1 bg-surface-100/50 rounded-xl border border-surface-200/50 p-6 flex flex-col gap-4 overflow-hidden">
-          <StepHeader stepNumber={2} title="Generated Prompts" />
+          <div className="flex items-center justify-between">
+            <StepHeader stepNumber={2} title="Generated Prompts" />
+            {prompts.length > 0 && (
+              <Button
+                variant="ghost-danger"
+                size="xs"
+                icon={<Trash2 className="w-4 h-4" />}
+                onClick={() => setConfirmClearPrompts(true)}
+              >
+                Clear All
+              </Button>
+            )}
+          </div>
+
+          {/* Numbered Card Grid — single row of 10 */}
+          {(prompts.length > 0 || loading) && (
+            <div className="grid grid-cols-10 gap-2">
+              {Array.from({ length: count }).map((_, i) => {
+                const prompt = prompts[i]
+                const isSelected = selectedIndex === i
+                const isLoading = loading && !prompt
+
+                return (
+                  <button
+                    type="button"
+                    // biome-ignore lint/suspicious/noArrayIndexKey: static ordered slots
+                    key={i}
+                    onClick={() => setSelectedIndex(i)}
+                    className={`aspect-square rounded-lg flex flex-col items-center justify-center text-sm font-semibold transition-all relative ${
+                      isSelected
+                        ? 'bg-brand-600 text-white ring-2 ring-brand-500'
+                        : prompt
+                          ? 'bg-surface-100 text-surface-900 hover:bg-surface-200'
+                          : isLoading
+                            ? 'bg-surface-200/30 animate-pulse'
+                            : 'bg-surface-50 text-surface-300'
+                    }`}
+                  >
+                    <span className="text-lg">{i + 1}</span>
+                    {prompt?._enriched && (
+                      <span
+                        className={`absolute top-1 right-1 w-2 h-2 rounded-full border ${
+                          isSelected ? 'bg-white border-white/70' : 'bg-success border-success/60'
+                        }`}
+                        title="Enhanced"
+                      />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           {/* Error */}
           {error && (
             <StatusBanner
