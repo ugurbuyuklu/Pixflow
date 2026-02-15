@@ -1,5 +1,4 @@
 import {
-  Check,
   CheckCircle,
   ChevronLeft,
   ChevronRight,
@@ -108,6 +107,7 @@ export default function MachinePage() {
     selectedApp,
     selectedVoice,
     selectedAvatar,
+    selectedAvatars,
     prompts,
     batchProgress,
     script,
@@ -123,6 +123,7 @@ export default function MachinePage() {
     setSelectedApp,
     setSelectedVoice,
     setSelectedAvatar,
+    toggleGalleryAvatar,
     setScript,
     refineScript,
     undoScript,
@@ -213,7 +214,7 @@ export default function MachinePage() {
         const uploaded = data.avatars?.[0]
         await loadAvatars()
         if (uploaded) {
-          setSelectedAvatar({
+          toggleGalleryAvatar({
             name: uploaded.name,
             filename: uploaded.filename,
             url: uploaded.url,
@@ -239,7 +240,7 @@ export default function MachinePage() {
         await loadAvatars()
         const updated = useAvatarStore.getState().avatars.find((a) => a.url === data.localPath)
         const filename = data.localPath.split('/').pop() || file.name
-        setSelectedAvatar(
+        toggleGalleryAvatar(
           updated ?? {
             name: filename,
             filename,
@@ -372,14 +373,6 @@ export default function MachinePage() {
               onChange={(e) => setConcept(e.target.value)}
               placeholder="e.g. Christmas, Halloween, Summer Beach..."
             />
-            <div className="mt-3">
-              <Select
-                label="App (Affects Voiceover)"
-                value={selectedApp}
-                onChange={(e) => setSelectedApp(e.target.value)}
-                options={APP_OPTIONS}
-              />
-            </div>
           </div>
 
           <div className="bg-surface-50 rounded-lg p-4">
@@ -387,13 +380,13 @@ export default function MachinePage() {
             <Slider
               label="Number of Prompts"
               displayValue={promptCount}
-              min={2}
+              min={1}
               max={10}
               value={promptCount}
               onChange={(e) => setPromptCount(Number(e.currentTarget.value))}
             />
             <div className="flex justify-between text-xs text-surface-400 mt-1">
-              <span>2</span>
+              <span>1</span>
               <span>6</span>
               <span>10</span>
             </div>
@@ -435,37 +428,40 @@ export default function MachinePage() {
                   </p>
                 ) : (
                   <div className="flex gap-2 overflow-x-auto pb-2">
-                    {avatars.map((avatar) => (
-                      <button
-                        type="button"
-                        key={avatar.filename}
-                        onClick={() => setSelectedAvatar(selectedAvatar?.filename === avatar.filename ? null : avatar)}
-                        className={`w-20 shrink-0 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 relative ${
-                          selectedAvatar?.filename === avatar.filename
-                            ? 'border-brand-500 ring-2 ring-brand-500/50'
-                            : 'border-transparent hover:border-surface-200'
-                        }`}
-                      >
-                        <img src={assetUrl(avatar.url)} alt={avatar.name} className="w-full h-full object-cover" />
-                        {selectedAvatar?.filename === avatar.filename && (
-                          <div className="absolute top-1 right-1 bg-brand-500 rounded-full p-0.5">
-                            <Check className="w-3 h-3" />
-                          </div>
-                        )}
-                      </button>
-                    ))}
+                    {avatars.map((avatar) => {
+                      const selIdx = selectedAvatars.findIndex((a) => a.filename === avatar.filename)
+                      const isSelected = selIdx >= 0
+                      return (
+                        <button
+                          type="button"
+                          key={avatar.filename}
+                          onClick={() => toggleGalleryAvatar(avatar)}
+                          className={`w-20 shrink-0 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 relative ${
+                            isSelected
+                              ? 'border-brand-500 ring-2 ring-brand-500/50'
+                              : 'border-transparent hover:border-surface-200'
+                          }`}
+                        >
+                          <img src={assetUrl(avatar.url)} alt={avatar.name} className="w-full h-full object-cover" />
+                          {isSelected && (
+                            <div className="absolute top-1 right-1 bg-brand-500 rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-white">
+                              {selIdx + 1}
+                            </div>
+                          )}
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
                 <p className="text-[11px] text-surface-400 mt-2">
-                  Uploaded avatars are auto green-screened before use.
+                  {selectedAvatars.length > 1
+                    ? `${selectedAvatars.length} avatars selected — #1 is used for lipsync, all are reference images.`
+                    : 'Select one or more avatars. First selected is used for lipsync. Uploaded avatars are auto green-screened.'}
                 </p>
               </div>
 
               <div>
                 <p className="text-xs text-surface-400 mb-2">Additional People (Optional)</p>
-                <p className="text-xs text-surface-400 mb-3">
-                  Selected avatar is used as the main reference. Add extra people for couple/family concepts.
-                </p>
                 <input
                   ref={machineRefInputRef}
                   type="file"
@@ -522,7 +518,24 @@ export default function MachinePage() {
           <div className="bg-surface-50 rounded-lg p-4">
             <StepHeader stepNumber={4} title="Voiceover" />
             <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-[120px_minmax(0,1fr)] gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Select
+                  label="App"
+                  value={selectedApp}
+                  onChange={(e) => {
+                    setSelectedApp(e.target.value)
+                    if (concept.trim() && !isRunning && !scriptGenerating) generateScript()
+                  }}
+                  options={APP_OPTIONS}
+                />
+                <Select
+                  label="Duration"
+                  value={String(scriptDuration)}
+                  onChange={(e) => setScriptDuration(Number(e.target.value))}
+                  options={DURATION_OPTIONS}
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-1">
                 <div className="flex items-center justify-start">
                   <p className="text-xs text-surface-400">Avatar</p>
                 </div>
@@ -607,12 +620,24 @@ export default function MachinePage() {
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Select
-                  label="Duration"
-                  value={String(scriptDuration)}
-                  onChange={(e) => setScriptDuration(Number(e.target.value))}
-                  options={DURATION_OPTIONS}
-                />
+                <div>
+                  {voicesLoading ? (
+                    <LoadingState title="Loading voices..." size="sm" />
+                  ) : (
+                    <Select
+                      label="Voice"
+                      value={selectedVoice?.id || ''}
+                      onChange={(e) => setSelectedVoice(voices.find((v) => v.id === e.target.value) || null)}
+                      options={[
+                        { value: '', label: 'Select a voice...' },
+                        ...voices.map((v) => ({
+                          value: v.id,
+                          label: `${v.name}${v.labels?.accent ? ` (${v.labels.accent})` : ''}`,
+                        })),
+                      ]}
+                    />
+                  )}
+                </div>
                 <Select
                   label="Tone"
                   value={scriptTone}
@@ -620,29 +645,11 @@ export default function MachinePage() {
                   options={TONE_OPTIONS}
                 />
               </div>
-              <div>
-                {voicesLoading ? (
-                  <LoadingState title="Loading voices..." size="sm" />
-                ) : (
-                  <Select
-                    label="Voice"
-                    value={selectedVoice?.id || ''}
-                    onChange={(e) => setSelectedVoice(voices.find((v) => v.id === e.target.value) || null)}
-                    options={[
-                      { value: '', label: 'Select a voice...' },
-                      ...voices.map((v) => ({
-                        value: v.id,
-                        label: `${v.name}${v.labels?.accent ? ` (${v.labels.accent})` : ''}`,
-                      })),
-                    ]}
-                  />
-                )}
-              </div>
             </div>
           </div>
 
           <Button
-            variant="warning"
+            variant="lime"
             size="lg"
             onClick={() => run()}
             disabled={!concept.trim() || !selectedAvatar || !selectedVoice || isRunning}
@@ -845,6 +852,8 @@ export default function MachinePage() {
 
               <div className="flex gap-4">
                 <Button
+                  variant="ghost-muted"
+                  size="sm"
                   onClick={() =>
                     useMachineStore.setState({
                       step: 'idle',
@@ -857,8 +866,7 @@ export default function MachinePage() {
                       error: null,
                     })
                   }
-                  icon={<RefreshCw className="w-5 h-5" />}
-                  className="flex-1 py-3"
+                  icon={<RefreshCw className="w-4 h-4" />}
                 >
                   Run Again
                 </Button>

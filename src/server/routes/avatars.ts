@@ -7,7 +7,7 @@ import multer from 'multer'
 import type { AuthRequest } from '../middleware/auth.js'
 import { generateAvatar, generateAvatarFromReference } from '../services/avatar.js'
 import { createHedraVideo, downloadHedraVideo } from '../services/hedra.js'
-import { downloadKlingVideo, generateKlingVideo } from '../services/kling.js'
+import { downloadKlingVideo, generateKlingTransitionVideo, generateKlingVideo } from '../services/kling.js'
 import { notify } from '../services/notifications.js'
 import { isMockProvidersEnabled } from '../services/providerRuntime.js'
 import { createPipelineSpan } from '../services/telemetry.js'
@@ -868,6 +868,120 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
         500,
         'Failed to generate video',
         'I2V_FAILED',
+        error instanceof Error ? error.message : 'Unknown error',
+      )
+    }
+  })
+
+  router.post('/i2v-startend', generationLimiter, async (req: AuthRequest, res) => {
+    req.setTimeout(300_000)
+    res.setTimeout(300_000)
+    let span: ReturnType<typeof createPipelineSpan> | null = null
+
+    try {
+      const { startImageUrl, endImageUrl, prompt, duration, aspectRatio } = req.body
+      if (!startImageUrl || typeof startImageUrl !== 'string') {
+        sendError(res, 400, 'Start image URL is required', 'MISSING_START_IMAGE_URL')
+        return
+      }
+      if (!endImageUrl || typeof endImageUrl !== 'string') {
+        sendError(res, 400, 'End image URL is required', 'MISSING_END_IMAGE_URL')
+        return
+      }
+      if (!prompt || typeof prompt !== 'string') {
+        sendError(res, 400, 'Prompt is required', 'INVALID_PROMPT')
+        return
+      }
+      if (prompt.length > MAX_PROMPT_LENGTH) {
+        sendError(res, 400, `Prompt too long (max ${MAX_PROMPT_LENGTH} characters)`, 'PROMPT_TOO_LONG')
+        return
+      }
+      if (duration && !['5', '10'].includes(String(duration))) {
+        sendError(res, 400, 'Duration must be 5 or 10', 'INVALID_DURATION')
+        return
+      }
+      if (aspectRatio && !VALID_ASPECT_RATIOS.includes(aspectRatio)) {
+        sendError(res, 400, 'Invalid aspect ratio', 'INVALID_ASPECT_RATIO')
+        return
+      }
+
+      span = createPipelineSpan({
+        pipeline: 'avatars.i2v-startend',
+        userId: req.user?.id,
+        metadata: { duration: String(duration || '5'), aspectRatio: aspectRatio || '9:16' },
+      })
+
+      const resolveImagePath = (imageUrl: string): string | null => {
+        if (imageUrl.startsWith('/avatars_generated/'))
+          return sanitizePath(generatedAvatarsDir, decodeURIComponent(imageUrl.slice('/avatars_generated/'.length)))
+        if (imageUrl.startsWith('/avatars_uploads/'))
+          return sanitizePath(uploadedAvatarsDir, decodeURIComponent(imageUrl.slice('/avatars_uploads/'.length)))
+        if (imageUrl.startsWith('/avatars/'))
+          return sanitizePath(avatarsDir, decodeURIComponent(imageUrl.slice('/avatars/'.length)))
+        if (imageUrl.startsWith('/outputs/'))
+          return sanitizePath(outputsDir, decodeURIComponent(imageUrl.slice('/outputs/'.length)))
+        if (imageUrl.startsWith('/uploads/'))
+          return sanitizePath(uploadsDir, decodeURIComponent(imageUrl.slice('/uploads/'.length)))
+        return null
+      }
+
+      const startImagePath = resolveImagePath(startImageUrl)
+      const endImagePath = resolveImagePath(endImageUrl)
+
+      if (!startImagePath) {
+        sendError(res, 400, 'Invalid start image path', 'INVALID_START_IMAGE_PATH')
+        return
+      }
+      if (!endImagePath) {
+        sendError(res, 400, 'Invalid end image path', 'INVALID_END_IMAGE_PATH')
+        return
+      }
+
+      try {
+        await fs.access(startImagePath)
+      } catch {
+        sendError(res, 400, `Start image not found: ${path.basename(startImagePath)}`, 'START_IMAGE_NOT_FOUND')
+        return
+      }
+      try {
+        await fs.access(endImagePath)
+      } catch {
+        sendError(res, 400, `End image not found: ${path.basename(endImagePath)}`, 'END_IMAGE_NOT_FOUND')
+        return
+      }
+
+      console.log(
+        `[I2V-StartEnd] Generating transition video: ${path.basename(startImagePath)} → ${path.basename(endImagePath)}`,
+      )
+      const result = await generateKlingTransitionVideo({
+        startImagePath,
+        endImagePath,
+        prompt,
+        duration: String(duration || '5') as '5' | '10',
+        aspectRatio: aspectRatio || '9:16',
+      })
+
+      await fs.mkdir(outputsDir, { recursive: true })
+      const outputFilename = `i2v_startend_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp4`
+      await downloadKlingVideo(result.videoUrl, path.join(outputsDir, outputFilename))
+
+      if (req.user?.id)
+        notify(req.user.id, 'i2v_complete', 'Video Ready', 'Your start/end frame video is ready to download')
+      span.success({ outputFile: outputFilename, requestId: result.requestId })
+
+      sendSuccess(res, {
+        videoUrl: result.videoUrl,
+        localPath: `/outputs/${outputFilename}`,
+        requestId: result.requestId,
+      })
+    } catch (error) {
+      console.error('[I2V-StartEnd] Generation failed:', error)
+      span?.error(error)
+      sendError(
+        res,
+        500,
+        'Failed to generate start/end video',
+        'I2V_STARTEND_FAILED',
         error instanceof Error ? error.message : 'Unknown error',
       )
     }

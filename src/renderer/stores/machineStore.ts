@@ -51,6 +51,7 @@ interface MachineState {
   selectedApp: string
   selectedVoice: Voice | null
   selectedAvatar: Avatar | null
+  selectedAvatars: Avatar[]
 
   prompts: GeneratedPrompt[]
   batchProgress: BatchProgress | null
@@ -68,6 +69,7 @@ interface MachineState {
   setSelectedApp: (appName: string) => void
   setSelectedVoice: (voice: Voice | null) => void
   setSelectedAvatar: (avatar: Avatar | null) => void
+  toggleGalleryAvatar: (avatar: Avatar) => void
   setScript: (script: string) => void
   undoScript: () => void
   redoScript: () => void
@@ -123,6 +125,7 @@ export const useMachineStore = create<MachineState>()((set, get) => ({
   selectedApp: 'Clone AI',
   selectedVoice: null,
   selectedAvatar: null,
+  selectedAvatars: [],
 
   prompts: [],
   batchProgress: null,
@@ -139,7 +142,18 @@ export const useMachineStore = create<MachineState>()((set, get) => ({
   setScriptTone: (scriptTone) => set({ scriptTone }),
   setSelectedApp: (selectedApp) => set({ selectedApp }),
   setSelectedVoice: (selectedVoice) => set({ selectedVoice }),
-  setSelectedAvatar: (selectedAvatar) => set({ selectedAvatar }),
+  setSelectedAvatar: (selectedAvatar) =>
+    set({ selectedAvatar, selectedAvatars: selectedAvatar ? [selectedAvatar] : [] }),
+  toggleGalleryAvatar: (avatar) =>
+    set((state) => {
+      const idx = state.selectedAvatars.findIndex((a) => a.filename === avatar.filename)
+      if (idx >= 0) {
+        const next = state.selectedAvatars.filter((_, i) => i !== idx)
+        return { selectedAvatars: next, selectedAvatar: next[0] ?? null }
+      }
+      const next = [...state.selectedAvatars, avatar]
+      return { selectedAvatars: next, selectedAvatar: next[0] }
+    }),
   setScript: (script) =>
     set((state) => {
       const history = [...state.scriptHistory]
@@ -196,6 +210,7 @@ export const useMachineStore = create<MachineState>()((set, get) => ({
     }),
 
   generateScript: async () => {
+    if (get().scriptGenerating) return null
     const { concept, scriptDuration, scriptTone, selectedApp } = get()
     if (!concept.trim()) {
       set({ error: { message: 'Enter a concept to generate a script', type: 'warning' } })
@@ -254,8 +269,17 @@ export const useMachineStore = create<MachineState>()((set, get) => ({
   },
 
   run: async (resumeFrom) => {
-    const { concept, selectedAvatar, selectedVoice, promptCount, scriptDuration, scriptTone, selectedApp, refImages } =
-      get()
+    const {
+      concept,
+      selectedAvatar,
+      selectedAvatars,
+      selectedVoice,
+      promptCount,
+      scriptDuration,
+      scriptTone,
+      selectedApp,
+      refImages,
+    } = get()
     const avatarUrl = selectedAvatar?.url
 
     if (!concept.trim()) {
@@ -363,12 +387,17 @@ export const useMachineStore = create<MachineState>()((set, get) => ({
         currentStep = 'images'
         set({ step: currentStep, batchProgress: null })
 
-        const avatarRes = await authFetch(assetUrl(avatarUrl), { signal })
-        const avatarBlob = await avatarRes.blob()
-        const avatarFile = new File([avatarBlob], avatarUrl.split('/').pop() || 'avatar.png', { type: avatarBlob.type })
+        const avatarFiles = await Promise.all(
+          selectedAvatars.map(async (a) => {
+            const res = await authFetch(assetUrl(a.url), { signal })
+            const blob = await res.blob()
+            return new File([blob], a.url.split('/').pop() || 'avatar.png', { type: blob.type })
+          }),
+        )
 
         const formData = new FormData()
-        formData.append('referenceImages', avatarFile)
+        // biome-ignore lint/suspicious/useIterableCallbackReturn: side-effect FormData append
+        avatarFiles.forEach((f) => formData.append('referenceImages', f))
         // biome-ignore lint/suspicious/useIterableCallbackReturn: side-effect FormData append
         refImages.forEach((f) => formData.append('referenceImages', f))
         formData.append('concept', concept)
@@ -499,6 +528,7 @@ export const useMachineStore = create<MachineState>()((set, get) => ({
       refImages: [],
       refPreviews: [],
       selectedAvatar: null,
+      selectedAvatars: [],
       selectedApp: 'Clone AI',
     })
   },

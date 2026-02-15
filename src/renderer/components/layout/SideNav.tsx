@@ -126,7 +126,7 @@ export function SideNav() {
               type="button"
               onClick={() => navigate(item.id)}
               title={brandedPlainText(item.id)}
-              className={`relative flex items-center w-full rounded-lg py-3 text-base font-semibold transition ${
+              className={`relative flex items-center w-full rounded-lg py-3 text-base font-black transition ${
                 sidebarCollapsed ? 'justify-center px-2' : 'justify-between gap-3 px-4'
               } ${
                 isActive

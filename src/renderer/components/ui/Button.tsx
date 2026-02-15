@@ -76,7 +76,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     const labelText = extractText(children).toLowerCase()
     const isGenerateLabel = /\b(re)?generate\b|\bgenerating\b/.test(labelText)
-    const effectiveVariant = isGenerateLabel ? 'lime' : variant
+    const effectiveVariant = isGenerateLabel && variant === 'primary' ? 'lime' : variant
 
     const shouldAutoScrollByLabel = (button: HTMLButtonElement): boolean => {
       const label = (button.textContent || '').trim().toLowerCase()

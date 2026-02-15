@@ -67,7 +67,7 @@ function composePrompt(base: string, presets: Record<string, string[]>): string 
   return `${base}, ${fragments.join(', ')}`
 }
 
-export type WorkflowType = 'img2img' | 'img2video'
+export type WorkflowType = 'img2img' | 'img2video' | 'startEnd'
 
 export interface QueueItem {
   id: string
@@ -81,6 +81,12 @@ export interface QueueItem {
     numberOfOutputs: number
     resolution: string
     format: string
+  }
+
+  // Start/End specific: paired frame URLs
+  startEndImages?: {
+    startImageUrl: string
+    endImageUrl: string
   }
 
   // Img2Video specific settings
@@ -171,6 +177,10 @@ interface Img2VideoQueueState {
     prompt: string,
     settings: { aspectRatio: string; numberOfOutputs: number; resolution: string; format: string },
   ) => Promise<void>
+
+  // Start/End specific
+  setStartEndImages: (id: string, images: { startImageUrl: string; endImageUrl: string }) => void
+  uploadStartEndFiles: (startFile: File, endFile: File) => Promise<string | null>
 
   // Utility
   setError: (error: ErrorInfo | null) => void
@@ -539,15 +549,27 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
       const fullPrompt = composePrompt(item.prompt, item.presets)
 
       try {
-        const res = await authFetch(apiUrl('/api/avatars/i2v'), {
+        const isStartEnd = item.workflowType === 'startEnd' && item.startEndImages
+        const endpoint = isStartEnd ? '/api/avatars/i2v-startend' : '/api/avatars/i2v'
+        const payload = isStartEnd
+          ? {
+              startImageUrl: item.startEndImages!.startImageUrl,
+              endImageUrl: item.startEndImages!.endImageUrl,
+              prompt: fullPrompt,
+              duration: Number.parseInt(item.settings.duration, 10),
+              aspectRatio: item.settings.aspectRatio,
+            }
+          : {
+              imageUrl: item.imageUrl,
+              prompt: fullPrompt,
+              duration: Number.parseInt(item.settings.duration, 10),
+              aspectRatio: item.settings.aspectRatio,
+            }
+
+        const res = await authFetch(apiUrl(endpoint), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageUrl: item.imageUrl,
-            prompt: fullPrompt,
-            duration: Number.parseInt(item.settings.duration, 10),
-            aspectRatio: item.settings.aspectRatio,
-          }),
+          body: JSON.stringify(payload),
           signal: abortController?.signal,
         })
 
@@ -851,6 +873,70 @@ export const useImg2VideoQueueStore = create<Img2VideoQueueState>()((set, get) =
           ),
         ),
       }))
+    }
+  },
+
+  // Start/End specific
+  setStartEndImages: (id, images) => {
+    set((state) => ({
+      queueItems: {
+        ...state.queueItems,
+        [id]: { ...state.queueItems[id], startEndImages: images },
+      },
+    }))
+  },
+
+  uploadStartEndFiles: async (startFile, endFile) => {
+    set({ uploading: true, error: null })
+
+    const uploadOne = async (file: File): Promise<string> => {
+      const form = new FormData()
+      form.append('image', file)
+      const res = await authFetch(apiUrl('/api/generate/upload-reference'), {
+        method: 'POST',
+        body: form,
+      })
+      if (!res.ok) {
+        const raw = await res.json().catch(() => ({}))
+        throw new Error(getApiError(raw, `Upload failed (${res.status})`))
+      }
+      const raw = await res.json()
+      return unwrapApiData<{ path: string }>(raw).path
+    }
+
+    try {
+      const [startPath, endPath] = await Promise.all([uploadOne(startFile), uploadOne(endFile)])
+
+      const id = generateId()
+      const item: QueueItem = {
+        id,
+        imageUrl: startPath,
+        prompt: '',
+        workflowType: 'startEnd',
+        presets: {},
+        settings: {
+          duration: get().globalSettings.duration,
+          aspectRatio: get().globalSettings.aspectRatio,
+        },
+        startEndImages: { startImageUrl: startPath, endImageUrl: endPath },
+        status: 'draft',
+        createdAt: Date.now(),
+      }
+
+      set((state) => ({
+        queueItems: { ...state.queueItems, [id]: item },
+        queueOrder: [...state.queueOrder, id],
+        selectedId: id,
+        uploading: false,
+      }))
+
+      return id
+    } catch (err) {
+      set({
+        uploading: false,
+        error: { message: err instanceof Error ? err.message : 'Upload failed', type: 'error' },
+      })
+      return null
     }
   },
 
