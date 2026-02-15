@@ -27,8 +27,8 @@ import {
   IMG2IMG_FORMATS,
   IMG2IMG_RESOLUTIONS,
   type QueueItem,
-  type WorkflowType,
   useImg2VideoQueueStore,
+  type WorkflowType,
 } from '../../stores/img2videoQueueStore'
 import { createOutputHistoryId, useOutputHistoryStore } from '../../stores/outputHistoryStore'
 import { StepHeader } from '../asset-monster/StepHeader'
@@ -721,12 +721,10 @@ function Img2VideoContent({ modeStep }: { modeStep: React.ReactNode }) {
       }
     }
 
-    const queuedIds = useImg2VideoQueueStore
-      .getState()
-      .queueOrder.filter((id) => {
-        const item = useImg2VideoQueueStore.getState().queueItems[id]
-        return item?.workflowType === 'img2video' && item.status === 'queued'
-      })
+    const queuedIds = useImg2VideoQueueStore.getState().queueOrder.filter((id) => {
+      const item = useImg2VideoQueueStore.getState().queueItems[id]
+      return item?.workflowType === 'img2video' && item.status === 'queued'
+    })
     if (queuedIds.length === 0) return
 
     const beforeCompletedIds = new Set(

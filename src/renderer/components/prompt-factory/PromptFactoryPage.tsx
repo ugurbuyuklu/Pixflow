@@ -212,7 +212,7 @@ function PromptPreview({
                       ? ''
                       : String(raw)
                 return (
-                  <label key={field.path.join('.')} className="space-y-1 block">
+                  <div key={field.path.join('.')} className="space-y-1">
                     <span className="text-[11px] text-surface-400">{field.label}</span>
                     {field.multiline ? (
                       <textarea
@@ -228,6 +228,7 @@ function PromptPreview({
                             el.style.height = `${el.scrollHeight}px`
                           }
                         }}
+                        aria-label={field.label}
                         className="w-full bg-surface-100 border border-surface-200 rounded-lg px-2.5 py-2 text-xs text-surface-700 focus:outline-none focus:border-brand-500 resize-none overflow-hidden"
                         spellCheck={false}
                       />
@@ -235,10 +236,11 @@ function PromptPreview({
                       <input
                         value={value}
                         onChange={(e) => onFieldChange?.(field.path, e.target.value, field.array)}
+                        aria-label={field.label}
                         className="w-full bg-surface-100 border border-surface-200 rounded-lg px-2.5 py-2 text-xs text-surface-700 focus:outline-none focus:border-brand-500"
                       />
                     )}
-                  </label>
+                  </div>
                 )
               })}
             </div>
@@ -430,7 +432,6 @@ export default function PromptFactoryPage() {
 
   const anyLoading = analyzeEntries.some((e) => e.loading)
   const analyzedCount = analyzeEntries.filter((e) => e.prompt).length
-  const allAnalyzed = analyzeEntries.length > 0 && analyzedCount === analyzeEntries.length
   const pendingAnalyzeCount = analyzeEntries.filter((e) => !e.prompt).length
   const promptModeTabs: { id: 'concept' | 'image'; label: string; icon: JSX.Element }[] = [
     { id: 'concept', label: 'Create Prompts', icon: <Sparkles className="w-4 h-4" /> },
@@ -475,13 +476,7 @@ export default function PromptFactoryPage() {
                   Upload one or more images to extract prompts via GPT-4o Vision
                 </p>
               </div>
-              <Button
-                variant="lime"
-                size="lg"
-                icon={<ScanSearch className="w-5 h-5" />}
-                disabled
-                className="w-full"
-              >
+              <Button variant="lime" size="lg" icon={<ScanSearch className="w-5 h-5" />} disabled className="w-full">
                 Generate Prompts
               </Button>
             </>

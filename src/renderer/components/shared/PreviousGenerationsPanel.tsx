@@ -35,7 +35,10 @@ const STATUS_STYLES: Record<
 }
 
 function sanitizeFileName(input: string): string {
-  const cleaned = input.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')
+  const cleaned = input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
   return cleaned.replace(/^-+|-+$/g, '') || 'output'
 }
 

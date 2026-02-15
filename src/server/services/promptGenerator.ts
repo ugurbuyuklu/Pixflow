@@ -475,7 +475,7 @@ function distributeSubThemes(subThemes: SubTheme[], count: number): SubTheme[] {
   return result
 }
 
-async function generateSinglePromptWithTheme(
+async function _generateSinglePromptWithTheme(
   client: OpenAI,
   concept: string,
   theme: SubTheme,

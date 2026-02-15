@@ -950,6 +950,7 @@ export default function CaptionsPage() {
       fontName,
       fontSize,
       fontWeight,
+      patchHistory,
       position,
       renderingSelection,
       sourceVideoUrl,

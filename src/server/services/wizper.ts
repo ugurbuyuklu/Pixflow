@@ -380,7 +380,7 @@ export async function transcribeAudio(audioPath: string): Promise<TranscriptionR
   }
 
   if (!result) {
-    throw (lastError instanceof Error ? lastError : new Error('Wizper transcription failed'))
+    throw lastError instanceof Error ? lastError : new Error('Wizper transcription failed')
   }
 
   const transcript = result.data?.text

@@ -329,7 +329,9 @@ export async function performResearchWithMeta(
     for (const keyword of missing) {
       const data = await researchSingleKeyword(keyword, mode)
       freshData.set(keyword, data)
-      data.source_urls?.forEach((url) => sourceUrlSet.add(url))
+      for (const url of data.source_urls || []) {
+        sourceUrlSet.add(url)
+      }
       effectiveModes.add(data.actual_mode)
 
       if (data.actual_mode === mode) {

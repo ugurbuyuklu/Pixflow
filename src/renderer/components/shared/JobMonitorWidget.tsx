@@ -15,10 +15,7 @@ const EXCLUDED_CATEGORY_STRINGS = new Set([
   'library',
 ])
 
-const STATUS_STYLE: Record<
-  OutputHistoryStatus,
-  { label: string; text: string; dot: string; icon?: 'spinner' }
-> = {
+const STATUS_STYLE: Record<OutputHistoryStatus, { label: string; text: string; dot: string; icon?: 'spinner' }> = {
   running: { label: 'RUNNING', text: 'text-warning', dot: 'bg-warning border-warning', icon: 'spinner' },
   completed: { label: 'DONE', text: 'text-success', dot: 'bg-success border-success' },
   failed: { label: 'FAILED', text: 'text-danger', dot: 'bg-danger border-danger' },
@@ -60,10 +57,7 @@ export function JobMonitorWidget() {
     return filtered.slice(0, MAX_VISIBLE)
   }, [entries])
 
-  const runningCount = useMemo(
-    () => visible.filter((e) => e.status === 'running').length,
-    [visible],
-  )
+  const runningCount = useMemo(() => visible.filter((e) => e.status === 'running').length, [visible])
 
   const header = (
     <div className="flex items-center justify-between gap-2">

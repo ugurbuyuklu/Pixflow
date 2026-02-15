@@ -1,4 +1,5 @@
 import { AlertTriangle, Download, Loader2, RefreshCw, Video, X } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useMemo, useRef } from 'react'
 import { assetUrl } from '../../lib/api'
 import { downloadVideo } from '../../lib/download'
@@ -6,11 +7,10 @@ import { REACTION_DEFINITIONS, useAvatarStore } from '../../stores/avatarStore'
 import { createOutputHistoryId, useOutputHistoryStore } from '../../stores/outputHistoryStore'
 import type { ReactionType } from '../../types'
 import { StepHeader } from '../asset-monster/StepHeader'
+import { PreviousGenerationsPanel } from '../shared/PreviousGenerationsPanel'
 import { Button } from '../ui/Button'
 import { EmptyState } from '../ui/EmptyState'
-import { PreviousGenerationsPanel } from '../shared/PreviousGenerationsPanel'
 import { AvatarSelectionCard } from './shared/AvatarSelectionCard'
-import type { ReactNode } from 'react'
 
 interface ReactionVideoPageProps {
   fullSizeAvatarUrl: string | null
@@ -224,9 +224,7 @@ export function ReactionVideoPage({
                   {(!hasSelectedAvatar || !selectedReaction) && (
                     <p className="text-xs text-warning/80 flex items-center gap-1.5 mt-1">
                       <AlertTriangle className="w-3 h-3 shrink-0" />
-                      {!hasSelectedAvatar
-                        ? 'Select an avatar first (Step 1)'
-                        : 'Choose a reaction (Step 2)'}
+                      {!hasSelectedAvatar ? 'Select an avatar first (Step 1)' : 'Choose a reaction (Step 2)'}
                     </p>
                   )}
                 </>

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
-import path from 'node:path'
 import { createRequire } from 'node:module'
+import path from 'node:path'
 import { download as ensureYtDlpBinary } from '@distube/yt-dlp'
 
 export interface YtDlpDownloadResult {
@@ -411,11 +411,7 @@ export async function extractFacebookAdsVideoUrl(pageUrl: string): Promise<strin
     )
 
     const collectedCandidates: FacebookAdsExtractionCandidate[] = []
-    const maybeAddCandidate = (
-      rawUrl: string,
-      source: FacebookAdsExtractionCandidate['source'],
-      field?: string,
-    ) => {
+    const maybeAddCandidate = (rawUrl: string, source: FacebookAdsExtractionCandidate['source'], field?: string) => {
       const normalized = normalizeFacebookVideoUrl(rawUrl)
       if (!normalized) {
         return
@@ -440,8 +436,7 @@ export async function extractFacebookAdsVideoUrl(pageUrl: string): Promise<strin
     if (adId) {
       await page
         .waitForFunction(
-          (targetAdId: string) =>
-            document.documentElement.innerHTML.includes(`"ad_archive_id":"${targetAdId}"`),
+          (targetAdId: string) => document.documentElement.innerHTML.includes(`"ad_archive_id":"${targetAdId}"`),
           { timeout: 12_000 },
           adId,
         )
@@ -689,9 +684,7 @@ export async function extractFacebookAdsVideoUrl(pageUrl: string): Promise<strin
     })
 
     if (!selected) {
-      throw new Error(
-        `Could not extract any direct MP4 candidate${adId ? ` for ad id=${adId}` : ''}.`,
-      )
+      throw new Error(`Could not extract any direct MP4 candidate${adId ? ` for ad id=${adId}` : ''}.`)
     }
 
     return selected.url

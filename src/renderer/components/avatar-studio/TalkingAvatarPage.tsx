@@ -4,11 +4,9 @@ import { apiUrl, assetUrl, authFetch } from '../../lib/api'
 import { downloadVideo } from '../../lib/download'
 import type { ScriptTone } from '../../stores/avatarStore'
 import { TALKING_AVATAR_LANGUAGE_CARDS, useAvatarStore } from '../../stores/avatarStore'
-import {
-  createOutputHistoryId,
-  useOutputHistoryStore,
-} from '../../stores/outputHistoryStore'
+import { createOutputHistoryId, useOutputHistoryStore } from '../../stores/outputHistoryStore'
 import { StepHeader } from '../asset-monster/StepHeader'
+import { PreviousGenerationsPanel } from '../shared/PreviousGenerationsPanel'
 import { AudioPlayer } from '../ui/AudioPlayer'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
@@ -17,7 +15,6 @@ import { SegmentedTabs } from '../ui/navigation/SegmentedTabs'
 import { ProgressBar } from '../ui/ProgressBar'
 import { Select } from '../ui/Select'
 import { Textarea } from '../ui/Textarea'
-import { PreviousGenerationsPanel } from '../shared/PreviousGenerationsPanel'
 import { ScriptRefinementToolbar } from './ScriptRefinementToolbar'
 import { AvatarSelectionCard } from './shared/AvatarSelectionCard'
 
@@ -430,7 +427,11 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
                     <div className="md:w-[116px] shrink-0">
                       <p className="text-[11px] uppercase tracking-wide text-surface-400 mb-2">Selected Avatar</p>
                       <div className="w-full aspect-[9/16] rounded-lg overflow-hidden border border-surface-200 bg-surface-0">
-                        <img src={assetUrl(selectedAvatarUrl)} alt="Selected avatar" className="w-full h-full object-cover" />
+                        <img
+                          src={assetUrl(selectedAvatarUrl)}
+                          alt="Selected avatar"
+                          className="w-full h-full object-cover"
+                        />
                       </div>
                     </div>
                   )}

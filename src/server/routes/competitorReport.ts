@@ -1,6 +1,6 @@
 import { Router } from 'express'
-import OpenAI from 'openai'
 import rateLimit from 'express-rate-limit'
+import OpenAI from 'openai'
 import { sendError, sendSuccess } from '../utils/http.js'
 
 const COMPETITOR_REPORT_MODEL = process.env.COMPETITOR_REPORT_MODEL || 'gpt-4o-mini'

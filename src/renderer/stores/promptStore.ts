@@ -1,9 +1,9 @@
 import { create } from 'zustand'
 import { PROMPT_GENERATE_MAX, PROMPT_GENERATE_MIN } from '../../constants/limits'
 import { apiUrl, authFetch, getApiError, unwrapApiData } from '../lib/api'
-import { createOutputHistoryId, useOutputHistoryStore } from './outputHistoryStore'
 import type { ErrorInfo, GeneratedPrompt, ResearchData, VarietyScore } from '../types'
 import { parseError } from '../types'
+import { createOutputHistoryId, useOutputHistoryStore } from './outputHistoryStore'
 
 interface GenerationProgress {
   step: 'quick_prompt' | 'research' | 'research_complete' | 'enriching' | 'done'

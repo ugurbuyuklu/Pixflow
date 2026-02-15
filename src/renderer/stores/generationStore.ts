@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { apiUrl, assetUrl, authFetch, getApiError, unwrapApiData } from '../lib/api'
-import { createOutputHistoryId, useOutputHistoryStore } from './outputHistoryStore'
 import type { Avatar, BatchProgress, ErrorInfo, GeneratedPrompt } from '../types'
 import { parseError } from '../types'
+import { createOutputHistoryId, useOutputHistoryStore } from './outputHistoryStore'
 
 const MAX_REFERENCE_IMAGES = 5
 const ASPECT_RATIOS = ['9:16', '16:9', '1:1', '4:3', '3:4', '4:5', '5:4', '3:2', '2:3', '21:9'] as const

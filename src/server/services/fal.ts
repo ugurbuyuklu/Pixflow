@@ -327,8 +327,8 @@ export function formatPromptForFal(
     referenceImageCount === 0
       ? ''
       : referenceImageCount === 1
-      ? `${REFERENCE_IDENTITY_SOURCE_CRITICAL} Preserve the exact person identity, facial structure, age, expression, and proportions. Do not replace the person, do not add extra people.`
-      : `CRITICAL: Use ALL provided reference images as mandatory identity sources. The final output must clearly include exactly ${referenceImageCount} distinct ${personWord} from the references. Do not omit any referenced person. Do not merge identities. Do not add new people. Preserve each person's face, age, expression, and proportions.`
+        ? `${REFERENCE_IDENTITY_SOURCE_CRITICAL} Preserve the exact person identity, facial structure, age, expression, and proportions. Do not replace the person, do not add extra people.`
+        : `CRITICAL: Use ALL provided reference images as mandatory identity sources. The final output must clearly include exactly ${referenceImageCount} distinct ${personWord} from the references. Do not omit any referenced person. Do not merge identities. Do not add new people. Preserve each person's face, age, expression, and proportions.`
 
   const style = (promptJson.style as string) || ''
   const pose = (promptJson.pose as Record<string, unknown>) || {}

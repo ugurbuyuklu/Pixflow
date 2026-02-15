@@ -1,5 +1,5 @@
-import fs from 'node:fs/promises'
 import { createWriteStream } from 'node:fs'
+import fs from 'node:fs/promises'
 import http from 'node:http'
 import https from 'node:https'
 import path from 'node:path'
@@ -119,10 +119,7 @@ export function createVideosRouter(config: VideosRouterConfig) {
             const status = response.statusCode ?? 0
             const location = response.headers.location
 
-            if (
-              location &&
-              (status === 301 || status === 302 || status === 303 || status === 307 || status === 308)
-            ) {
+            if (location && (status === 301 || status === 302 || status === 303 || status === 307 || status === 308)) {
               if (redirectCount >= maxRedirects) {
                 cleanupAndReject(new Error('Failed to download video: too many redirects'))
                 return
