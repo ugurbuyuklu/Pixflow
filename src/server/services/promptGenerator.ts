@@ -372,7 +372,7 @@ export async function generatePrompts(
   concept: string,
   count: number,
   researchBrief: ResearchBrief,
-  onBatchDone?: (completedCount: number, total: number) => void,
+  onBatchDone?: (completedCount: number, total: number, prompt: PromptOutput, index: number) => void,
   imageInsights?: AnalyzedPrompt,
 ): Promise<{ prompts: PromptOutput[]; varietyScore: VarietyScore }> {
   const client = await getOpenAI()
@@ -416,7 +416,7 @@ export async function generatePrompts(
         prompts[index] = fallbackPrompt
       } finally {
         completed += 1
-        onBatchDone?.(completed, count)
+        onBatchDone?.(completed, count, prompts[index], index)
       }
     }
   }

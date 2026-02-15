@@ -84,28 +84,19 @@ async function runPromptGenerationPipeline({
     remainingCount,
     researchBrief,
     emit
-      ? (completed, total) =>
+      ? (completed, total, prompt, index) => {
+          emit('prompt', { prompt, index, total, enriched: true })
           emit('progress', {
             step: 'enriching',
             completed,
             total,
             message: `Generating prompt ${completed}/${total}...`,
           })
+          console.log(`[Streaming] Sent prompt ${completed}/${total}`)
+        }
       : undefined,
     imageInsights,
   )
-
-  if (emit) {
-    enrichedPrompts.forEach((prompt, idx) => {
-      emit('prompt', {
-        prompt,
-        index: idx,
-        total: count,
-        enriched: true,
-      })
-    })
-    console.log(`[Streaming Phase 3] Sent ${enrichedPrompts.length} enriched prompts`)
-  }
 
   const prompts = enrichedPrompts
   const varietyScore = enrichedVariety
@@ -210,7 +201,9 @@ export function createPromptsRouter(config: PromptsRouterConfig): express.Router
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
       })
+      res.flushHeaders()
     }
 
     try {
@@ -298,7 +291,9 @@ export function createPromptsRouter(config: PromptsRouterConfig): express.Router
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
     })
+    res.flushHeaders()
 
     try {
       const result = await runPromptGenerationPipeline({
