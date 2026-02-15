@@ -565,10 +565,10 @@ Return a JSON object with this EXACT structure (all fields are nested objects):
 CONCEPT: "${concept}"
 
 RESEARCH INSIGHTS:
-- Summary: ${research.summary}
-- Key Themes: ${research.key_themes.join(', ')}
-- Visual Elements: ${research.visual_elements.join(', ')}
-- Mood Keywords: ${research.mood_keywords.join(', ')}
+- Aesthetics: ${research.trend_findings.trending_aesthetics.join(', ')}
+- Colors: ${research.trend_findings.color_palettes.join(', ')}
+- Outfits: ${research.trend_findings.outfit_trends.slice(0, 3).join(', ')}
+- Sets: ${research.trend_findings.set_design_trends.slice(0, 3).join(', ')}
 
 SUB-THEME FOR THIS PROMPT:
 ${themeDescription}
