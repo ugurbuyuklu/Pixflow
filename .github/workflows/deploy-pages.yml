@@ -1,17 +1,6 @@
 name: Deploy Pages
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'src/renderer/**'
-      - 'public/**'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'vite.web.config.ts'
-      - 'wrangler.toml'
-      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
     inputs:
       preview:
