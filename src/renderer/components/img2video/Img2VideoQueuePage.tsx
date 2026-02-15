@@ -1185,6 +1185,17 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
         >
           {isGenerating ? 'Generating...' : 'Generate Video'}
         </Button>
+        {selectedItem?.status === 'failed' && selectedItem.error && (
+          <div className="mt-2 px-3 py-2 bg-danger/10 border border-danger/20 rounded-lg">
+            <p className="text-xs text-danger">{selectedItem.error}</p>
+          </div>
+        )}
+        {selectedItem?.status === 'generating' && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-surface-400">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Generating video, this may take a few minutes...
+          </div>
+        )}
       </div>
 
       {/* RIGHT COLUMN: OUTPUTS */}
