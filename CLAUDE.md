@@ -99,6 +99,17 @@ Adding a new page requires syncing these files:
 - Early transitions: Kling video calls fire during frame gen (non-blocking), video job awaits them before assembly
 - Transition concurrency: 4 parallel batches via `runWithConcurrency()` in server routes (separate from Zustand pattern)
 
+### Prompt Factory Pipeline (promptGenerator.ts + prompts.ts)
+- **SSE streaming**: GET `/api/prompts/generate` uses EventSource (SSE) for progressive delivery. Each prompt is emitted via `onBatchDone` callback the moment its GPT-4o call resolves — not batched at the end.
+- **`onBatchDone` signature**: `(completedCount, total, prompt, index) => void` — passes the prompt object and its index so the route can emit it immediately.
+- **Parallel workers**: `generatePrompts()` spawns `min(10, count)` parallel workers pulling from a shared queue. Each worker calls `generateSinglePromptWithTheme()` → GPT-4o with `response_format: { type: 'json_object' }`.
+- **Schema alignment is critical**: The JSON schema in the system prompt sent to GPT-4o MUST match the `PromptOutput` TypeScript interface in `src/server/utils/prompts.ts` exactly. Historical bug: mismatched field names (e.g. top-level `expression` vs `pose.expression`, `camera.framing` vs `camera.focus`) caused GPT to return valid JSON that didn't map to the expected type, silently producing "generic" prompts.
+- **`PROMPT_SCHEMA_EXAMPLE` constant**: Used by `generatePromptBatch()` and `textToPrompt()`. Already aligned with `PromptOutput`. The inline schema in `generateSinglePromptWithTheme()` must stay in sync with this.
+- **Fallback prompts**: `createFallbackPrompt()` returns a scaffold with `FALLBACK SCAFFOLD` markers in outfit fields. Every fallback path now logs explicitly (empty content, JSON parse failure, missing core fields, catch block).
+- **SSE headers**: Both GET and POST routes use `flushHeaders()`, `X-Accel-Buffering: no`, `Cache-Control: no-cache` to prevent proxy/buffer delays.
+- **Research pipeline**: `performResearch()` → `analyzeResearchResults()` feeds into prompt generation. Access research data via `researchBrief.trend_findings.*` (NOT `research.key_themes` etc. which don't exist).
+- **`getOpenAI()` singleton**: Uses `clientInitializing` flag with `try/finally` to prevent deadlock if init throws.
+
 ### Static Asset Directories
 Server serves: `/uploads`, `/outputs`, `/avatars`, `/avatars_generated`, `/avatars_uploads`.
 Vite proxies these + `/api` to localhost:3002 with 600s timeout.
@@ -143,8 +154,11 @@ Events logged to `logs/pipeline-events.jsonl`. Run `gate:release` before deployi
 - Avatar green screen detection: hardcoded thresholds (minGreen: 120, minDominance: 35, ratio: 0.6)
 - Caption segments: max 8 words / 72 chars per segment
 - FAL.ai Kling model IDs and params change without notice — always verify via Context7 docs before assuming endpoint exists
-- Server does not hot-reload all service file changes — restart `npm run dev` after modifying services like `kling.ts`
+- Server does not hot-reload all service file changes — restart `npm run dev` after modifying services like `kling.ts`, `promptGenerator.ts`
 - GitHub Actions: push to main with `src/renderer/**` changes triggers Cloudflare Pages deploy; needs `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` secrets
+- Prompt Factory: if GPT-4o prompts look "generic" or arrive instantly, check for silent fallbacks in server logs (`FALLBACK for prompt`, `JSON parse failed`, `missing core fields`). The most common cause is schema mismatch between the system prompt JSON and `PromptOutput` interface.
+- Prompt Factory: `generateSinglePromptWithTheme()` catches ALL errors and returns fallback — outer code sees "success". Always check server logs for `[generateSinglePrompt]` prefixed errors.
+- Prompt Factory: `ResearchBrief` properties live under `trend_findings.*`, `technical_recommendations.*`, `competitor_insights.*`, `sub_themes[]` — NOT flat fields like `key_themes` or `visual_elements`.
 - Legacy materials in `Burgflow Archive/` - do not reference in new code
 - Keep "Pixflow" naming in all new docs, routes, and UX copy
 
