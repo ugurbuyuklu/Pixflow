@@ -126,7 +126,7 @@ export function SideNav() {
               type="button"
               onClick={() => navigate(item.id)}
               title={brandedPlainText(item.id)}
-              className={`relative flex items-center w-full rounded-lg py-3 text-sm font-semibold transition ${
+              className={`relative flex items-center w-full rounded-lg py-3 text-base font-semibold transition ${
                 sidebarCollapsed ? 'justify-center px-2' : 'justify-between gap-3 px-4'
               } ${
                 isActive
@@ -135,7 +135,7 @@ export function SideNav() {
               }`}
             >
               <div className={`flex items-center ${sidebarCollapsed ? '' : 'gap-3'}`}>
-                <item.icon className={`w-4 h-4 ${isActive ? 'text-brand-500' : ''}`} />
+                <item.icon className={`w-5 h-5 ${isActive ? 'text-brand-500' : ''}`} />
                 {!sidebarCollapsed && <span>{brandedName(item.id)}</span>}
               </div>
               {!sidebarCollapsed && item.badge && <span className="flex items-center">{item.badge}</span>}
