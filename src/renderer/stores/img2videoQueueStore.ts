@@ -58,7 +58,7 @@ function generateId(): string {
 }
 
 // Compose multi-select presets into prompt
-function composePrompt(base: string, presets: Record<string, string[]>): string {
+export function composePrompt(base: string, presets: Record<string, string[]>): string {
   const fragments: string[] = []
   for (const values of Object.values(presets)) {
     fragments.push(...values)

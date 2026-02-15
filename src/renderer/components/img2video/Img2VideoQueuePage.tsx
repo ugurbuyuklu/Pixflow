@@ -19,6 +19,7 @@ import { useDropzone } from 'react-dropzone'
 import { assetUrl } from '../../lib/api'
 import {
   ASPECT_RATIOS,
+  composePrompt,
   DURATIONS,
   IMG2IMG_ASPECT_RATIOS,
   IMG2IMG_FORMATS,
@@ -712,6 +713,14 @@ function Img2VideoContent({ tabs }: { tabs: React.ReactNode }) {
             placeholder="Describe the video motion... (e.g., 'camera zooms in slowly', 'gentle pan from left to right')"
             rows={4}
           />
+          {selectedItem && Object.values(selectedItem.presets).flat().length > 0 && (
+            <div className="mt-2 px-3 py-2 bg-surface-100 rounded-lg border border-surface-200/60">
+              <p className="text-[10px] font-medium text-surface-400 mb-1">FINAL PROMPT</p>
+              <p className="text-xs text-surface-300 break-words">
+                {composePrompt(selectedItem.prompt || '', selectedItem.presets)}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Step 3: Settings */}
@@ -1145,6 +1154,14 @@ function StartEndContent({ tabs }: { tabs: React.ReactNode }) {
             placeholder="Describe the transition... (e.g., 'smooth morphing transition between two poses, cinematic lighting')"
             rows={4}
           />
+          {selectedItem && Object.values(selectedItem.presets).flat().length > 0 && (
+            <div className="mt-2 px-3 py-2 bg-surface-100 rounded-lg border border-surface-200/60">
+              <p className="text-[10px] font-medium text-surface-400 mb-1">FINAL PROMPT</p>
+              <p className="text-xs text-surface-300 break-words">
+                {composePrompt(selectedItem.prompt || '', selectedItem.presets)}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Step 3: Settings */}
