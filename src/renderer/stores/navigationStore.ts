@@ -44,6 +44,8 @@ export const useNavigationStore = create<NavigationState>()((set) => ({
   pendingNavigationPerf: null,
 
   navigate: (tab, options) => {
+    if (tab === 'competitors') return
+
     set((state) => {
       if (state.activeTab === tab) return state
       const shouldExpand = !state.hasSelectedCategory && tab !== 'home'

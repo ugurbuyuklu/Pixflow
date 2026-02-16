@@ -75,12 +75,22 @@ export default function HomePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {CATEGORIES.map((category, index) => {
           const Icon = category.icon
+          const isDisabled = category.id === 'competitors'
           return (
             <button
               key={category.id}
               type="button"
-              onClick={() => navigate(category.id)}
-              className="home-card-enter text-left bg-surface-50 rounded-xl border border-surface-200/50 p-5 hover:border-brand-500/40 hover:shadow-sm transition cursor-pointer"
+              onClick={() => {
+                if (isDisabled) return
+                navigate(category.id)
+              }}
+              disabled={isDisabled}
+              title={isDisabled ? `${brandedName(category.id)} (Under Development)` : brandedName(category.id)}
+              className={`home-card-enter text-left bg-surface-50 rounded-xl border border-surface-200/50 p-5 transition ${
+                isDisabled
+                  ? 'opacity-65 cursor-not-allowed'
+                  : 'hover:border-brand-500/40 hover:shadow-sm cursor-pointer'
+              }`}
               style={{ animationDelay: `${240 + index * 160}ms` }}
             >
               <div className="flex items-start gap-3">
@@ -88,7 +98,10 @@ export default function HomePage() {
                   <Icon className="w-5 h-5 text-brand-500" />
                 </div>
                 <div className="space-y-2">
-                  <h3 className="text-base font-black text-surface-900">{brandedName(category.id)}</h3>
+                  <h3 className="text-base font-black text-surface-900 flex items-center gap-2">
+                    <span>{brandedName(category.id)}</span>
+                    {isDisabled && <span className="text-xs font-bold text-surface-500">(U/D)</span>}
+                  </h3>
                   <p className="text-sm text-surface-500">{category.description}</p>
                 </div>
               </div>

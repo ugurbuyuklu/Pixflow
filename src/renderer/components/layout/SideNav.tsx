@@ -38,6 +38,7 @@ const SIDEBAR_ITEMS: { id: TabId; icon: typeof Wand2 }[] = [
   { id: 'history', icon: BookOpen },
   { id: 'competitors', icon: BarChart3 },
 ]
+const DISABLED_ITEMS = new Set<TabId>(['competitors'])
 
 const LG_BREAKPOINT = '(min-width: 1024px)'
 
@@ -123,25 +124,45 @@ export function SideNav() {
         {items.map((item) => {
           const isActive = activeTab === item.id
           const isCompetitor = item.id === 'competitors'
+          const isDisabled = DISABLED_ITEMS.has(item.id)
           return (
             <Fragment key={item.id}>
               {isCompetitor && <div className="my-2 border-t border-surface-200/70" aria-hidden="true" />}
               <button
                 type="button"
-                onClick={() => navigate(item.id)}
-                title={brandedPlainText(item.id)}
+                onClick={() => {
+                  if (isDisabled) return
+                  navigate(item.id)
+                }}
+                disabled={isDisabled}
+                title={isDisabled ? `${brandedPlainText(item.id)} (Under Development)` : brandedPlainText(item.id)}
                 className={`relative flex items-center w-full rounded-lg py-3 text-base font-black transition ${
                   sidebarCollapsed ? 'justify-center px-2' : 'justify-between gap-3 px-4'
                 } ${
                   isActive
                     ? 'bg-brand-500/10 text-surface-900 border border-transparent shadow-sm'
-                    : 'text-surface-600 hover:text-surface-900 hover:bg-surface-100'
+                    : isDisabled
+                      ? 'text-surface-400/70 cursor-not-allowed opacity-70'
+                      : 'text-surface-600 hover:text-surface-900 hover:bg-surface-100'
                 }`}
               >
                 <div className={`flex items-center ${sidebarCollapsed ? '' : 'gap-3'}`}>
                   <item.icon className={`w-5 h-5 ${isActive ? 'text-brand-500' : ''}`} />
                   {!sidebarCollapsed && (
-                    <span>{brandedName(item.id, isCompetitor ? 'text-secondary-500' : undefined)}</span>
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span className="whitespace-nowrap">
+                        {brandedName(item.id, isCompetitor ? 'text-secondary-500' : undefined)}
+                      </span>
+                      {isDisabled && (
+                        <span
+                          className="inline-flex w-4 h-4 items-center justify-center rounded-full border border-surface-300/70 text-surface-400"
+                          aria-hidden="true"
+                          title="Under development"
+                        >
+                          <Loader2 className="w-2.5 h-2.5" />
+                        </span>
+                      )}
+                    </span>
                   )}
                 </div>
                 {!sidebarCollapsed && item.badge && <span className="flex items-center">{item.badge}</span>}
