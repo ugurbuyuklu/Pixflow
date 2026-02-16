@@ -135,15 +135,12 @@ export function AvatarSelectionCard({ stepNumber, subtitle, showGenerateOptions 
   modeTabs.push({ id: 'upload', label: 'Upload', icon: <Upload className="w-4 h-4" /> })
   const isGenerateMode = mode === 'generate' && showGenerateOptions
   const isUploadMode = mode === 'upload'
-  const isUploaded = (avatar: { source?: string; url: string }) =>
-    avatar.source === 'uploaded' || avatar.url.startsWith('/avatars_uploads/')
   const isCurated = (avatar: { source?: string; url: string }) =>
     avatar.source === 'curated' || avatar.url.startsWith('/avatars/')
   const isGenerated = (avatar: { source?: string; url: string }) =>
     avatar.source === 'generated' || avatar.url.startsWith('/avatars_generated/')
-  const curatedAvatars = avatars.filter((avatar) => isCurated(avatar))
   const generatedAvatars = avatars.filter((avatar) => isGenerated(avatar))
-  const uploadedAvatars = avatars.filter((avatar) => isUploaded(avatar))
+  const galleryAvatars = avatars.filter((avatar) => !isGenerated(avatar))
 
   const handleAvatarUpload = async (files: FileList) => {
     if (!files || files.length === 0) return
@@ -190,60 +187,23 @@ export function AvatarSelectionCard({ stepNumber, subtitle, showGenerateOptions 
 
       {isUploadMode && (
         <div className="space-y-3">
+          <div className="rounded-lg border border-surface-200 bg-surface-0 p-3 flex items-center justify-between gap-3">
+            <p className="text-xs text-surface-400">Upload avatar image</p>
+            <Button
+              variant="ghost-muted"
+              size="sm"
+              icon={<Upload className="w-4 h-4" />}
+              onClick={openUploadPicker}
+              disabled={uploading}
+            >
+              Choose
+            </Button>
+          </div>
           {uploading && (
             <div className="rounded-lg border border-surface-200 bg-surface-0 p-3 flex justify-center">
               <Button variant="ghost-muted" size="sm" loading>
                 Uploading...
               </Button>
-            </div>
-          )}
-
-          {avatarsLoading ? (
-            <LoadingState title="Loading avatars..." size="sm" />
-          ) : uploadedAvatars.length === 0 ? (
-            <EmptyState
-              title="No uploaded avatars yet"
-              description="Upload images to add them to this list."
-              icon={<Upload className="w-10 h-10" />}
-            />
-          ) : (
-            <div>
-              <p className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-2">Uploaded Images</p>
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {uploadedAvatars.map((avatar) => (
-                  <button
-                    type="button"
-                    key={avatar.filename}
-                    onClick={() => {
-                      setSelectedAvatar(selectedAvatar?.filename === avatar.filename ? null : avatar)
-                      useAvatarStore.setState({ generatedUrls: [], selectedGeneratedIndex: 0 })
-                    }}
-                    className={`w-20 shrink-0 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 relative ${
-                      selectedAvatar?.filename === avatar.filename
-                        ? 'border-brand-500 ring-2 ring-brand-500/50'
-                        : 'border-transparent hover:border-surface-200'
-                    }`}
-                  >
-                    <img src={assetUrl(avatar.url)} alt={avatar.name} className="w-full h-full object-cover" />
-                    {selectedAvatar?.filename === avatar.filename && (
-                      <div className="absolute top-1 right-1 bg-brand-500 rounded-full p-0.5">
-                        <Check className="w-3 h-3" />
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setConfirmDeleteAvatar(avatar.filename)
-                      }}
-                      className="absolute top-1 left-1 w-5 h-5 rounded-full bg-black/60 hover:bg-danger flex items-center justify-center"
-                      title="Delete uploaded avatar"
-                    >
-                      <Trash2 className="w-3 h-3 text-white" />
-                    </button>
-                  </button>
-                ))}
-              </div>
             </div>
           )}
         </div>
@@ -262,11 +222,11 @@ export function AvatarSelectionCard({ stepNumber, subtitle, showGenerateOptions 
               />
             ) : (
               <div className="space-y-3">
-                {curatedAvatars.length > 0 && (
+                {galleryAvatars.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-2">Gallery</p>
                     <div className="flex gap-2 overflow-x-auto pb-2">
-                      {curatedAvatars.map((avatar) => {
+                      {galleryAvatars.map((avatar) => {
                         const canDelete = !isCurated(avatar)
                         return (
                           <button
@@ -349,48 +309,6 @@ export function AvatarSelectionCard({ stepNumber, subtitle, showGenerateOptions 
                           </button>
                         )
                       })}
-                    </div>
-                  </div>
-                )}
-                {uploadedAvatars.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-surface-400 uppercase tracking-wider mb-2">
-                      Uploaded Images
-                    </p>
-                    <div className="flex gap-2 overflow-x-auto pb-2">
-                      {uploadedAvatars.map((avatar) => (
-                        <button
-                          type="button"
-                          key={avatar.filename}
-                          onClick={() => {
-                            setSelectedAvatar(selectedAvatar?.filename === avatar.filename ? null : avatar)
-                            useAvatarStore.setState({ generatedUrls: [], selectedGeneratedIndex: 0 })
-                          }}
-                          className={`w-20 shrink-0 aspect-[9/16] rounded-lg overflow-hidden border-2 transition-all hover:scale-105 relative ${
-                            selectedAvatar?.filename === avatar.filename
-                              ? 'border-brand-500 ring-2 ring-brand-500/50'
-                              : 'border-transparent hover:border-surface-200'
-                          }`}
-                        >
-                          <img src={assetUrl(avatar.url)} alt={avatar.name} className="w-full h-full object-cover" />
-                          {selectedAvatar?.filename === avatar.filename && (
-                            <div className="absolute top-1 right-1 bg-brand-500 rounded-full p-0.5">
-                              <Check className="w-3 h-3" />
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setConfirmDeleteAvatar(avatar.filename)
-                            }}
-                            className="absolute top-1 left-1 w-5 h-5 rounded-full bg-black/60 hover:bg-danger flex items-center justify-center"
-                            title="Delete uploaded avatar"
-                          >
-                            <Trash2 className="w-3 h-3 text-white" />
-                          </button>
-                        </button>
-                      ))}
                     </div>
                   </div>
                 )}

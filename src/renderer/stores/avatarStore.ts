@@ -359,6 +359,7 @@ interface AvatarState {
   avatars: Avatar[]
   avatarsLoading: boolean
   selectedAvatar: Avatar | null
+  talkingAvatarUrl: string | null
   fullSizeAvatarUrl: string | null
   error: ErrorInfo | null
 
@@ -470,6 +471,7 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
   avatars: [],
   avatarsLoading: false,
   selectedAvatar: null,
+  talkingAvatarUrl: null,
   fullSizeAvatarUrl: null,
   error: null,
 
@@ -495,7 +497,7 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
   transcriptionRequestId: 0,
   autoDetectLanguage: true,
   detectedLanguage: null,
-  translationLanguages: ['EN'],
+  translationLanguages: [],
   translatedScripts: [],
   translatedAudios: [],
   translatedVideos: [],
@@ -528,14 +530,23 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
   reactionError: null,
 
   setMode: (mode) => set({ mode }),
-  setSelectedAvatar: (selectedAvatar) => set({ selectedAvatar }),
+  setSelectedAvatar: (selectedAvatar) =>
+    set({
+      selectedAvatar,
+      talkingAvatarUrl: selectedAvatar?.url?.trim() || null,
+    }),
   setFullSizeAvatarUrl: (fullSizeAvatarUrl) => set({ fullSizeAvatarUrl }),
   setGender: (gender) => set({ gender }),
   setAgeGroup: (ageGroup) => set({ ageGroup }),
   setEthnicity: (ethnicity) => set({ ethnicity }),
   setOutfit: (outfit) => set({ outfit }),
   setAvatarCount: (avatarCount) => set({ avatarCount }),
-  setSelectedGeneratedIndex: (selectedGeneratedIndex) => set({ selectedGeneratedIndex, selectedAvatar: null }),
+  setSelectedGeneratedIndex: (selectedGeneratedIndex) =>
+    set((state) => ({
+      selectedGeneratedIndex,
+      selectedAvatar: null,
+      talkingAvatarUrl: state.generatedUrls[selectedGeneratedIndex]?.trim() || null,
+    })),
   setScriptConcept: (scriptConcept) => set({ scriptConcept }),
   setScriptDuration: (scriptDuration) => set({ scriptDuration }),
   setScriptTone: (scriptTone) => set({ scriptTone }),
@@ -675,6 +686,7 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
         set((state) => ({
           avatars: [...uploadedAvatars, ...state.avatars],
           selectedAvatar: firstUploaded,
+          talkingAvatarUrl: firstUploaded.url?.trim() || null,
           generatedUrls: [],
           selectedGeneratedIndex: 0,
         }))
@@ -717,6 +729,7 @@ export const useAvatarStore = create<AvatarState>()((set, get) => ({
       selectedGeneratedIndex: 0,
       generationProgress: 0,
       selectedAvatar: null,
+      talkingAvatarUrl: null,
     })
 
     const urls: string[] = []
@@ -1003,6 +1016,7 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
       generatedUrls,
       selectedGeneratedIndex,
       selectedAvatar,
+      talkingAvatarUrl,
     } = get()
     if (!generatedScript.trim()) {
       set({ translationError: { message: 'Please generate a script first', type: 'warning' } })
@@ -1017,11 +1031,15 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
       return
     }
     const selectedAvatarUrl = selectedAvatar?.url?.trim() || null
+    const pinnedAvatarUrl = talkingAvatarUrl?.trim() || null
     const generatedAvatarUrl = generatedUrls[selectedGeneratedIndex]?.trim() || null
-    const avatarUrl = selectedAvatarUrl || generatedAvatarUrl
+    const avatarUrl = selectedAvatarUrl || pinnedAvatarUrl || generatedAvatarUrl
     if (!avatarUrl) {
       set({ translationError: { message: 'Select an avatar to generate videos', type: 'warning' } })
       return
+    }
+    if (avatarUrl !== pinnedAvatarUrl) {
+      set({ talkingAvatarUrl: avatarUrl })
     }
 
     await get().generateTranslationAudioBatch()
@@ -1156,10 +1174,11 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
   },
 
   createLipsync: async () => {
-    const { generatedUrls, selectedGeneratedIndex, selectedAvatar, generatedAudioUrl } = get()
+    const { generatedUrls, selectedGeneratedIndex, selectedAvatar, talkingAvatarUrl, generatedAudioUrl } = get()
     const selectedAvatarUrl = selectedAvatar?.url?.trim() || null
+    const pinnedAvatarUrl = talkingAvatarUrl?.trim() || null
     const generatedAvatarUrl = generatedUrls[selectedGeneratedIndex]?.trim() || null
-    const avatarUrl = selectedAvatarUrl || generatedAvatarUrl
+    const avatarUrl = selectedAvatarUrl || pinnedAvatarUrl || generatedAvatarUrl
 
     if (!generatedAudioUrl) {
       set({ error: { message: 'Please generate audio first', type: 'warning' } })
@@ -1281,14 +1300,16 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
       generatedUrls,
       selectedGeneratedIndex,
       selectedAvatar,
+      talkingAvatarUrl,
       selectedReaction,
       reactionDuration,
       reactionAspectRatio,
     } = get()
 
     const selectedAvatarUrl = selectedAvatar?.url?.trim() || null
+    const pinnedAvatarUrl = talkingAvatarUrl?.trim() || null
     const generatedAvatarUrl = generatedUrls[selectedGeneratedIndex]?.trim() || null
-    const avatarUrl = selectedAvatarUrl || generatedAvatarUrl
+    const avatarUrl = selectedAvatarUrl || pinnedAvatarUrl || generatedAvatarUrl
     if (!avatarUrl) {
       set({ reactionError: { message: 'Please select or generate an avatar', type: 'warning' } })
       return

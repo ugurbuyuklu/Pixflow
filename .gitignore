@@ -50,3 +50,6 @@ docs/ops/release-preflight.md
 docs/ops/proposed-thresholds.env
 docs/ops/proposed-thresholds.md
 docs/ops/preflight-history.md
+
+# Legacy archive (keep local, never commit)
+Burgflow Archive/

@@ -84,6 +84,8 @@ const VALID_REACTIONS = [
   'happy',
 ]
 const GREENBOX_PROMPT = GREENBOX_REFERENCE_PROMPT
+const GREENBOX_PROMPT_HASH = createHash('sha1').update(GREENBOX_PROMPT).digest('hex').slice(0, 8)
+const LIPSYNC_GREENBOX_MODE = (process.env.PIXFLOW_LIPSYNC_GREENBOX_MODE || 'disabled').toLowerCase()
 
 function mimeTypeFromImagePath(imagePath: string): string {
   const ext = path.extname(imagePath).toLowerCase()
@@ -108,6 +110,20 @@ function sanitizePath(basePath: string, userPath: string): string | null {
     return null
   }
   return resolved
+}
+
+function shouldNormalizeAvatarForLipsync(imageUrl: string): boolean {
+  // Identity fidelity is prioritized by default; normalization is opt-in.
+  if (LIPSYNC_GREENBOX_MODE === 'force') {
+    return !imageUrl.startsWith('/avatars_generated/')
+  }
+
+  // In auto mode, normalize only transient output images.
+  if (LIPSYNC_GREENBOX_MODE === 'auto') {
+    return imageUrl.startsWith('/outputs/')
+  }
+
+  return false
 }
 
 export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router {
@@ -655,7 +671,7 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
 
     const imageHash = createHash('sha1').update(imagePath).digest('hex').slice(0, 10)
     const cacheBase = path.parse(path.basename(imagePath)).name.replace(/[^a-zA-Z0-9_-]/g, '_')
-    const cacheFilename = `greenbox_${cacheBase}_${imageHash}.png`
+    const cacheFilename = `greenbox_${cacheBase}_${imageHash}_${GREENBOX_PROMPT_HASH}.png`
     const cachedPath = path.join(generatedAvatarsDir, cacheFilename)
     if (await fileExists(cachedPath)) {
       return cachedPath
@@ -749,13 +765,20 @@ export function createAvatarsRouter(config: AvatarsRouterConfig): express.Router
         return
       }
 
-      const greenboxImagePath = await ensureGreenboxAvatarPath(imagePath, imageUrl)
-      if (greenboxImagePath !== imagePath) {
-        console.log(`[Lipsync] Avatar normalized to greenbox: ${path.basename(greenboxImagePath)}`)
+      let imagePathForLipsync = imagePath
+      if (shouldNormalizeAvatarForLipsync(imageUrl)) {
+        imagePathForLipsync = await ensureGreenboxAvatarPath(imagePath, imageUrl)
+        if (imagePathForLipsync !== imagePath) {
+          console.log(`[Lipsync] Avatar normalized to greenbox: ${path.basename(imagePathForLipsync)}`)
+        }
+      } else {
+        console.log(
+          `[Lipsync] Using selected avatar source directly (greenbox normalization disabled): ${path.basename(imagePath)}`,
+        )
       }
 
       console.log('[Lipsync] Creating video with Hedra Character-3...')
-      const result = await createHedraVideo({ imagePath: greenboxImagePath, audioPath, aspectRatio: '9:16' })
+      const result = await createHedraVideo({ imagePath: imagePathForLipsync, audioPath, aspectRatio: '9:16' })
 
       await fs.mkdir(outputsDir, { recursive: true })
       const outputFilename = `lipsync_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp4`

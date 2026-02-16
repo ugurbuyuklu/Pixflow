@@ -25,6 +25,9 @@ const TONE_OPTIONS = [
   { value: 'friendly', label: 'Friendly' },
   { value: 'dramatic', label: 'Dramatic' },
 ]
+const TRANSCRIBED_AVATAR_WIDTH_CLASS = 'w-[116px]'
+const TRANSCRIBED_AVATAR_HEIGHT_CLASS = 'h-[206px]'
+const TRANSCRIBED_TEXTAREA_HEIGHT_CLASS = 'h-[206px] min-h-[206px] max-h-[206px] resize-none'
 
 interface TalkingAvatarPageProps {
   fullSizeAvatarUrl: string | null
@@ -47,6 +50,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
 
   const {
     selectedAvatar,
+    talkingAvatarUrl,
     generatedUrls,
     selectedGeneratedIndex,
     scriptConcept,
@@ -170,9 +174,15 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
     { id: 'url', label: 'Video URL', icon: <Link className="w-4 h-4" /> },
     { id: 'upload', label: 'Upload File', icon: <Upload className="w-4 h-4" /> },
   ]
-  const selectedAvatarUrl = (selectedAvatar?.url || generatedUrls[selectedGeneratedIndex] || '').trim()
+  const selectedAvatarUrl = (
+    selectedAvatar?.url ||
+    talkingAvatarUrl ||
+    generatedUrls[selectedGeneratedIndex] ||
+    ''
+  ).trim()
   const hasSelectedAvatar = Boolean(selectedAvatarUrl)
-  const showTranscribedAvatarThumb = scriptMode === 'fetch' && Boolean(generatedScript.trim()) && hasSelectedAvatar
+  const showTranscribedAvatarThumb =
+    (scriptMode === 'fetch' || scriptMode === 'audio') && Boolean(generatedScript.trim()) && hasSelectedAvatar
 
   const handleGenerateTalkingBatch = async () => {
     const historyId = createOutputHistoryId('talking')
@@ -424,9 +434,11 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
               {generatedScript && !transcribingVideo && (
                 <div className="flex flex-col gap-3 md:flex-row md:items-start">
                   {showTranscribedAvatarThumb && (
-                    <div className="md:w-[116px] shrink-0">
+                    <div className={`${TRANSCRIBED_AVATAR_WIDTH_CLASS} shrink-0`}>
                       <p className="text-[11px] uppercase tracking-wide text-surface-400 mb-2">Selected Avatar</p>
-                      <div className="w-full aspect-[9/16] rounded-lg overflow-hidden border border-surface-200 bg-surface-0">
+                      <div
+                        className={`w-full ${TRANSCRIBED_AVATAR_HEIGHT_CLASS} rounded-lg overflow-hidden border border-surface-200 bg-surface-0`}
+                      >
                         <img
                           src={assetUrl(selectedAvatarUrl)}
                           alt="Selected avatar"
@@ -485,6 +497,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
                       onChange={(e) => setGeneratedScript(e.target.value)}
                       rows={6}
                       disabled={scriptGenerating}
+                      className={TRANSCRIBED_TEXTAREA_HEIGHT_CLASS}
                     />
                     <p className="text-xs text-surface-400">
                       {generatedScript.split(/\s+/).filter(Boolean).length} words (~
@@ -578,47 +591,64 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
                     </div>
                   )}
                   {generatedScript && !transcribingVideo && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-surface-400">Transcribed Script</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setShowVariationOptions(!showVariationOptions)}
-                        >
-                          Improve
-                        </Button>
-                      </div>
-                      {showVariationOptions && (
-                        <ScriptRefinementToolbar
-                          onImprove={() => handleRefineScript('improved')}
-                          onShorter={() => handleRefineScript('shorter')}
-                          onLonger={() => handleRefineScript('longer')}
-                          onDuration={(duration) =>
-                            refineScript(
-                              `Adjust this script to be exactly ${duration} seconds long (approximately ${Math.round(duration * 2.5)} words). If too long, remove unnecessary words/phrases. If too short, add relevant details between existing sentences. Keep the original structure and flow - only add or remove minimal content to reach the target duration.`,
-                              duration,
-                            )
-                          }
-                          onUndo={undoScript}
-                          onRedo={redoScript}
-                          isGenerating={scriptGenerating}
-                          canUndo={scriptHistoryIndex > 0}
-                          canRedo={scriptHistoryIndex < scriptHistory.length - 1}
-                          targetDuration={targetDuration}
-                          onTargetDurationChange={setTargetDuration}
-                        />
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start">
+                      {showTranscribedAvatarThumb && (
+                        <div className={`${TRANSCRIBED_AVATAR_WIDTH_CLASS} shrink-0`}>
+                          <p className="text-[11px] uppercase tracking-wide text-surface-400 mb-2">Selected Avatar</p>
+                          <div
+                            className={`w-full ${TRANSCRIBED_AVATAR_HEIGHT_CLASS} rounded-lg overflow-hidden border border-surface-200 bg-surface-0`}
+                          >
+                            <img
+                              src={assetUrl(selectedAvatarUrl)}
+                              alt="Selected avatar"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        </div>
                       )}
-                      <Textarea
-                        value={generatedScript}
-                        onChange={(e) => setGeneratedScript(e.target.value)}
-                        rows={6}
-                        disabled={scriptGenerating}
-                      />
-                      <p className="text-xs text-surface-400">
-                        {generatedScript.split(/\s+/).filter(Boolean).length} words (~
-                        {Math.ceil((generatedScript.split(/\s+/).filter(Boolean).length / 150) * 60)}s)
-                      </p>
+                      <div className="space-y-2 min-w-0 flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-surface-400">Transcribed Script</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowVariationOptions(!showVariationOptions)}
+                          >
+                            Improve
+                          </Button>
+                        </div>
+                        {showVariationOptions && (
+                          <ScriptRefinementToolbar
+                            onImprove={() => handleRefineScript('improved')}
+                            onShorter={() => handleRefineScript('shorter')}
+                            onLonger={() => handleRefineScript('longer')}
+                            onDuration={(duration) =>
+                              refineScript(
+                                `Adjust this script to be exactly ${duration} seconds long (approximately ${Math.round(duration * 2.5)} words). If too long, remove unnecessary words/phrases. If too short, add relevant details between existing sentences. Keep the original structure and flow - only add or remove minimal content to reach the target duration.`,
+                                duration,
+                              )
+                            }
+                            onUndo={undoScript}
+                            onRedo={redoScript}
+                            isGenerating={scriptGenerating}
+                            canUndo={scriptHistoryIndex > 0}
+                            canRedo={scriptHistoryIndex < scriptHistory.length - 1}
+                            targetDuration={targetDuration}
+                            onTargetDurationChange={setTargetDuration}
+                          />
+                        )}
+                        <Textarea
+                          value={generatedScript}
+                          onChange={(e) => setGeneratedScript(e.target.value)}
+                          rows={6}
+                          disabled={scriptGenerating}
+                          className={TRANSCRIBED_TEXTAREA_HEIGHT_CLASS}
+                        />
+                        <p className="text-xs text-surface-400">
+                          {generatedScript.split(/\s+/).filter(Boolean).length} words (~
+                          {Math.ceil((generatedScript.split(/\s+/).filter(Boolean).length / 150) * 60)}s)
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>

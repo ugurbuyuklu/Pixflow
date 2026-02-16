@@ -109,16 +109,17 @@ export default {
           null,
         )
       }
-      return json(
-        204,
-        {
-          success: true,
-          data: {
-            ok: true,
-          },
-        },
-        allowedOrigin,
-      )
+      const preflightHeaders = new Headers({
+        'X-Pixflow-Gateway': 'cloudflare-worker',
+      })
+      if (allowedOrigin) {
+        preflightHeaders.set('Access-Control-Allow-Origin', allowedOrigin)
+        preflightHeaders.set('Access-Control-Allow-Methods', CORS_METHODS)
+        preflightHeaders.set('Access-Control-Allow-Headers', CORS_HEADERS)
+        preflightHeaders.set('Access-Control-Max-Age', '86400')
+        preflightHeaders.set('Vary', 'Origin')
+      }
+      return new Response(null, { status: 204, headers: preflightHeaders })
     }
 
     if (origin && !allowedOrigin) {
@@ -178,10 +179,7 @@ export default {
     })
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(
-      () => controller.abort(`Upstream timeout after ${upstreamTimeoutMs}ms`),
-      upstreamTimeoutMs,
-    )
+    const timeoutId = setTimeout(() => controller.abort(), upstreamTimeoutMs)
 
     try {
       const upstreamResponse = await fetch(upstreamRequest, {
@@ -190,12 +188,12 @@ export default {
       const upstreamIsSse = includesEventStream(upstreamResponse.headers.get('content-type'))
       return withCorsHeaders(upstreamResponse, allowedOrigin, clientExpectsSse || upstreamIsSse)
     } catch (error) {
-      const isAbort = error instanceof Error && error.name === 'AbortError'
+      const isTimeout = controller.signal.aborted
       return json(
-        isAbort ? 504 : 502,
+        isTimeout ? 504 : 502,
         {
           success: false,
-          error: isAbort ? 'Gateway upstream timeout' : 'Gateway upstream fetch failed',
+          error: isTimeout ? `Gateway upstream timeout after ${upstreamTimeoutMs}ms` : 'Gateway upstream fetch failed',
           details: error instanceof Error ? error.message : String(error),
         },
         allowedOrigin,
