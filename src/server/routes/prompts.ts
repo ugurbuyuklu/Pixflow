@@ -18,6 +18,7 @@ interface PromptsRouterConfig {
 }
 
 const VALID_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp']
+const MAX_TEXT_TO_JSON_LENGTH = 8000
 
 type StreamEmitter = (event: string, data: unknown) => void
 
@@ -569,8 +570,8 @@ export function createPromptsRouter(config: PromptsRouterConfig): express.Router
       return
     }
 
-    if (text.length > 2000) {
-      sendError(res, 400, 'Text too long (max 2000 characters)', 'INVALID_TEXT')
+    if (text.length > MAX_TEXT_TO_JSON_LENGTH) {
+      sendError(res, 400, `Text too long (max ${MAX_TEXT_TO_JSON_LENGTH} characters)`, 'INVALID_TEXT')
       return
     }
 

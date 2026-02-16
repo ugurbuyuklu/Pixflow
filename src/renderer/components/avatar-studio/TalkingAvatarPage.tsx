@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle, Download, Link, Loader2, Upload, Video, Volume2, Wand2 } from 'lucide-react'
+import { AlertCircle, Download, Link, Loader2, Upload, Video, Wand2, X } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { apiUrl, assetUrl, authFetch } from '../../lib/api'
 import { downloadVideo } from '../../lib/download'
@@ -27,7 +27,7 @@ const TONE_OPTIONS = [
 ]
 const TRANSCRIBED_AVATAR_WIDTH_CLASS = 'w-[116px]'
 const TRANSCRIBED_AVATAR_HEIGHT_CLASS = 'h-[206px]'
-const TRANSCRIBED_TEXTAREA_HEIGHT_CLASS = 'h-[206px] min-h-[206px] max-h-[206px] resize-none'
+const TRANSCRIBED_TEXTAREA_HEIGHT_CLASS = '!h-[206px] !min-h-[206px] !max-h-[206px] resize-none'
 
 interface TalkingAvatarPageProps {
   fullSizeAvatarUrl: string | null
@@ -44,7 +44,6 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
   const [uploadedAudioFile, setUploadedAudioFile] = useState<File | null>(null)
   const [uploadedAudioUrl, setUploadedAudioUrl] = useState<string | null>(null)
   const [audioUploadProgress, setAudioUploadProgress] = useState(0)
-  const [audioUploadDone, setAudioUploadDone] = useState(false)
   const [showVariationOptions, setShowVariationOptions] = useState(false)
   const [targetDuration, setTargetDuration] = useState(30)
 
@@ -75,6 +74,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
     translatedVideos,
     translationGenerating,
     translationError,
+    error: avatarError,
     setScriptConcept,
     setScriptDuration,
     setScriptTone,
@@ -92,6 +92,8 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
     setAutoDetectLanguage,
     clearTranslations,
     generateTalkingAvatarVideosBatch,
+    createLipsync,
+    generatedVideoUrl,
   } = useAvatarStore()
   const outputHistoryEntries = useOutputHistoryStore((state) => state.entries)
   const upsertHistory = useOutputHistoryStore((state) => state.upsert)
@@ -110,12 +112,10 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
   useEffect(() => {
     if (!uploadedAudioFile) {
       setAudioUploadProgress(0)
-      setAudioUploadDone(false)
       return
     }
     if (!audioUploading) return
 
-    setAudioUploadDone(false)
     setAudioUploadProgress((prev) => (prev > 0 && prev < 95 ? prev : 8))
     const timer = window.setInterval(() => {
       setAudioUploadProgress((prev) => {
@@ -126,15 +126,6 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
 
     return () => window.clearInterval(timer)
   }, [audioUploading, uploadedAudioFile])
-
-  useEffect(() => {
-    if (!uploadedAudioFile) return
-    if (audioUploading) return
-    if (uploadedAudioUrl) {
-      setAudioUploadProgress(100)
-      setAudioUploadDone(true)
-    }
-  }, [audioUploading, uploadedAudioFile, uploadedAudioUrl])
 
   const handleRefineScript = async (type: 'improved' | 'shorter' | 'longer') => {
     const prompts = {
@@ -153,11 +144,10 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
     setUploadedAudioFile(file)
     setUploadedAudioUrl(null)
     setAudioUploadProgress(5)
-    setAudioUploadDone(false)
     const uploadedUrl = await uploadAudio(file)
     if (uploadedUrl) {
+      setAudioUploadProgress(100)
       setUploadedAudioUrl(uploadedUrl)
-      await transcribeVideo(uploadedUrl)
     }
   }
 
@@ -187,16 +177,81 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
   const handleGenerateTalkingBatch = async () => {
     const historyId = createOutputHistoryId('talking')
     activeTalkingHistoryIdRef.current = historyId
+    const title =
+      scriptMode === 'audio'
+        ? 'Talking Avatar (Direct Audio)'
+        : `Talking Avatar (${translationLanguages.length} language${translationLanguages.length === 1 ? '' : 's'})`
     upsertHistory({
       id: historyId,
       category: 'avatars_talking',
-      title: `Talking Avatar (${translationLanguages.length} language${translationLanguages.length === 1 ? '' : 's'})`,
+      title,
       status: 'running',
       startedAt: Date.now(),
       updatedAt: Date.now(),
       message: 'Generating videos...',
       artifacts: [],
     })
+
+    if (scriptMode === 'audio') {
+      if (!uploadedAudioUrl) {
+        patchHistory(historyId, {
+          status: 'failed',
+          message: 'Please upload audio first.',
+          artifacts: [],
+        })
+        activeTalkingHistoryIdRef.current = null
+        return
+      }
+      if (!hasSelectedAvatar) {
+        patchHistory(historyId, {
+          status: 'failed',
+          message: 'Please select an avatar first.',
+          artifacts: [],
+        })
+        activeTalkingHistoryIdRef.current = null
+        return
+      }
+
+      useAvatarStore.setState({
+        generatedAudioUrl: uploadedAudioUrl,
+        generatedVideoUrl: null,
+        translationError: null,
+        translatedScripts: [],
+        translatedAudios: [],
+        translatedVideos: [],
+      })
+
+      await createLipsync()
+      if (activeTalkingHistoryIdRef.current !== historyId) return
+
+      const state = useAvatarStore.getState()
+      const singleVideoUrl = state.generatedVideoUrl
+      const hasVideo = Boolean(singleVideoUrl && /\.(mp4|mov|webm|m4v)$/i.test(singleVideoUrl))
+      if (!hasVideo) {
+        patchHistory(historyId, {
+          status: 'failed',
+          message: state.error?.message || 'No video output generated.',
+          artifacts: [],
+        })
+        activeTalkingHistoryIdRef.current = null
+        return
+      }
+
+      patchHistory(historyId, {
+        status: 'completed',
+        message: '1 video completed',
+        artifacts: [
+          {
+            id: `${historyId}_audio`,
+            label: 'AUDIO',
+            type: 'video',
+            url: singleVideoUrl || undefined,
+          },
+        ],
+      })
+      activeTalkingHistoryIdRef.current = null
+      return
+    }
 
     await generateTalkingAvatarVideosBatch()
     if (activeTalkingHistoryIdRef.current !== historyId) return
@@ -431,25 +486,15 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
               )}
 
               {/* Success - Transcribed Script */}
-              {generatedScript && !transcribingVideo && (
-                <div className="flex flex-col gap-3 md:flex-row md:items-start">
-                  {showTranscribedAvatarThumb && (
-                    <div className={`${TRANSCRIBED_AVATAR_WIDTH_CLASS} shrink-0`}>
-                      <p className="text-[11px] uppercase tracking-wide text-surface-400 mb-2">Selected Avatar</p>
-                      <div
-                        className={`w-full ${TRANSCRIBED_AVATAR_HEIGHT_CLASS} rounded-lg overflow-hidden border border-surface-200 bg-surface-0`}
-                      >
-                        <img
-                          src={assetUrl(selectedAvatarUrl)}
-                          alt="Selected avatar"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
+              {generatedScript &&
+                !transcribingVideo &&
+                (showTranscribedAvatarThumb ? (
+                  <div className="grid grid-cols-1 gap-y-2 md:grid-cols-[116px_minmax(0,1fr)] md:gap-x-3 md:gap-y-2">
+                    <div className="min-h-[32px] flex items-center">
+                      <p className="text-[11px] uppercase tracking-wide text-surface-400">Selected Avatar</p>
                     </div>
-                  )}
-                  <div className="space-y-2 min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-surface-400">Script</span>
+                    <div className="flex items-center justify-between min-h-[32px]">
+                      <span className="text-[11px] uppercase tracking-wide text-surface-400">Script</span>
                       <div className="flex items-center gap-2">
                         {!scriptGenerating && (
                           <Button
@@ -466,7 +511,76 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
                             setGeneratedScript('')
                             useAvatarStore.setState({ transcriptionError: null })
                           }}
-                          className="text-xs text-surface-400 hover:text-surface-300"
+                          className="text-xs font-medium text-surface-400 hover:text-surface-300"
+                        >
+                          Try another
+                        </button>
+                      </div>
+                    </div>
+                    <div
+                      className={`w-full ${TRANSCRIBED_AVATAR_HEIGHT_CLASS} rounded-lg overflow-hidden border border-surface-200 bg-surface-0`}
+                    >
+                      <img
+                        src={assetUrl(selectedAvatarUrl)}
+                        alt="Selected avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      {showVariationOptions && (
+                        <ScriptRefinementToolbar
+                          onImprove={() => handleRefineScript('improved')}
+                          onShorter={() => handleRefineScript('shorter')}
+                          onLonger={() => handleRefineScript('longer')}
+                          onDuration={(duration) =>
+                            refineScript(
+                              `Adjust this script to be exactly ${duration} seconds long (approximately ${Math.round(duration * 2.5)} words). If too long, remove unnecessary words/phrases. If too short, add relevant details between existing sentences. Keep the original structure and flow - only add or remove minimal content to reach the target duration.`,
+                              duration,
+                            )
+                          }
+                          onUndo={undoScript}
+                          onRedo={redoScript}
+                          isGenerating={scriptGenerating}
+                          canUndo={scriptHistoryIndex > 0}
+                          canRedo={scriptHistoryIndex < scriptHistory.length - 1}
+                          targetDuration={targetDuration}
+                          onTargetDurationChange={setTargetDuration}
+                        />
+                      )}
+                      <Textarea
+                        value={generatedScript}
+                        onChange={(e) => setGeneratedScript(e.target.value)}
+                        rows={1}
+                        disabled={scriptGenerating}
+                        className={TRANSCRIBED_TEXTAREA_HEIGHT_CLASS}
+                      />
+                      <p className="text-xs text-surface-400">
+                        {generatedScript.split(/\s+/).filter(Boolean).length} words (~
+                        {Math.ceil((generatedScript.split(/\s+/).filter(Boolean).length / 150) * 60)}s)
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2 min-w-0">
+                    <div className="flex items-center justify-between min-h-[32px]">
+                      <span className="text-[11px] uppercase tracking-wide text-surface-400">Script</span>
+                      <div className="flex items-center gap-2">
+                        {!scriptGenerating && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowVariationOptions(!showVariationOptions)}
+                          >
+                            Improve
+                          </Button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGeneratedScript('')
+                            useAvatarStore.setState({ transcriptionError: null })
+                          }}
+                          className="text-xs font-medium text-surface-400 hover:text-surface-300"
                         >
                           Try another
                         </button>
@@ -495,7 +609,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
                     <Textarea
                       value={generatedScript}
                       onChange={(e) => setGeneratedScript(e.target.value)}
-                      rows={6}
+                      rows={1}
                       disabled={scriptGenerating}
                       className={TRANSCRIBED_TEXTAREA_HEIGHT_CLASS}
                     />
@@ -504,8 +618,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
                       {Math.ceil((generatedScript.split(/\s+/).filter(Boolean).length / 150) * 60)}s)
                     </p>
                   </div>
-                </div>
-              )}
+                ))}
             </div>
           )}
 
@@ -513,7 +626,7 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
           {scriptMode === 'audio' && (
             <div className="space-y-4">
               <p className="text-sm text-surface-400">
-                Upload your pre-recorded audio file (from ElevenLabs, Descript, etc.)
+                Upload your pre-recorded audio file. It will be used directly for talking avatar video generation.
               </p>
 
               {!uploadedAudioFile ? (
@@ -544,55 +657,21 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="p-3 bg-surface-100 rounded-lg flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Volume2 className="w-4 h-4 text-surface-400" />
-                      <span className="text-sm font-medium">{uploadedAudioFile.name}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUploadedAudioFile(null)
-                        setUploadedAudioUrl(null)
-                        setAudioUploadProgress(0)
-                        setAudioUploadDone(false)
-                      }}
-                      className="text-xs text-surface-400 hover:text-surface-300"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                  <div className="p-3 bg-surface-100 rounded-lg space-y-2">
-                    <div className="flex items-center justify-between text-xs text-surface-400">
-                      <span className="flex items-center gap-2">
-                        {audioUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                        {audioUploading ? 'Uploading automatically...' : audioUploadDone ? 'Upload completed' : 'Ready'}
-                      </span>
-                      <span>{Math.round(audioUploadProgress)}%</span>
-                    </div>
-                    <ProgressBar value={audioUploadProgress} />
-                    {audioUploadDone && (
-                      <div className="text-xs text-success flex items-center gap-1">
-                        <CheckCircle className="w-3 h-3" />
-                        Audio uploaded successfully.
+                  {audioUploading ? (
+                    <div className="p-3 bg-surface-100 rounded-lg space-y-2">
+                      <div className="flex items-center justify-between text-xs text-surface-400">
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Uploading...
+                        </span>
+                        <span>{Math.round(audioUploadProgress)}%</span>
                       </div>
-                    )}
-                  </div>
-                  {uploadedAudioUrl && (
-                    <div className="p-3 bg-surface-100 rounded-lg">
-                      <p className="text-xs text-surface-400 mb-2">Uploaded Audio Preview</p>
-                      <AudioPlayer src={assetUrl(uploadedAudioUrl)} />
+                      <ProgressBar value={audioUploadProgress} />
                     </div>
-                  )}
-                  {transcribingVideo && (
-                    <div className="p-3 bg-surface-100 rounded-lg text-xs text-surface-400 flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Transcribing audio to script...
-                    </div>
-                  )}
-                  {generatedScript && !transcribingVideo && (
+                  ) : null}
+                  {!audioUploading && uploadedAudioUrl && (
                     <div className="flex flex-col gap-3 md:flex-row md:items-start">
-                      {showTranscribedAvatarThumb && (
+                      {hasSelectedAvatar && (
                         <div className={`${TRANSCRIBED_AVATAR_WIDTH_CLASS} shrink-0`}>
                           <p className="text-[11px] uppercase tracking-wide text-surface-400 mb-2">Selected Avatar</p>
                           <div
@@ -607,50 +686,38 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
                         </div>
                       )}
                       <div className="space-y-2 min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-surface-400">Transcribed Script</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setShowVariationOptions(!showVariationOptions)}
+                        <div className="relative p-3 bg-surface-100 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUploadedAudioFile(null)
+                              setUploadedAudioUrl(null)
+                              setAudioUploadProgress(0)
+                            }}
+                            className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-md border border-surface-300 bg-surface-200/90 px-2 py-1 text-[11px] text-surface-500 hover:bg-surface-300 hover:text-surface-600 transition-colors"
                           >
-                            Improve
-                          </Button>
+                            <X className="w-3 h-3" />
+                            Remove
+                          </button>
+                          <div className="pt-8">
+                            <AudioPlayer src={assetUrl(uploadedAudioUrl)} />
+                          </div>
                         </div>
-                        {showVariationOptions && (
-                          <ScriptRefinementToolbar
-                            onImprove={() => handleRefineScript('improved')}
-                            onShorter={() => handleRefineScript('shorter')}
-                            onLonger={() => handleRefineScript('longer')}
-                            onDuration={(duration) =>
-                              refineScript(
-                                `Adjust this script to be exactly ${duration} seconds long (approximately ${Math.round(duration * 2.5)} words). If too long, remove unnecessary words/phrases. If too short, add relevant details between existing sentences. Keep the original structure and flow - only add or remove minimal content to reach the target duration.`,
-                                duration,
-                              )
-                            }
-                            onUndo={undoScript}
-                            onRedo={redoScript}
-                            isGenerating={scriptGenerating}
-                            canUndo={scriptHistoryIndex > 0}
-                            canRedo={scriptHistoryIndex < scriptHistory.length - 1}
-                            targetDuration={targetDuration}
-                            onTargetDurationChange={setTargetDuration}
-                          />
-                        )}
-                        <Textarea
-                          value={generatedScript}
-                          onChange={(e) => setGeneratedScript(e.target.value)}
-                          rows={6}
-                          disabled={scriptGenerating}
-                          className={TRANSCRIBED_TEXTAREA_HEIGHT_CLASS}
-                        />
-                        <p className="text-xs text-surface-400">
-                          {generatedScript.split(/\s+/).filter(Boolean).length} words (~
-                          {Math.ceil((generatedScript.split(/\s+/).filter(Boolean).length / 150) * 60)}s)
-                        </p>
+                        <p className="text-[11px] text-surface-400 truncate">{uploadedAudioFile.name}</p>
                       </div>
                     </div>
                   )}
+                  <Button
+                    size="md"
+                    icon={lipsyncGenerating ? undefined : <Video className="w-4 h-4" />}
+                    loading={lipsyncGenerating}
+                    onClick={handleGenerateTalkingBatch}
+                    disabled={!uploadedAudioUrl || !hasSelectedAvatar || lipsyncGenerating || audioUploading}
+                    className="w-full"
+                  >
+                    {lipsyncGenerating ? 'Generating...' : 'Generate Talking Avatar Video'}
+                  </Button>
+                  {!hasSelectedAvatar && <p className="text-xs text-surface-400">Select an avatar first.</p>}
                 </div>
               )}
             </div>
@@ -906,6 +973,36 @@ export function TalkingAvatarPage({ setFullSizeAvatarUrl: _setFullSizeAvatarUrl,
                 )
               })}
             </div>
+          </div>
+        )}
+        {scriptMode === 'audio' && (
+          <div className="bg-surface-50 rounded-lg p-4 space-y-3">
+            <StepHeader stepNumber={6} title="Final Outputs" />
+            {lipsyncGenerating && (
+              <div className="flex items-center gap-2 text-xs text-surface-400">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Generating talking avatar video...
+              </div>
+            )}
+            {!lipsyncGenerating && generatedVideoUrl && /\.(mp4|mov|webm|m4v)$/i.test(generatedVideoUrl) && (
+              <div className="space-y-2">
+                <div className="rounded-lg overflow-hidden">
+                  {/* biome-ignore lint/a11y/useMediaCaption: AI-generated video, no captions available */}
+                  <video controls src={assetUrl(generatedVideoUrl)} className="w-full" />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Download className="w-4 h-4" />}
+                  onClick={() => downloadVideo(assetUrl(generatedVideoUrl), 'talking-avatar-audio.mp4')}
+                >
+                  Download Video
+                </Button>
+              </div>
+            )}
+            {!lipsyncGenerating && !generatedVideoUrl && avatarError?.message && (
+              <p className="text-xs text-danger">{avatarError.message}</p>
+            )}
           </div>
         )}
         <PreviousGenerationsPanel

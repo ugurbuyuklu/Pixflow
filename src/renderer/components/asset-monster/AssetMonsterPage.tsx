@@ -385,17 +385,39 @@ export default function AssetMonsterPage() {
 
   const handleBatchGenerate = async () => {
     if (promptSource === 'custom') {
-      if (selectedCustomPrompts.size === 0) {
-        setBatchError({ message: 'Please select at least one custom prompt.', type: 'warning' })
+      // Use selected saved custom prompts first
+      if (selectedCustomPrompts.size > 0) {
+        const validPrompts = Array.from(selectedCustomPrompts)
+          .map((id) => savedCustomPrompts.find((sp) => sp.id === id)?.prompt)
+          .filter((p): p is GeneratedPrompt => p !== undefined)
+
+        if (validPrompts.length === 0) {
+          setBatchError({
+            message: 'Selected custom prompts are invalid. Please reselect and try again.',
+            type: 'warning',
+          })
+          return
+        }
+
+        startBatch(validPrompts, 'custom')
         return
       }
 
-      // Use only selected custom prompts
-      const validPrompts = Array.from(selectedCustomPrompts)
-        .map((id) => savedCustomPrompts.find((sp) => sp.id === id)?.prompt)
-        .filter((p): p is GeneratedPrompt => p !== undefined)
+      // Fallback: allow direct generate from unsaved custom prompt input
+      const inlinePrompt = currentCustomPromptInput.trim()
+      if (!inlinePrompt) {
+        setBatchError({ message: 'Please select or enter at least one custom prompt.', type: 'warning' })
+        return
+      }
 
-      startBatch(validPrompts, 'custom')
+      setCustomPromptConverting(true)
+      try {
+        const parsedInline = await parseCustomPrompt(inlinePrompt, 1, setCurrentCustomPromptError)
+        if (!parsedInline || parsedInline.length === 0) return
+        startBatch(parsedInline, 'custom')
+      } finally {
+        setCustomPromptConverting(false)
+      }
     } else if (promptSource === 'library') {
       if (selectedLibraryPrompts.size === 0) {
         setBatchError({ message: 'Please select at least one prompt from library.', type: 'warning' })
@@ -423,9 +445,15 @@ export default function AssetMonsterPage() {
     }
   }
 
+  const hasInlineCustomPrompt = currentCustomPromptInput.trim().length > 0
+  const hasCustomPromptReady = selectedCustomPrompts.size > 0 || hasInlineCustomPrompt
   const totalImages =
     promptSource === 'custom'
-      ? selectedCustomPrompts.size
+      ? selectedCustomPrompts.size > 0
+        ? selectedCustomPrompts.size
+        : hasInlineCustomPrompt
+          ? 1
+          : 0
       : promptSource === 'library'
         ? selectedLibraryPrompts.size
         : selectedPrompts.size
@@ -863,7 +891,7 @@ Examples:
                 (promptSource === 'generated'
                   ? selectedPrompts.size === 0
                   : promptSource === 'custom'
-                    ? selectedCustomPrompts.size === 0
+                    ? !hasCustomPromptReady
                     : selectedLibraryPrompts.size === 0)
               }
               className="w-full"

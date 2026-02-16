@@ -117,117 +117,28 @@ const EXPRESSION_VARIATIONS = [
   'welcoming expression, direct eye contact',
 ]
 
-const GREENBOX_PROMPT =
-  'Using the provided reference image, preserve the face, identity, age, and pose exactly. Isolate the subject cleanly and place them on a solid chroma green (#00FF00) background. No extra objects or text. Keep clothing and proportions unchanged. High-quality cutout.'
-const GREEN_THRESHOLD = {
-  minGreen: 120,
-  minDominance: 35,
-  ratio: 0.6,
-}
-
 function normalizeLanguageCode(value: string): string {
   return value.trim().toUpperCase()
 }
 
-async function detectGreenScreen(file: File): Promise<boolean> {
-  const url = URL.createObjectURL(file)
-  try {
-    const img = new Image()
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve()
-      img.onerror = () => reject(new Error('Failed to load image'))
-      img.src = url
-    })
-
-    const maxDim = 200
-    const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
-    const width = Math.max(1, Math.round(img.width * scale))
-    const height = Math.max(1, Math.round(img.height * scale))
-    const canvas = document.createElement('canvas')
-    canvas.width = width
-    canvas.height = height
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return false
-
-    ctx.drawImage(img, 0, 0, width, height)
-    const { data } = ctx.getImageData(0, 0, width, height)
-    const margin = Math.max(2, Math.round(Math.min(width, height) * 0.12))
-    let total = 0
-    let green = 0
-
-    for (let y = 0; y < height; y += 2) {
-      for (let x = 0; x < width; x += 2) {
-        if (x > margin && x < width - margin && y > margin && y < height - margin) continue
-        const idx = (y * width + x) * 4
-        const r = data[idx]
-        const g = data[idx + 1]
-        const b = data[idx + 2]
-        total += 1
-        if (
-          g >= GREEN_THRESHOLD.minGreen &&
-          g - r >= GREEN_THRESHOLD.minDominance &&
-          g - b >= GREEN_THRESHOLD.minDominance
-        ) {
-          green += 1
-        }
-      }
-    }
-
-    if (!total) return false
-    return green / total >= GREEN_THRESHOLD.ratio
-  } catch {
-    return false
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
-
 async function uploadSingleAvatar(file: File): Promise<Avatar> {
-  const alreadyGreen = await detectGreenScreen(file)
-
-  if (alreadyGreen) {
-    const uploadFormData = new FormData()
-    uploadFormData.append('files', file)
-    const uploadRes = await authFetch(apiUrl('/api/avatars/upload'), {
-      method: 'POST',
-      body: uploadFormData,
-    })
-    if (!uploadRes.ok) {
-      const raw = await uploadRes.json().catch(() => ({}))
-      throw new Error(getApiError(raw, 'Upload failed'))
-    }
-    const raw = await uploadRes.json().catch(() => ({}))
-    const data = unwrapApiData<{ avatars?: Avatar[] }>(raw)
-    const uploadedAvatar = data.avatars?.[0]
-    if (!uploadedAvatar) {
-      throw new Error('Upload failed: avatar response missing')
-    }
-    return uploadedAvatar
-  }
-
-  const generateFormData = new FormData()
-  generateFormData.append('referenceImage', file)
-  generateFormData.append('prompt', GREENBOX_PROMPT)
-  generateFormData.append('aspectRatio', '9:16')
-
-  const generatedRes = await authFetchWithRateLimitRetry(apiUrl('/api/avatars/generate-from-reference'), {
+  const uploadFormData = new FormData()
+  uploadFormData.append('files', file)
+  const uploadRes = await authFetch(apiUrl('/api/avatars/upload'), {
     method: 'POST',
-    body: generateFormData,
+    body: uploadFormData,
   })
-  if (!generatedRes.ok) {
-    const raw = await generatedRes.json().catch(() => ({}))
-    throw new Error(getApiError(raw, 'Failed to process avatar'))
+  if (!uploadRes.ok) {
+    const raw = await uploadRes.json().catch(() => ({}))
+    throw new Error(getApiError(raw, 'Upload failed'))
   }
-  const generatedRaw = await generatedRes.json().catch(() => ({}))
-  const generatedData = unwrapApiData<{ localPath: string }>(generatedRaw)
-  const localPath = generatedData.localPath
-  const filename = decodeURIComponent(localPath.split('/').pop() || `avatar_${Date.now()}.png`)
-  return {
-    name: filename,
-    filename,
-    url: localPath,
-    source: 'generated',
+  const raw = await uploadRes.json().catch(() => ({}))
+  const data = unwrapApiData<{ avatars?: Avatar[] }>(raw)
+  const uploadedAvatar = data.avatars?.[0]
+  if (!uploadedAvatar) {
+    throw new Error('Upload failed: avatar response missing')
   }
+  return uploadedAvatar
 }
 
 async function runWithConcurrency<T>(
@@ -862,7 +773,7 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
       return
     }
 
-    let enabledLanguages = translationLanguages
+    const enabledLanguages = translationLanguages
       .map((value) => normalizeLanguageCode(value))
       .filter((code) => Boolean(LANGUAGE_CODE_TO_NAME[code]))
 
@@ -880,9 +791,6 @@ sharp focus, detailed skin texture, 8k uhd, high resolution, photorealistic, pro
           const normalized = normalizeLanguageCode(detectData.languageCode || '')
           if (LANGUAGE_CODE_TO_NAME[normalized]) {
             detectedLanguage = normalized
-            if (!enabledLanguages.includes(normalized)) {
-              enabledLanguages = [normalized, ...enabledLanguages].slice(0, MAX_TRANSLATION_LANGUAGES)
-            }
           }
         }
       } catch {
