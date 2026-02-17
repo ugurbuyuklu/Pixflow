@@ -1,7 +1,7 @@
 # CLAUDE.md - Pixflow Project Intelligence
 
 > Primary reference for the active Pixflow web app.
-> Last updated: 2026-02-16
+> Last updated: 2026-02-17
 
 ## Project
 
@@ -258,6 +258,7 @@ Events logged to `logs/pipeline-events.jsonl`. Run `gate:release` before deployi
 - Prompt Factory: `generateSinglePromptWithTheme()` catches ALL errors and returns fallback — outer code sees "success". Always check server logs for `[generateSinglePrompt]` prefixed errors.
 - Prompt Factory: `ResearchBrief` properties live under `trend_findings.*`, `technical_recommendations.*`, `competitor_insights.*`, `sub_themes[]` — NOT flat fields like `key_themes` or `visual_elements`.
 - Research: if web grounding silently falls back to model-only behavior, verify server process is restarted and confirm `effective_mode` in `research` meta.
+- Mock-provider video pipelines now emit valid MP4 data URLs (Kling/Hedra). If FFmpeg reports `moov atom not found`, suspect stale old mock files generated before 2026-02-17.
 - Legacy materials in `Burgflow Archive/` - do not reference in new code
 - Keep "Pixflow" naming in all new docs, routes, and UX copy
 

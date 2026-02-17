@@ -1,6 +1,6 @@
 # Pixflow
 
-Last updated: 2026-02-16
+Last updated: 2026-02-17
 
 Pixflow is a web-first AI production workspace for social/media creative pipelines.
 
@@ -88,6 +88,8 @@ npm run smoke:api
 npm run smoke:journey
 npm run gate:release
 ```
+
+Current local status (2026-02-17): `gate:release` passes end-to-end.
 
 ## Pipeline Lock (PGP)
 

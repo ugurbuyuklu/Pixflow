@@ -1,12 +1,13 @@
 # Repository Structure (Current)
 
-Last updated: 2026-02-15
+Last updated: 2026-02-17
 
 This repo is an active web-first Pixflow workspace. Keep a strict split between source-of-truth code and runtime artifacts.
 
 ## Active source-of-truth areas
 
 - `src/renderer` - React UI (pages, shared components, stores, hooks)
+- `src/renderer/public` - web static assets (e.g., favicon)
 - `src/server` - Express API (routes, services, db, telemetry, smoke)
 - `src/constants` - shared limits and cross-runtime constants
 - `scripts` - operational scripts (gate, deploy, telemetry, PGP lock guard)

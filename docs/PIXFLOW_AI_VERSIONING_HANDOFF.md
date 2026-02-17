@@ -7,7 +7,7 @@ This document is a machine-readable handoff for another AI agent to understand:
 3. what is still pending.
 
 Date: 2026-02-07
-Last updated: 2026-02-16 (docs sync: Avatar Studio direct-audio flow + transcript media alignment + custom prompt fallback + text-to-json limit update)
+Last updated: 2026-02-17 (docs sync: mock media stabilization + captions/lifetime mock pipeline fix + release gate recovery)
 Project root: `/Users/pixery/Projects/pixflow`
 
 ---
@@ -26,11 +26,33 @@ Project root: `/Users/pixery/Projects/pixflow`
 - Key automation/workflow files:
   - `/Users/pixery/Projects/pixflow/.github/workflows/ci.yml`
   - `/Users/pixery/Projects/pixflow/.github/workflows/nightly-real-smoke.yml`
-- Unit tests: 94 tests via Vitest (`npm run test`), integrated into `gate:release`.
+- Unit tests: 100 tests via Vitest (`npm run test`), integrated into `gate:release`.
 - Static analysis: Biome v2.3.14 linter + formatter (`npm run lint:biome`), integrated into `gate:release` as first check. All rules at `"error"` severity (0 warnings).
 - High-priority residual risk:
   - caption pipeline still depends on external model availability/quotas; provider outages or auth errors can fail generation even when local checks are green.
   - historical sections below include Electron-era notes kept for traceability; treat current architecture sections and latest updates as source of truth.
+
+### 0.10) Pipeline Stabilization + Gate Recovery (2026-02-17)
+
+- Commit pushed:
+  - `dbb2561` (`fix: stabilize pipelines, mock media outputs, and release gate`)
+- Mock video output reliability fix:
+  - Added valid MP4 mock payload helper in `/Users/pixery/Projects/pixflow/src/server/services/providerRuntime.ts` (`makeMockMp4DataUrl`).
+  - Switched Kling/Hedra mock video responses to valid MP4 data URLs:
+    - `/Users/pixery/Projects/pixflow/src/server/services/kling.ts`
+    - `/Users/pixery/Projects/pixflow/src/server/services/hedra.ts`
+- Captions mock behavior fix:
+  - `/api/captions/auto-subtitle` mock mode now returns source video URL + mock transcript + segments/word metadata.
+  - This unblocks downstream `/api/captions/render-selected` in mock mode.
+  - File: `/Users/pixery/Projects/pixflow/src/server/services/captions.ts`
+- Investigation-driven validation (mock providers):
+  - `captions` flow: `auto-subtitle` + `render-selected` ✅
+  - `lifetime` flow: `run` + `create-videos` + final merged video ✅
+  - `avatars` flow: `i2v-startend` + `reaction` ✅
+- Gate blockers resolved:
+  - Fixed Biome/a11y/format violations across renderer/server touched files.
+  - Updated PGP lock with explicit unlock note (`npm run pgp:lock:update`) and verified lock check pass.
+  - Full `npm run gate:release` now passes end-to-end.
 
 ### 0.6) UI Output + Job Monitor Update (2026-02-15)
 
