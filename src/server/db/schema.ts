@@ -197,7 +197,7 @@ export function seedCaptionPresets(db: Database.Database): void {
       prompt: {
         language: 'auto',
         fontName: 'Poppins',
-        fontSize: 38,
+        fontSize: 72,
         fontWeight: 'black',
         fontColor: '#ffffff',
         highlightColor: '#7c3aed',
@@ -217,7 +217,7 @@ export function seedCaptionPresets(db: Database.Database): void {
       prompt: {
         language: 'auto',
         fontName: 'Inter',
-        fontSize: 30,
+        fontSize: 72,
         fontWeight: 'bold',
         fontColor: '#ffffff',
         highlightColor: '#ffffff',
@@ -237,7 +237,7 @@ export function seedCaptionPresets(db: Database.Database): void {
       prompt: {
         language: 'auto',
         fontName: 'Poppins',
-        fontSize: 24,
+        fontSize: 72,
         fontWeight: 'normal',
         fontColor: '#f5f5f5',
         highlightColor: '#f5f5f5',
@@ -257,7 +257,7 @@ export function seedCaptionPresets(db: Database.Database): void {
       prompt: {
         language: 'auto',
         fontName: 'Poppins',
-        fontSize: 40,
+        fontSize: 72,
         fontWeight: 'bold',
         fontColor: '#ffffff',
         highlightColor: '#22c55e',
@@ -276,9 +276,15 @@ export function seedCaptionPresets(db: Database.Database): void {
   const insert = db.prepare(
     'INSERT INTO presets (product_id, user_id, name, description, prompt, is_builtin) VALUES (?, NULL, ?, ?, ?, 1)',
   )
+  const update = db.prepare(
+    'UPDATE presets SET description = ?, prompt = ? WHERE product_id = ? AND name = ? AND is_builtin = 1',
+  )
 
   for (const preset of presets) {
-    if (existingNames.has(preset.name)) continue
-    insert.run(productRow.id, preset.name, preset.description, JSON.stringify(preset.prompt))
+    if (existingNames.has(preset.name)) {
+      update.run(preset.description, JSON.stringify(preset.prompt), productRow.id, preset.name)
+    } else {
+      insert.run(productRow.id, preset.name, preset.description, JSON.stringify(preset.prompt))
+    }
   }
 }

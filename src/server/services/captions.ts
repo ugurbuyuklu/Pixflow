@@ -504,7 +504,7 @@ function buildAssStyle(input: RenderSelectedCaptionsInput): string {
   const position = input.position ?? 'bottom'
   const alignment = position === 'top' ? 8 : position === 'center' ? 5 : 2
   const fontName = (input.fontName ?? 'Poppins').replace(/[^a-zA-Z0-9 _-]/g, '') || 'Poppins'
-  const fontSize = Math.round(clamp(input.fontSize ?? 48, 12, 160))
+  const fontSize = Math.round(clamp(input.fontSize ?? 72, 12, 160))
   const outline = Number(clamp(input.strokeWidth ?? 2, 0, 12).toFixed(2))
   const bold = normalizeFontWeight(input.fontWeight) === 'bold' ? -1 : 0
   const xOffset = Math.round(input.xOffset ?? 0)
@@ -719,7 +719,7 @@ export async function renderSelectedCaptions(
       const position = input.position ?? 'bottom'
       const alignment = position === 'top' ? 8 : position === 'center' ? 5 : 2
       const fontName = (input.fontName ?? 'Poppins').replace(/[^a-zA-Z0-9 _-]/g, '') || 'Poppins'
-      const fontSize = Math.round(clamp(input.fontSize ?? 48, 12, 160))
+      const fontSize = Math.round(clamp(input.fontSize ?? 72, 12, 160))
       const outline = Number(clamp(input.strokeWidth ?? 2, 0, 12).toFixed(2))
       const bold = normalizeFontWeight(input.fontWeight) === 'bold' ? -1 : 0
       const forceStyle = [
