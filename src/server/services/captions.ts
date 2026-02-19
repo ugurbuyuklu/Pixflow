@@ -437,9 +437,7 @@ function normalizeRenderSegments(
   for (const segment of parsed) {
     const wordCount = segment.text.split(/\s+/).filter(Boolean).length
     const duration = segment.end - segment.start
-    const shouldSplit =
-      wordCount > wordsPerSubtitle &&
-      (parsed.length <= 2 || duration >= 4 || wordCount >= Math.max(wordsPerSubtitle + 3, wordsPerSubtitle * 2))
+    const shouldSplit = wordCount > wordsPerSubtitle
 
     if (!shouldSplit) {
       expanded.push({ ...segment })

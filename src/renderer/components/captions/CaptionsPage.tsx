@@ -263,8 +263,9 @@ export default function CaptionsPage() {
   const [timingOffsetMs, setTimingOffsetMs] = useState(0)
   const [yOffsetTouched, setYOffsetTouched] = useState(false)
   const [wordsPerSubtitle, setWordsPerSubtitle] = useState(4)
-  const [enableAnimation, setEnableAnimation] = useState(true)
+
   const [captionError, setCaptionError] = useState<string | null>(null)
+  const [hasGenerated, setHasGenerated] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [renderingSelection, setRenderingSelection] = useState(false)
   const [segmentLoading, setSegmentLoading] = useState(false)
@@ -357,7 +358,7 @@ export default function CaptionsPage() {
       yOffset,
       timingOffsetMs,
       wordsPerSubtitle,
-      enableAnimation,
+      enableAnimation: true,
     }),
     [
       fontName,
@@ -374,7 +375,6 @@ export default function CaptionsPage() {
       yOffset,
       timingOffsetMs,
       wordsPerSubtitle,
-      enableAnimation,
     ],
   )
 
@@ -564,7 +564,6 @@ export default function CaptionsPage() {
       setTimingOffsetMs(typeof p.timingOffsetMs === 'number' ? Math.round(p.timingOffsetMs) : 0)
       setYOffsetTouched(true)
       setWordsPerSubtitle(p.wordsPerSubtitle ?? 4)
-      setEnableAnimation(Boolean(p.enableAnimation))
       setPresetName(preset.name)
     },
     [presets],
@@ -785,7 +784,7 @@ export default function CaptionsPage() {
         formData.append('xOffset', String(submitXOffset))
         formData.append('yOffset', String(submitYOffset))
         formData.append('wordsPerSubtitle', String(wordsPerSubtitle))
-        formData.append('enableAnimation', enableAnimation ? 'true' : 'false')
+        formData.append('enableAnimation', 'true')
         res = await authFetch(apiUrl('/api/captions/auto-subtitle'), {
           method: 'POST',
           body: formData,
@@ -810,7 +809,7 @@ export default function CaptionsPage() {
             xOffset: submitXOffset,
             yOffset: submitYOffset,
             wordsPerSubtitle,
-            enableAnimation,
+            enableAnimation: true,
           }),
         })
       }
@@ -825,6 +824,7 @@ export default function CaptionsPage() {
         transcription?: string
         segments?: Array<{ id?: string; start?: number; end?: number; text?: string }>
       }>(raw)
+      setHasGenerated(true)
       setOutputUrl(data.videoUrl)
       setTranscription(data.transcription || null)
       setSourceVideoUrl((prev) => prev || data.sourceVideoUrl || directVideoUrl || null)
@@ -1327,15 +1327,6 @@ export default function CaptionsPage() {
                   )
                 }
               />
-              <Select
-                label="Animation"
-                value={enableAnimation ? 'on' : 'off'}
-                onChange={(e) => setEnableAnimation(e.target.value === 'on')}
-                options={[
-                  { value: 'on', label: 'Enabled' },
-                  { value: 'off', label: 'Disabled' },
-                ]}
-              />
             </div>
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
@@ -1419,48 +1410,50 @@ export default function CaptionsPage() {
           </div>
         </div>
 
-        <div data-output-category="captions" className="bg-surface-50 rounded-lg p-4 space-y-4">
-          <StepHeader stepNumber={4} title="Output" />
-          <div className="space-y-3">
-            {outputUrl && (
-              // biome-ignore lint/a11y/useMediaCaption: generated preview videos do not have captions yet
-              <video controls src={outputUrl} className="w-full rounded-lg border border-surface-200" />
-            )}
-            {!outputUrl && (
-              <div className="rounded-lg border border-surface-200 bg-surface-0 p-6 text-sm text-surface-500">
-                Captioned video will appear here.
-              </div>
-            )}
-            {outputUrl && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => {
-                  const a = document.createElement('a')
-                  a.href = outputUrl
-                  a.download = 'captioned-video.mp4'
-                  a.click()
-                }}
-              >
-                Download Captioned Video
-              </Button>
-            )}
-            {transcription && (
-              <div className="rounded-lg border border-surface-200 bg-surface-0 p-4 text-xs text-surface-500 whitespace-pre-wrap">
-                {transcription}
-              </div>
-            )}
-            {historyEntries.length > 0 && (
-              <div className="pt-2 border-t border-surface-200">
-                <PreviousGenerationsPanel
-                  entries={historyEntries}
-                  onDeleteEntry={removeHistory}
-                  onClear={() => removeManyHistory(historyEntries.map((entry) => entry.id))}
-                />
-              </div>
-            )}
+        {hasGenerated && (
+          <div data-output-category="captions" className="bg-surface-50 rounded-lg p-4 space-y-4">
+            <StepHeader stepNumber={4} title="Output" />
+            <div className="space-y-3">
+              {outputUrl && (
+                // biome-ignore lint/a11y/useMediaCaption: generated preview videos do not have captions yet
+                <video controls src={outputUrl} className="w-full rounded-lg border border-surface-200" />
+              )}
+              {!outputUrl && (
+                <div className="rounded-lg border border-surface-200 bg-surface-0 p-6 text-sm text-surface-500">
+                  Captioned video will appear here.
+                </div>
+              )}
+              {outputUrl && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    const a = document.createElement('a')
+                    a.href = outputUrl
+                    a.download = 'captioned-video.mp4'
+                    a.click()
+                  }}
+                >
+                  Download Captioned Video
+                </Button>
+              )}
+              {transcription && (
+                <div className="rounded-lg border border-surface-200 bg-surface-0 p-4 text-xs text-surface-500 whitespace-pre-wrap">
+                  {transcription}
+                </div>
+              )}
+              {historyEntries.length > 0 && (
+                <div className="pt-2 border-t border-surface-200">
+                  <PreviousGenerationsPanel
+                    entries={historyEntries}
+                    onDeleteEntry={removeHistory}
+                    onClear={() => removeManyHistory(historyEntries.map((entry) => entry.id))}
+                  />
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )
