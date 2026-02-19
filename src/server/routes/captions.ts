@@ -4,7 +4,12 @@ import express from 'express'
 import rateLimit from 'express-rate-limit'
 import multer from 'multer'
 import { v4 as uuidv4 } from 'uuid'
-import { renderSelectedCaptions, runAutoSubtitle, uploadVideoFile } from '../services/captions.js'
+import {
+  normalizeRenderSegments,
+  renderSelectedCaptions,
+  runAutoSubtitle,
+  uploadVideoFile,
+} from '../services/captions.js'
 import { sendError, sendSuccess } from '../utils/http.js'
 import { buildJobOutputFileName, createJobOutputDir } from '../utils/outputPaths.js'
 
@@ -234,10 +239,15 @@ export function createCaptionsRouter(config: CaptionsRouterConfig): express.Rout
         subtitleCount: result.subtitleCount,
       })
 
-      const segments = extractCaptionSegments({
+      const rawSegments = extractCaptionSegments({
         transcriptionMetadata: result.transcriptionMetadata,
         words: result.words,
       })
+      const wordsPerSubtitle = input.wordsPerSubtitle ?? 4
+      const segments = normalizeRenderSegments(rawSegments, wordsPerSubtitle, 0).map((seg, i) => ({
+        id: `seg-${i + 1}`,
+        ...seg,
+      }))
 
       sendSuccess(res, {
         ...result,

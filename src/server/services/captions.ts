@@ -418,7 +418,7 @@ function splitTextByWordLimit(text: string, wordsPerSubtitle: number): string[] 
   return chunks
 }
 
-function normalizeRenderSegments(
+export function normalizeRenderSegments(
   segments: CaptionSegment[],
   wordsPerSubtitle: number,
   timingOffsetMs = 0,
@@ -545,14 +545,10 @@ function escapeAssText(text: string): string {
 }
 
 function buildHighlightedDialogueText(text: string, input: RenderSelectedCaptionsInput): string {
-  const words = sanitizeSubtitleText(text).split(' ').filter(Boolean)
-  if (words.length === 0) return ''
+  const cleaned = sanitizeSubtitleText(text)
+  if (!cleaned) return ''
   const highlight = toAssColor(input.highlightColor ?? '#7c3aed', [124, 58, 237], 0)
-  if (words.length === 1) {
-    return `{\\1c${highlight}}${escapeAssText(words[0])}{\\r}`
-  }
-  const [first, ...rest] = words
-  return `{\\1c${highlight}}${escapeAssText(first)}{\\r} ${escapeAssText(rest.join(' '))}`
+  return `{\\1c${highlight}}${escapeAssText(cleaned)}{\\r}`
 }
 
 function buildAssFile(
