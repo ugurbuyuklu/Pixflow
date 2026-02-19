@@ -14,6 +14,7 @@ import { StepHeader } from '../asset-monster/StepHeader'
 import { PreviousGenerationsPanel } from '../shared/PreviousGenerationsPanel'
 import { Button } from '../ui/Button'
 import { EmptyState } from '../ui/EmptyState'
+import { StatusBanner } from '../ui/StatusBanner'
 import { AvatarSelectionCard } from './shared/AvatarSelectionCard'
 
 interface ReactionVideoPageProps {
@@ -37,6 +38,7 @@ export function ReactionVideoPage({
     reactionAspectRatio,
     reactionGenerating,
     reactionVideoUrl,
+    reactionError,
     setSelectedReaction,
     setReactionDuration,
     setReactionAspectRatio,
@@ -188,6 +190,14 @@ export function ReactionVideoPage({
             </div>
 
             {/* Generate */}
+            {reactionError && (
+              <StatusBanner
+                type={reactionError.type}
+                message={reactionError.message}
+                onDismiss={() => useAvatarStore.setState({ reactionError: null })}
+              />
+            )}
+
             <div className="pt-2">
               {reactionGenerating ? (
                 <div className="space-y-4 flex flex-col items-center">

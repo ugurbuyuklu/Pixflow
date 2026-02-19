@@ -41,6 +41,7 @@ import { Button } from '../ui/Button'
 import { SegmentedTabs } from '../ui/navigation/SegmentedTabs'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
+import { StatusBanner } from '../ui/StatusBanner'
 import { StatusPill } from '../ui/StatusPill'
 import { Textarea } from '../ui/Textarea'
 import { CameraPresetCards } from './CameraPresetCards'
@@ -140,6 +141,7 @@ function Img2ImgContent({ modeStep }: { modeStep: React.ReactNode }) {
     format: 'JPG',
   })
   const [img2imgBatchGenerating, setImg2imgBatchGenerating] = useState(false)
+  const [img2imgError, setImg2imgError] = useState<string | null>(null)
   const [modalImage, setModalImage] = useState<string | null>(null)
   const [modalItemId, setModalItemId] = useState<string | null>(null)
   const [likedItems, setLikedItems] = useState<Set<string>>(new Set())
@@ -248,6 +250,7 @@ function Img2ImgContent({ modeStep }: { modeStep: React.ReactNode }) {
     })
 
     setImg2imgBatchGenerating(true)
+    setImg2imgError(null)
     try {
       await transformBatch(ids, effectivePrompt, batchSettings)
       if (activeHistoryIdRef.current !== historyId) return
@@ -273,12 +276,14 @@ function Img2ImgContent({ modeStep }: { modeStep: React.ReactNode }) {
             .filter((artifact) => Boolean(artifact.url)),
         })
       } else {
-        patchHistory(historyId, {
-          status: 'failed',
-          message: 'No output image generated',
-          artifacts: [],
-        })
+        const errMsg = 'No output image generated'
+        patchHistory(historyId, { status: 'failed', message: errMsg, artifacts: [] })
+        setImg2imgError(errMsg)
       }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Failed to generate images'
+      patchHistory(historyId, { status: 'failed', message: errMsg, artifacts: [] })
+      setImg2imgError(errMsg)
     } finally {
       setImg2imgBatchGenerating(false)
       if (activeHistoryIdRef.current === historyId) {
@@ -389,6 +394,7 @@ function Img2ImgContent({ modeStep }: { modeStep: React.ReactNode }) {
               options={IMG2IMG_FORMATS.map((fmt) => ({ value: fmt, label: fmt }))}
             />
           </div>
+          {img2imgError && <StatusBanner type="error" message={img2imgError} onDismiss={() => setImg2imgError(null)} />}
           <div className="pt-4 mt-4 border-t border-surface-200/60">
             {!img2imgBatchGenerating && (
               <button
@@ -684,6 +690,7 @@ function Img2VideoContent({ modeStep }: { modeStep: React.ReactNode }) {
   } = useImg2VideoQueueStore()
   const activeHistoryIdRef = useRef<string | null>(null)
   const [cameraControlsOpen, setCameraControlsOpen] = useState(true)
+  const [img2videoError, setImg2videoError] = useState<string | null>(null)
 
   const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set())
   const outputHistoryEntries = useOutputHistoryStore((state) => state.entries)
@@ -790,6 +797,7 @@ function Img2VideoContent({ modeStep }: { modeStep: React.ReactNode }) {
       artifacts: [],
     })
 
+    setImg2videoError(null)
     await generateQueue({ workflowType: 'img2video' })
     if (activeHistoryIdRef.current !== historyId) return
 
@@ -814,11 +822,12 @@ function Img2VideoContent({ modeStep }: { modeStep: React.ReactNode }) {
           .filter((artifact) => Boolean(artifact.url)),
       })
     } else {
-      patchHistory(historyId, {
-        status: 'failed',
-        message: 'No completed output in this run',
-        artifacts: [],
-      })
+      const errMsg =
+        failedCount > 0
+          ? `All ${failedCount} video${failedCount === 1 ? '' : 's'} failed`
+          : 'No completed output in this run'
+      patchHistory(historyId, { status: 'failed', message: errMsg, artifacts: [] })
+      setImg2videoError(errMsg)
     }
 
     activeHistoryIdRef.current = null
@@ -942,6 +951,9 @@ function Img2VideoContent({ modeStep }: { modeStep: React.ReactNode }) {
               options={DURATIONS.map((d) => ({ value: d, label: `${d}s` }))}
             />
           </div>
+          {img2videoError && (
+            <StatusBanner type="error" message={img2videoError} onDismiss={() => setImg2videoError(null)} />
+          )}
           <div className="pt-4 mt-4 border-t border-surface-200/60">
             <Button
               variant="lime"

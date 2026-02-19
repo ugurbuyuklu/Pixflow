@@ -804,6 +804,7 @@ export default function PromptFactoryPage() {
               icon={<Sparkles className="w-5 h-5" />}
               onClick={generate}
               disabled={activeConcepts.length === 0}
+              title={activeConcepts.length === 0 ? 'Enter a concept or upload an image to continue' : undefined}
               className="w-full"
             >
               Generate {count}

@@ -147,7 +147,7 @@ export function SideNav() {
                 }`}
               >
                 <div className={`flex items-center ${sidebarCollapsed ? '' : 'gap-3'}`}>
-                  <item.icon className={`w-5 h-5 ${isActive ? 'text-brand-500' : ''}`} />
+                  <item.icon className={`w-5 h-5 ${isActive ? 'text-brand-400' : ''}`} />
                   {!sidebarCollapsed && (
                     <span className="flex items-center gap-1.5 min-w-0">
                       <span className="whitespace-nowrap">
@@ -181,13 +181,13 @@ export function SideNav() {
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className="flex items-center text-surface-500 hover:text-surface-900 transition w-full"
         >
-          <span className="w-8 h-8 inline-flex items-center justify-center">
+          <span className="w-11 h-11 inline-flex items-center justify-center">
             {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </span>
           <span className="sr-only">Toggle sidebar</span>
         </button>
         <div className="flex items-center text-surface-500 w-full">
-          <NotificationBell compact buttonClassName="w-8 h-8 p-0" />
+          <NotificationBell compact buttonClassName="w-11 h-11 p-0" />
         </div>
         <button
           type="button"
@@ -195,13 +195,13 @@ export function SideNav() {
           title={mode === 'dark' ? 'Light mode' : 'Dark mode'}
           className="flex items-center text-surface-500 hover:text-surface-900 transition w-full"
         >
-          <span className="w-8 h-8 inline-flex items-center justify-center">
+          <span className="w-11 h-11 inline-flex items-center justify-center">
             {mode === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </span>
           <span className="sr-only">Toggle theme</span>
         </button>
-        <div className="grid grid-cols-[32px_1fr] items-center gap-2 text-surface-500 w-full">
-          <UserMenu compact buttonClassName="w-8 h-8 p-0" />
+        <div className="grid grid-cols-[44px_1fr] items-center gap-2 text-surface-500 w-full">
+          <UserMenu compact buttonClassName="w-11 h-11 p-0" />
           {!sidebarCollapsed && <span className="text-sm font-medium">{userName}</span>}
         </div>
       </div>

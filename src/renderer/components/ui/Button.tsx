@@ -43,7 +43,7 @@ const variantClasses: Record<Variant, string> = {
 }
 
 const sizeClasses: Record<Size, string> = {
-  xs: 'p-1 text-xs gap-1',
+  xs: 'p-1 text-xs gap-1 min-h-[28px]',
   sm: 'px-3 py-2 text-xs gap-1.5 min-h-[36px]',
   md: 'px-4 py-2.5 text-sm gap-2 min-h-[44px]',
   lg: 'px-6 py-3 text-base gap-2 min-h-[44px]',

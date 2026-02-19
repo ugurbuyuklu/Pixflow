@@ -12,6 +12,7 @@ import { PreviousGenerationsPanel } from '../shared/PreviousGenerationsPanel'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Select } from '../ui/Select'
+import { StatusBanner } from '../ui/StatusBanner'
 
 const FONT_OPTIONS = [
   { value: 'Poppins', label: 'Poppins' },
@@ -263,6 +264,7 @@ export default function CaptionsPage() {
   const [yOffsetTouched, setYOffsetTouched] = useState(false)
   const [wordsPerSubtitle, setWordsPerSubtitle] = useState(4)
   const [enableAnimation, setEnableAnimation] = useState(true)
+  const [captionError, setCaptionError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [renderingSelection, setRenderingSelection] = useState(false)
   const [segmentLoading, setSegmentLoading] = useState(false)
@@ -761,6 +763,7 @@ export default function CaptionsPage() {
     setSubmitting(true)
     setOutputUrl(null)
     setTranscription(null)
+    setCaptionError(null)
     try {
       let res: Response
       const submitYOffset = clampProviderYOffset(Math.round(clampedYOffset))
@@ -858,11 +861,10 @@ export default function CaptionsPage() {
       })
       notify.success('Captions generated')
     } catch (err) {
-      patchHistory(historyId, {
-        status: 'failed',
-        message: err instanceof Error ? err.message : 'Failed to generate captions',
-      })
-      notify.error(err instanceof Error ? err.message : 'Failed to generate captions')
+      const errMsg = err instanceof Error ? err.message : 'Failed to generate captions'
+      patchHistory(historyId, { status: 'failed', message: errMsg })
+      setCaptionError(errMsg)
+      notify.error(errMsg)
     } finally {
       setSubmitting(false)
     }
@@ -939,7 +941,9 @@ export default function CaptionsPage() {
           notify.success('Rendered with selected sentences')
         }
       } catch (error) {
-        notify.error(error instanceof Error ? error.message : 'Failed to render selected captions')
+        const errMsg = error instanceof Error ? error.message : 'Failed to render selected captions'
+        setCaptionError(errMsg)
+        notify.error(errMsg)
       } finally {
         setRenderingSelection(false)
       }
@@ -1397,6 +1401,9 @@ export default function CaptionsPage() {
                   ))}
                 </div>
               </div>
+            )}
+            {captionError && (
+              <StatusBanner type="error" message={captionError} onDismiss={() => setCaptionError(null)} />
             )}
             <div className="pt-4 mt-1 border-t border-surface-200/60">
               <Button

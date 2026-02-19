@@ -1,5 +1,7 @@
-import { BarChart3, Film, Layers, LayoutGrid, MessageSquareText, TimerReset, Video, Wand2, Zap } from 'lucide-react'
+import { BarChart3, Film, Layers, LayoutGrid, MessageSquareText, TimerReset, Video, Wand2, X, Zap } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useNavigationStore } from '../../stores/navigationStore'
+import { type OutputHistoryEntry, useOutputHistoryStore } from '../../stores/outputHistoryStore'
 import { BrandedName, brandedName } from '../ui/BrandedName'
 
 const CATEGORIES = [
@@ -52,25 +54,102 @@ const CATEGORIES = [
   },
 ]
 
+const VISITED_KEY = 'pixflow_visited'
+const BANNER_DISMISSED_KEY = 'pixflow_banner_dismissed'
+
+function RecentJobsRow({ entries }: { entries: OutputHistoryEntry[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {entries.map((entry) => (
+        <span
+          key={entry.id}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-100 border border-surface-200 text-xs text-surface-500"
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full shrink-0 ${entry.status === 'completed' ? 'bg-success' : 'bg-danger'}`}
+          />
+          {entry.title}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export default function HomePage() {
   const navigate = useNavigationStore((s) => s.navigate)
+  const allEntries = useOutputHistoryStore((s) => s.entries)
+  const [isReturning, setIsReturning] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+
+  useEffect(() => {
+    if (localStorage.getItem(BANNER_DISMISSED_KEY) === '1') {
+      setDismissed(true)
+      return
+    }
+    if (localStorage.getItem(VISITED_KEY) === '1') {
+      setIsReturning(true)
+    } else {
+      localStorage.setItem(VISITED_KEY, '1')
+    }
+  }, [])
+
+  const handleDismiss = () => {
+    setDismissed(true)
+    localStorage.setItem(BANNER_DISMISSED_KEY, '1')
+  }
+
+  const recentEntries = allEntries
+    .filter((e) => e.status === 'completed' || e.status === 'failed')
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, 3)
 
   return (
     <div className="space-y-6">
-      <div className="bg-surface-50 rounded-xl border border-surface-200/50 p-6 flex items-center gap-4">
-        <div className="w-12 h-12 rounded-xl bg-brand-500/10 flex items-center justify-center">
-          <LayoutGrid className="w-6 h-6 text-brand-500" />
+      {!dismissed && (
+        <div className="bg-surface-50 rounded-xl border border-surface-200/50 p-6 flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-brand-500/10 flex items-center justify-center shrink-0">
+            <LayoutGrid className="w-6 h-6 text-brand-500" />
+          </div>
+          <div className="flex-1 min-w-0">
+            {isReturning ? (
+              <>
+                <h2 className="text-xl font-black text-surface-900">
+                  Welcome back to <BrandedName prefix="Pix" suffix="flow" />
+                </h2>
+                {recentEntries.length > 0 ? (
+                  <>
+                    <p className="text-sm text-surface-500 mt-1">Here's what you've been working on:</p>
+                    <RecentJobsRow entries={recentEntries} />
+                  </>
+                ) : (
+                  <p className="text-sm text-surface-500 mt-1">Pick up where you left off — choose a module below.</p>
+                )}
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-black text-surface-900">
+                  Welcome to <BrandedName prefix="Pix" suffix="flow" />
+                </h2>
+                <p className="text-sm text-surface-500">
+                  <BrandedName prefix="Pix" suffix="flow" /> helps content creators, social media teams, and marketing
+                  artists ship high‑quality assets faster, with less manual work and more consistent results.
+                </p>
+              </>
+            )}
+          </div>
+          {isReturning && (
+            <button
+              type="button"
+              onClick={handleDismiss}
+              aria-label="Dismiss banner"
+              className="shrink-0 text-surface-400 hover:text-surface-600 transition-colors rounded-md p-1 hover:bg-surface-100"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
-        <div>
-          <h2 className="text-xl font-black text-surface-900">
-            Welcome to <BrandedName prefix="Pix" suffix="flow" />
-          </h2>
-          <p className="text-sm text-surface-500">
-            <BrandedName prefix="Pix" suffix="flow" /> helps content creators, social media teams, and marketing artists
-            ship high‑quality assets faster, with less manual work and more consistent results.
-          </p>
-        </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {CATEGORIES.map((category, index) => {

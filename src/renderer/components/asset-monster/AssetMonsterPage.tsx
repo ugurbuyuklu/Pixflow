@@ -894,6 +894,13 @@ Examples:
                     ? !hasCustomPromptReady
                     : selectedLibraryPrompts.size === 0)
               }
+              title={
+                !batchLoading && totalImages === 0
+                  ? promptSource === 'custom'
+                    ? 'Enter a custom prompt to continue'
+                    : 'Select at least one prompt to continue'
+                  : undefined
+              }
               className="w-full"
             >
               {batchLoading ? (

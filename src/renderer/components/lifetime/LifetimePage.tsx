@@ -13,6 +13,7 @@ import { Button } from '../ui/Button'
 import { SegmentedTabs } from '../ui/navigation/SegmentedTabs'
 import { ProgressBar } from '../ui/ProgressBar'
 import { Slider } from '../ui/Slider'
+import { StatusBanner } from '../ui/StatusBanner'
 
 interface LifetimeFrame {
   age: number
@@ -112,6 +113,7 @@ export default function LifetimePage() {
   const [running, setRunning] = useState(false)
   const [creatingVideos, setCreatingVideos] = useState(false)
   const [runMessage, setRunMessage] = useState('')
+  const [runError, setRunError] = useState<string | null>(null)
   const [sourceFrameUrl, setSourceFrameUrl] = useState('')
   const [progress, setProgress] = useState(0)
   const [frames, setFrames] = useState<LifetimeFrame[]>([])
@@ -304,6 +306,7 @@ export default function LifetimePage() {
             activeLifetimeHistoryIdRef.current = null
           }
           notify.error(data.error || 'Failed to generate lifetime frames')
+          setRunError(data.error || 'Failed to generate lifetime frames')
         }
       } catch (error) {
         if (activeJobIdRef.current !== jobId) return
@@ -321,6 +324,7 @@ export default function LifetimePage() {
           activeLifetimeHistoryIdRef.current = null
         }
         notify.error(error instanceof Error ? error.message : 'Failed to track frame generation')
+        setRunError(error instanceof Error ? error.message : 'Failed to track frame generation')
       }
     }
 
@@ -424,6 +428,7 @@ export default function LifetimePage() {
             activeLifetimeHistoryIdRef.current = null
           }
           notify.error(data.error || 'Failed to create lifetime videos')
+          setRunError(data.error || 'Failed to create lifetime videos')
         }
       } catch (error) {
         if (activeVideoJobIdRef.current !== jobId) return
@@ -439,6 +444,7 @@ export default function LifetimePage() {
             activeLifetimeHistoryIdRef.current = null
           }
           notify.error(error instanceof Error ? error.message : 'Failed to track video creation')
+          setRunError(error instanceof Error ? error.message : 'Failed to track video creation')
         }
       }
     }
@@ -498,6 +504,7 @@ export default function LifetimePage() {
     resetLifetimeResults()
     setRunning(true)
     setRunMessage('Queued')
+    setRunError(null)
 
     try {
       const formData = new FormData()
@@ -564,6 +571,7 @@ export default function LifetimePage() {
 
   return (
     <div className="space-y-6">
+      {runError && <StatusBanner type="error" message={runError} onDismiss={() => setRunError(null)} />}
       <div className="grid grid-cols-1 xl:grid-cols-[360px_minmax(0,1fr)] gap-6">
         <div className="space-y-6">
           <div className="bg-surface-50 rounded-lg p-4">

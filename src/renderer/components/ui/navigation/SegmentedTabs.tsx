@@ -81,7 +81,7 @@ export function SegmentedTabs<T extends SegmentedTabId>({
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className={`flex bg-surface-100/80 rounded-xl p-1.5 gap-1.5 border border-surface-200/60 ${className}`}
+      className={`flex bg-surface-100/80 rounded-xl p-1.5 gap-1.5 border border-surface-200/60 overflow-x-auto scrollbar-none ${className}`}
     >
       {items.map((item, index) => {
         const isActive = item.id === value
@@ -101,7 +101,7 @@ export function SegmentedTabs<T extends SegmentedTabId>({
             onClick={() => {
               if (!item.disabled) onChange(item.id)
             }}
-            className={`flex-1 min-w-0 flex items-center justify-center gap-2 rounded-lg font-medium transition-colors ${sizeClass} ${
+            className={`flex-1 min-w-fit flex items-center justify-center gap-2 rounded-lg font-medium transition-colors whitespace-nowrap ${sizeClass} ${
               isActive
                 ? 'bg-brand-600 text-white shadow-sm'
                 : item.disabled
@@ -110,7 +110,7 @@ export function SegmentedTabs<T extends SegmentedTabId>({
             }`}
           >
             {item.icon}
-            <span className="truncate">{item.label}</span>
+            <span>{item.label}</span>
             {item.badge}
           </button>
         )

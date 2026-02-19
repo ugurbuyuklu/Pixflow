@@ -34,7 +34,7 @@ export function NotificationBell({
         type="button"
         onClick={handleOpen}
         className={`relative text-surface-400 hover:text-surface-900 transition-colors rounded-lg hover:bg-surface-100 ${
-          compact ? 'w-8 h-8 inline-flex items-center justify-center p-0' : 'p-2'
+          compact ? 'w-11 h-11 inline-flex items-center justify-center p-0' : 'p-2'
         } ${buttonClassName}`}
       >
         <Bell className="w-4 h-4" />
