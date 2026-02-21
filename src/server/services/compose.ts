@@ -62,6 +62,17 @@ function runFfmpeg(args: string[]): Promise<void> {
     })
 }
 
+function resolveMediaPath(projectRoot: string, mediaUrl: string): string {
+  const prefix = mediaUrl.startsWith('/uploads/') ? '/uploads/' : mediaUrl.startsWith('/outputs/') ? '/outputs/' : null
+  if (!prefix) throw new Error(`Invalid media URL prefix: ${mediaUrl}`)
+  const relative = decodeURIComponent(mediaUrl.slice(prefix.length)).trim()
+  if (!relative || relative.includes('\0')) throw new Error(`Invalid media URL: ${mediaUrl}`)
+  const baseDir = path.join(projectRoot, prefix.slice(1, -1))
+  const resolved = path.resolve(baseDir, relative)
+  if (!resolved.startsWith(path.resolve(baseDir) + path.sep)) throw new Error(`Path traversal detected: ${mediaUrl}`)
+  return resolved
+}
+
 export async function runComposeExport(params: ComposeExportParams): Promise<ComposeExportResult> {
   const { layers, width, height, fps, outputDir, outputFile, projectRoot } = params
   await fs.mkdir(outputDir, { recursive: true })
@@ -79,7 +90,7 @@ export async function runComposeExport(params: ComposeExportParams): Promise<Com
   // Add each layer as an input
   for (let i = 0; i < layers.length; i++) {
     const layer = layers[i]
-    const mediaPath = path.join(projectRoot, layer.mediaUrl.replace(/^\//, ''))
+    const mediaPath = resolveMediaPath(projectRoot, layer.mediaUrl)
 
     if (layer.mediaType === 'image') {
       inputArgs.push('-loop', '1', '-t', String(layer.duration), '-framerate', String(fps), '-i', mediaPath)

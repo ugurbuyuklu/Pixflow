@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { apiUrl, authFetch, authHeaders, unwrapApiData } from '../lib/api'
+import { apiUrl, authFetch, unwrapApiData } from '../lib/api'
 import { createOutputHistoryId, useOutputHistoryStore } from './outputHistoryStore'
 
 export type BlendMode = 'normal' | 'screen' | 'multiply' | 'overlay' | 'darken' | 'lighten'
@@ -28,7 +28,7 @@ export interface ComposeExportJob {
   error: string
 }
 
-const ASPECT_DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
+export const ASPECT_DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
   '9:16': { width: 1080, height: 1920 },
   '16:9': { width: 1920, height: 1080 },
   '1:1': { width: 1080, height: 1080 },
@@ -96,8 +96,7 @@ export const useComposeStore = create<ComposeState>()((set, get) => ({
     let sourceDuration = Infinity
 
     if (isVideo) {
-      const probedUrl = URL.createObjectURL(file)
-      sourceDuration = await probeVideoDuration(probedUrl)
+      sourceDuration = await probeVideoDuration(URL.createObjectURL(file))
       duration = sourceDuration
     }
 
@@ -121,10 +120,14 @@ export const useComposeStore = create<ComposeState>()((set, get) => ({
   },
 
   removeLayer: (id) =>
-    set((state) => ({
-      layers: state.layers.filter((l) => l.id !== id),
-      selectedLayerId: state.selectedLayerId === id ? null : state.selectedLayerId,
-    })),
+    set((state) => {
+      const removed = state.layers.find((l) => l.id === id)
+      if (removed) URL.revokeObjectURL(removed.mediaUrl)
+      return {
+        layers: state.layers.filter((l) => l.id !== id),
+        selectedLayerId: state.selectedLayerId === id ? null : state.selectedLayerId,
+      }
+    }),
 
   moveLayerUp: (id) =>
     set((state) => {
@@ -155,12 +158,15 @@ export const useComposeStore = create<ComposeState>()((set, get) => ({
   setIsPlaying: (playing) => set({ isPlaying: playing }),
 
   clearAll: () =>
-    set({
-      layers: [],
-      selectedLayerId: null,
-      playbackTime: 0,
-      isPlaying: false,
-      exportJob: null,
+    set((state) => {
+      for (const layer of state.layers) URL.revokeObjectURL(layer.mediaUrl)
+      return {
+        layers: [],
+        selectedLayerId: null,
+        playbackTime: 0,
+        isPlaying: false,
+        exportJob: null,
+      }
     }),
 
   totalDuration: () => {
@@ -243,7 +249,7 @@ export const useComposeStore = create<ComposeState>()((set, get) => ({
 
     const exportRes = await authFetch(apiUrl('/api/compose/export'), {
       method: 'POST',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ layers: uploadedLayers, width: dims.width, height: dims.height, fps: 30 }),
     })
     const exportData = unwrapApiData<{ jobId: string }>(await exportRes.json())

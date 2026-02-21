@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import type { BlendMode, ComposeLayer } from '../../stores/composeStore'
-import { useComposeStore } from '../../stores/composeStore'
+import { ASPECT_DIMENSIONS, type BlendMode, type ComposeLayer, useComposeStore } from '../../stores/composeStore'
 
 const BLEND_MAP: Record<BlendMode, GlobalCompositeOperation> = {
   normal: 'source-over',
@@ -9,13 +8,6 @@ const BLEND_MAP: Record<BlendMode, GlobalCompositeOperation> = {
   overlay: 'overlay',
   darken: 'darken',
   lighten: 'lighten',
-}
-
-const ASPECT_DIMENSIONS: Record<string, { width: number; height: number }> = {
-  '9:16': { width: 1080, height: 1920 },
-  '16:9': { width: 1920, height: 1080 },
-  '1:1': { width: 1080, height: 1080 },
-  '4:5': { width: 1080, height: 1350 },
 }
 
 interface MediaRef {
@@ -126,6 +118,9 @@ export function ComposeCanvas() {
     drawFrame(playbackTime)
   }, [playbackTime, drawFrame, layers, aspectRatio])
 
+  const playbackTimeRef = useRef(playbackTime)
+  playbackTimeRef.current = playbackTime
+
   useEffect(() => {
     if (!isPlaying) {
       cancelAnimationFrame(animFrameRef.current)
@@ -138,14 +133,15 @@ export function ComposeCanvas() {
       return
     }
 
+    const initialTime = playbackTimeRef.current
     playStartRef.current = performance.now()
-    playOffsetRef.current = playbackTime
+    playOffsetRef.current = initialTime
 
     for (const layer of layers) {
       const ref = mediaRefs.current.get(layer.id)
       if (ref?.type === 'video') {
         const videoEl = ref.element as HTMLVideoElement
-        const localTime = playbackTime - layer.startTime
+        const localTime = initialTime - layer.startTime
         if (localTime >= 0 && localTime < layer.duration) {
           videoEl.currentTime = localTime
           void videoEl.play()
@@ -175,7 +171,7 @@ export function ComposeCanvas() {
         if (ref.type === 'video') (ref.element as HTMLVideoElement).pause()
       }
     }
-  }, [isPlaying, totalDuration, setPlaybackTime, setIsPlaying, layers, playbackTime])
+  }, [isPlaying, totalDuration, setPlaybackTime, setIsPlaying, layers])
 
   const containerAspect = dims.width / dims.height
   const maxW = containerAspect >= 1 ? '100%' : `${containerAspect * 100}%`
