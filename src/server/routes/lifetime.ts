@@ -487,8 +487,17 @@ async function buildFinalLifetimeVideo(params: {
   for (const transitionPath of transitionVideoPaths) {
     args.push('-i', transitionPath)
   }
-  const inputs = transitionVideoPaths.map((_value, index) => `[${index}:v:0]`).join('')
-  const filterGraph = `${inputs}concat=n=${transitionVideoPaths.length}:v=1:a=0,fps=${FINAL_VIDEO_FPS},setpts=PTS/${speedExpr}[v]`
+  const TARGET_W = 1080
+  const TARGET_H = 1920
+  const scaleParts = transitionVideoPaths.map(
+    (_v, i) =>
+      `[${i}:v:0]scale=${TARGET_W}:${TARGET_H}:force_original_aspect_ratio=decrease,pad=${TARGET_W}:${TARGET_H}:(ow-iw)/2:(oh-ih)/2,setsar=1[s${i}]`,
+  )
+  const scaledInputs = transitionVideoPaths.map((_v, i) => `[s${i}]`).join('')
+  const filterGraph = [
+    ...scaleParts,
+    `${scaledInputs}concat=n=${transitionVideoPaths.length}:v=1:a=0,fps=${FINAL_VIDEO_FPS},setpts=PTS/${speedExpr}[v]`,
+  ].join(';')
   args.push(
     '-filter_complex',
     filterGraph,
