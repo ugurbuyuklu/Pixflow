@@ -19,7 +19,7 @@ new_sqlite_classes = ["PixflowBackend"]
 
 [vars]
 PROXY_PATH_PREFIXES = "/api,/health,/uploads,/outputs,/avatars,/avatars_generated,/avatars_uploads"
-ALLOWED_ORIGINS = ""
+ALLOWED_ORIGINS = "https://pixflow.pixerylabs.ai"
 
 [observability]
 enabled = true
