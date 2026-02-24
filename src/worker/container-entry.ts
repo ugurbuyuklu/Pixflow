@@ -2,7 +2,6 @@ import { Container, getContainer } from '@cloudflare/containers'
 
 interface Env {
   PIXFLOW_BACKEND: DurableObjectNamespace
-  PROXY_PATH_PREFIXES?: string
   ALLOWED_ORIGINS?: string
   JWT_SECRET?: string
   OPENAI_API_KEY?: string
@@ -66,18 +65,9 @@ export class PixflowBackend extends Container<Env> {
   }
 }
 
-// ---- CORS / path-filter helpers (ported from api-proxy.js) ----
+// ---- CORS helpers ----
 
 const UPSTREAM_TIMEOUT_MS = 610_000
-const DEFAULT_PROXY_PREFIXES = [
-  '/api',
-  '/health',
-  '/uploads',
-  '/outputs',
-  '/avatars',
-  '/avatars_generated',
-  '/avatars_uploads',
-]
 const CORS_METHODS = 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS'
 const CORS_HEADERS = 'Authorization,Content-Type,X-Requested-With'
 
@@ -87,20 +77,6 @@ function parseCsv(raw: string | undefined): string[] {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
-}
-
-function parseProxyPrefixes(raw: string | undefined): string[] {
-  if (!raw) return DEFAULT_PROXY_PREFIXES
-  const parsed = raw
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((s) => (s.startsWith('/') ? s : `/${s}`))
-  return parsed.length > 0 ? parsed : DEFAULT_PROXY_PREFIXES
-}
-
-function shouldProxy(pathname: string, prefixes: string[]): boolean {
-  return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))
 }
 
 function resolveAllowedOrigin(origin: string | null, raw: string | undefined): string | null {
@@ -146,10 +122,8 @@ function json(status: number, body: unknown, allowedOrigin: string | null): Resp
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url)
     const origin = request.headers.get('Origin')
     const allowedOrigin = resolveAllowedOrigin(origin, env.ALLOWED_ORIGINS)
-    const prefixes = parseProxyPrefixes(env.PROXY_PATH_PREFIXES)
     const clientExpectsSse = includesEventStream(request.headers.get('accept'))
 
     if (request.method === 'OPTIONS') {
@@ -169,14 +143,6 @@ export default {
 
     if (origin && !allowedOrigin) {
       return json(403, { success: false, error: 'Origin is not allowed' }, null)
-    }
-
-    if (!shouldProxy(url.pathname, prefixes)) {
-      return json(
-        404,
-        { success: false, error: 'Route is not handled by API gateway', details: { path: url.pathname } },
-        allowedOrigin,
-      )
     }
 
     const container = getContainer(env.PIXFLOW_BACKEND, 'main')

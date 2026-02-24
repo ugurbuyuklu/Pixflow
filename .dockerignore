@@ -12,7 +12,6 @@ logs/
 .git/
 .github/
 .claude/
-src/renderer/
 public/
 docs/
 Burgflow Archive/

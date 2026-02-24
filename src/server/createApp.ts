@@ -29,10 +29,11 @@ import { sendError, sendSuccess } from './utils/http.js'
 export interface ServerConfig {
   projectRoot: string
   dataDir: string
+  spaDir?: string
 }
 
 export function createApp(config: ServerConfig): express.Express {
-  const { projectRoot, dataDir } = config
+  const { projectRoot, dataDir, spaDir } = config
 
   validateServerEnv()
   initDatabase(dataDir)
@@ -89,6 +90,23 @@ export function createApp(config: ServerConfig): express.Express {
       version: '0.2.0',
     })
   })
+
+  if (spaDir) {
+    app.use(express.static(spaDir))
+    app.get('*', (req, res, next) => {
+      if (
+        req.path === '/api' ||
+        req.path.startsWith('/api/') ||
+        req.path.startsWith('/health') ||
+        req.path.startsWith('/uploads/') ||
+        req.path.startsWith('/outputs/') ||
+        req.path.startsWith('/avatars')
+      ) {
+        return next()
+      }
+      res.sendFile(path.join(spaDir, 'index.html'))
+    })
+  }
 
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     if (res.headersSent) return

@@ -1,4 +1,5 @@
-name = "pixflow-backend"
+name = "pixflow"
+account_id = "edef8d171ebc6f83d4969316ca9598df"
 main = "src/worker/container-entry.ts"
 compatibility_date = "2026-02-24"
 compatibility_flags = ["nodejs_compat"]
@@ -18,8 +19,12 @@ tag = "v1"
 new_sqlite_classes = ["PixflowBackend"]
 
 [vars]
-PROXY_PATH_PREFIXES = "/api,/health,/uploads,/outputs,/avatars,/avatars_generated,/avatars_uploads"
 ALLOWED_ORIGINS = "https://pixflow.pixerylabs.ai"
+PIXFLOW_AUTH_MODE = "token"
+PIXFLOW_BOOTSTRAP_ADMIN_ON_STARTUP = "true"
+PIXFLOW_BOOTSTRAP_ADMIN_EMAIL = "admin@pixflow.local"
+PIXFLOW_BOOTSTRAP_ADMIN_NAME = "Pixflow Admin"
+RESEARCH_WEB_ENABLED = "true"
 
 [observability]
 enabled = true

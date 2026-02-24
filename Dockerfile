@@ -7,9 +7,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci && npm rebuild better-sqlite3
 
-COPY tsconfig.json tsconfig.node.json ./
+COPY tsconfig.json tsconfig.node.json tsconfig.web.json vite.web.config.ts ./
 COPY src/server/ src/server/
 COPY src/constants/ src/constants/
+COPY src/renderer/ src/renderer/
+
+RUN npx vite build --config vite.web.config.ts
 
 # ---------- runtime ----------
 FROM node:20-bookworm-slim
@@ -31,6 +34,7 @@ COPY --from=builder /app/tsconfig.json tsconfig.json
 COPY --from=builder /app/tsconfig.node.json tsconfig.node.json
 COPY --from=builder /app/src/server src/server
 COPY --from=builder /app/src/constants src/constants
+COPY --from=builder /app/dist/web dist/web
 
 RUN mkdir -p data uploads outputs avatars_generated avatars_uploads exports logs \
   && chown -R pixflow:pixflow /app

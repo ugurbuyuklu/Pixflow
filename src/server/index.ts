@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
@@ -12,7 +13,10 @@ const PROJECT_ROOT = path.resolve(__dirname, '../..')
 const DATA_DIR = path.join(PROJECT_ROOT, 'data')
 const PORT = process.env.PORT || 3001
 
-const app = createApp({ projectRoot: PROJECT_ROOT, dataDir: DATA_DIR })
+const webDir = path.join(PROJECT_ROOT, 'dist/web')
+const spaDir = fs.existsSync(webDir) ? webDir : undefined
+
+const app = createApp({ projectRoot: PROJECT_ROOT, dataDir: DATA_DIR, spaDir })
 
 process.on('uncaughtException', (err) => {
   console.error('[FATAL] Uncaught exception:', err)
