@@ -1,0 +1,25 @@
+name = "pixflow-backend"
+main = "src/worker/container-entry.ts"
+compatibility_date = "2026-02-24"
+compatibility_flags = ["nodejs_compat"]
+
+[[containers]]
+class_name = "PixflowBackend"
+image = "./Dockerfile"
+max_instances = 2
+instance_type = "standard-2"
+
+[[durable_objects.bindings]]
+name = "PIXFLOW_BACKEND"
+class_name = "PixflowBackend"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PixflowBackend"]
+
+[vars]
+PROXY_PATH_PREFIXES = "/api,/health,/uploads,/outputs,/avatars,/avatars_generated,/avatars_uploads"
+ALLOWED_ORIGINS = ""
+
+[observability]
+enabled = true

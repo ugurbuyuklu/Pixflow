@@ -2,11 +2,77 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fal } from '@fal-ai/client'
+import ffmpegStatic from 'ffmpeg-static'
 import { ensureFalConfig } from './falConfig.js'
 import { isMockProvidersEnabled, recordMockProviderSuccess, runWithRetries } from './providerRuntime.js'
 
 const WIZPER_MODEL = 'fal-ai/wizper'
-const FFMPEG_PATH = '/opt/homebrew/bin/ffmpeg'
+const DEFAULT_FFMPEG_PATH = '/opt/homebrew/bin/ffmpeg'
+
+function getFfmpegCandidates(): string[] {
+  return [process.env.FFMPEG_PATH?.trim(), DEFAULT_FFMPEG_PATH, ffmpegStatic || undefined, 'ffmpeg']
+    .filter((c): c is string => Boolean(c))
+    .filter((c, i, list) => list.indexOf(c) === i)
+}
+
+const FFMPEG_TIMEOUT_MS = 30_000
+
+class SpawnError extends Error {
+  constructor(
+    message: string,
+    public readonly isSpawnFailure: boolean,
+  ) {
+    super(message)
+  }
+}
+
+function spawnFfmpeg(args: string[]): Promise<void> {
+  const runWithBinary = (binary: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const proc = spawn(binary, args)
+      let stderr = ''
+      let settled = false
+      const settle = (fn: () => void) => {
+        if (!settled) {
+          settled = true
+          fn()
+        }
+      }
+      proc.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString()
+      })
+      proc.on('close', (code) => {
+        settle(() => {
+          if (code === 0) resolve()
+          else
+            reject(
+              new SpawnError(`ffmpeg failed (binary=${binary}, code ${code}): ${stderr || 'unknown error'}`, false),
+            )
+        })
+      })
+      proc.on('error', (error: Error) => {
+        settle(() => reject(new SpawnError(`ffmpeg spawn failed (binary=${binary}): ${error.message}`, true)))
+      })
+      setTimeout(() => {
+        settle(() => {
+          proc.kill()
+          reject(new SpawnError(`ffmpeg timed out after ${FFMPEG_TIMEOUT_MS}ms (binary=${binary})`, false))
+        })
+      }, FFMPEG_TIMEOUT_MS)
+    })
+
+  return getFfmpegCandidates()
+    .reduce<Promise<void>>(
+      (chain, binary) =>
+        chain.catch((err) =>
+          err instanceof SpawnError && err.isSpawnFailure ? runWithBinary(binary) : Promise.reject(err),
+        ),
+      Promise.reject(new SpawnError('ffmpeg execution not started', true)),
+    )
+    .catch((error) => {
+      throw error instanceof Error ? error : new Error('ffmpeg execution failed')
+    })
+}
 
 export interface TranscriptionResult {
   transcript: string
@@ -236,49 +302,22 @@ export async function extractAudioFromVideo(videoPath: string): Promise<string> 
   const random = Math.random().toString(36).slice(2, 8)
   const tempAudioPath = `/tmp/wizper_audio_${timestamp}_${random}.mp3`
 
-  return new Promise((resolve, reject) => {
-    const ffmpeg = spawn(FFMPEG_PATH, [
-      '-i',
-      videoPath,
-      '-vn', // No video
-      '-acodec',
-      'libmp3lame',
-      '-ar',
-      '16000', // 16kHz is sufficient for speech transcription and much faster to upload/process
-      '-ac',
-      '1', // Mono speech track
-      '-b:a',
-      '64k', // Smaller transcription payload
-      tempAudioPath,
-    ])
-
-    let stderr = ''
-
-    ffmpeg.stderr.on('data', (data) => {
-      stderr += data.toString()
-    })
-
-    ffmpeg.on('close', (code) => {
-      if (code === 0) {
-        console.log(`[Wizper] Audio extracted to ${tempAudioPath}`)
-        resolve(tempAudioPath)
-      } else {
-        console.error('[Wizper] FFmpeg extraction failed:', stderr)
-        reject(new Error(`FFmpeg extraction failed with code ${code}`))
-      }
-    })
-
-    ffmpeg.on('error', (err) => {
-      console.error('[Wizper] FFmpeg spawn error:', err)
-      reject(new Error(`FFmpeg not available: ${err.message}`))
-    })
-
-    // Timeout after 30 seconds
-    setTimeout(() => {
-      ffmpeg.kill()
-      reject(new Error('Audio extraction timed out after 30 seconds'))
-    }, 30000)
-  })
+  await spawnFfmpeg([
+    '-i',
+    videoPath,
+    '-vn',
+    '-acodec',
+    'libmp3lame',
+    '-ar',
+    '16000',
+    '-ac',
+    '1',
+    '-b:a',
+    '64k',
+    tempAudioPath,
+  ])
+  console.log(`[Wizper] Audio extracted to ${tempAudioPath}`)
+  return tempAudioPath
 }
 
 /**

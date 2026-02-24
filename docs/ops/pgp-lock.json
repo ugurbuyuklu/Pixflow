@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-02-17T07:26:03.056Z",
+  "generatedAt": "2026-02-24T14:15:59.883Z",
   "protectedFiles": [
     {
       "path": "src/server/routes/prompts.ts",
@@ -24,7 +24,7 @@
     },
     {
       "path": "src/server/services/wizper.ts",
-      "sha256": "2bb989f33549e2a976a62d93956caa7b79c6da27a15622ac31a5150c5fd49402"
+      "sha256": "03600f5ddb57d42e85e98b730c75c75bab9e027cc98f3c728ebb53b3c338bd7b"
     },
     {
       "path": "src/server/utils/prompts.ts",
@@ -35,5 +35,5 @@
       "sha256": "de05e5f364010bedb715db3edf32c2fd6ed52ceca6df3726d2d9dc85c075ff0c"
     }
   ],
-  "unlockNote": "stabilize pipelines after mock media/output fixes"
+  "unlockNote": "Make ffmpeg candidates lazy for dotenv compat"
 }

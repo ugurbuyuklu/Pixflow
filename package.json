@@ -19,6 +19,10 @@
     "deploy:pages:preview": "bash ./scripts/deploy-pages.sh preview",
     "dev:worker:api": "BACKEND_ORIGIN=${BACKEND_ORIGIN:-http://localhost:${PIXFLOW_WEB_API_PORT:-3002}} wrangler dev --config wrangler.api-proxy.toml",
     "deploy:worker:api": "bash ./scripts/deploy-worker-api.sh",
+    "dev:container": "wrangler dev --config wrangler.container.toml",
+    "deploy:container": "bash ./scripts/deploy-container.sh",
+    "container:list": "wrangler containers list",
+    "container:images": "wrangler containers images list",
     "pgp:lock:check": "node scripts/pgp-lock-guard.js check",
     "pgp:lock:update": "node scripts/pgp-lock-guard.js update",
     "native:rebuild": "npm run native:rebuild:node",
@@ -87,6 +91,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@cloudflare/containers": "^0.1.0",
     "@biomejs/biome": "^2.3.14",
     "@tailwindcss/vite": "^4.0.0",
     "@types/bcryptjs": "^2.4.6",

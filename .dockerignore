@@ -1,0 +1,19 @@
+node_modules/
+dist/
+data/
+uploads/
+outputs/
+avatars_generated/
+avatars_uploads/
+exports/
+logs/
+.env
+.env.*
+.git/
+.github/
+.claude/
+src/renderer/
+public/
+docs/
+Burgflow Archive/
+*.md
